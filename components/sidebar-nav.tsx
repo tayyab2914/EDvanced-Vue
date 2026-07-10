@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons";
+import { useShell } from "@/components/sidebar-shell";
 
 export interface NavItem {
   label: string;
@@ -19,6 +20,9 @@ export interface NavGroup {
 
 export function SidebarNav({ groups }: { groups: NavGroup[] }) {
   const pathname = usePathname();
+  // Navigating to the current route fires no pathname change, so the drawer
+  // has to be dismissed on the click itself.
+  const { closeSidebar } = useShell();
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-3.5">
       {groups.map((group, gi) => (
@@ -37,6 +41,7 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={closeSidebar}
                 className={cn(
                   "mb-0.5 flex items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-[13.5px] font-medium transition-colors",
                   active

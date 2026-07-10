@@ -7,6 +7,8 @@ import * as z from "zod";
  */
 const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1, { error: "DATABASE_URL is required" }),
+  // Non-pooled (session/direct) connection used by Prisma Migrate + one-shot scripts.
+  DIRECT_URL: z.string().optional(),
   SESSION_SECRET: z
     .string()
     .min(32, { error: "SESSION_SECRET must be at least 32 characters" }),

@@ -7,7 +7,9 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  adapter: new PrismaPg({
+    connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
+  }),
 });
 const t = (districtId: string) =>
   prisma.$extends(makeTenantExtension(districtId)) as unknown as typeof prisma;

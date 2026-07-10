@@ -8,7 +8,9 @@ import { hashPassword } from "../lib/auth/password";
 import { seedDistrictReferenceData } from "../lib/reference-data/florida-red-book";
 
 const prisma = new PrismaClient({
-  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  adapter: new PrismaPg({
+    connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
+  }),
 });
 const PW = "Demo!2026Pass";
 

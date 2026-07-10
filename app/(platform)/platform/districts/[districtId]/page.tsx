@@ -78,7 +78,7 @@ export default async function DistrictDetailPage({
         </Alert>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <SummaryStat label="Users" value={district._count.users} />
         <SummaryStat label="Schools" value={district._count.schools} />
         <SummaryStat label="Grants" value={district._count.grants} />
