@@ -1,0 +1,302 @@
+// K-12 School Finance Platform — data model (Milestone 1: Platform Foundation)
+// Two data groups: (1) reference/master data (stable, per-district) and
+// (2) periodic snapshot data (uploaded each reporting period).
+// M1 builds ONLY the tenancy + auth + audit + master/reference tables below.
+//
+// DESIGN-FOR-FUTURE (M2/M3 — do not build yet): periodic tables
+// (RevenueActual, ExpenditureActual, FundBalance, CashFlow, GrantsActivity,
+// CapitalProjectsActivity, Enrollment) plus a DatasetVersion snapshot table
+// will each carry districtId + fiscalYear + period/survey + version and FK
+// into the master rows below by their stable `id` PKs — inheriting the same
+// per-district scoped-client enforcement with no rework.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ===================== Enums =====================
+
+enum Role {
+  PLATFORM_ADMIN
+  DISTRICT_ADMIN
+  FINANCE_USER
+  VIEWER
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum DistrictStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TokenType {
+  INVITE
+  PASSWORD_RESET
+}
+
+// ===================== Tenancy / Auth / Audit =====================
+
+/// The tenant root. Every tenant-owned row carries `districtId`.
+model District {
+  id                   String         @id @default(cuid())
+  code                 String         @unique
+  name                 String
+  status               DistrictStatus @default(ACTIVE)
+  fiscalYearStartMonth Int            @default(7) // July
+  settings             Json           @default("{}")
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  users           User[]
+  schools         School[]
+  grants          Grant[]
+  capitalProjects CapitalProject[]
+  fundTypes       FundType[]
+  funds           Fund[]
+  revenueSources  RevenueSource[]
+  functions       AccountFunction[]
+  objects         AccountObject[]
+  statuses        Status[]
+  auditLogs       AuditLog[]
+}
+
+/// districtId is NULL for Platform Admins (cross-district); required for all others (enforced in app logic).
+model User {
+  id                  String     @id @default(cuid())
+  districtId          String?
+  role                Role
+  email               String     @unique
+  name                String
+  passwordHash        String? // null until an INVITED user sets their password
+  status              UserStatus @default(INVITED)
+  failedLoginAttempts Int        @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  district           District?           @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  sessions           Session[]
+  verificationTokens VerificationToken[]
+
+  @@index([districtId])
+}
+
+/// DB-backed sessions enable revocation and lockout-logout. The cookie carries a signed { sessionId, ... }.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  ipAddress String?
+  userAgent String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// One-time tokens for INVITE (set first password) and PASSWORD_RESET. Only the SHA-256 hash is stored.
+model VerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  type      TokenType
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Append-only activity trail. districtId is NULL for platform-level events.
+model AuditLog {
+  id          String   @id @default(cuid())
+  districtId  String?
+  actorUserId String? // not an FK: retain history even if the user is deleted
+  action      String
+  entityType  String?
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  district District? @relation(fields: [districtId], references: [id], onDelete: SetNull)
+
+  @@index([districtId, createdAt])
+  @@index([actorUserId])
+}
+
+// ===================== Master data (tenant-owned) =====================
+
+model School {
+  id           String   @id @default(cuid())
+  districtId   String
+  schoolNumber String
+  name         String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, schoolNumber])
+  @@index([districtId])
+}
+
+model Grant {
+  id          String   @id @default(cuid())
+  districtId  String
+  grantId     String
+  name        String
+  description String?
+  fiscalYear  String?
+  fundId      String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  fund     Fund?    @relation(fields: [fundId], references: [id], onDelete: SetNull)
+
+  @@unique([districtId, grantId])
+  @@index([districtId])
+  @@index([fundId])
+}
+
+model CapitalProject {
+  id          String   @id @default(cuid())
+  districtId  String
+  projectId   String
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, projectId])
+  @@index([districtId])
+}
+
+// ---- Reference lists (controlled vocabularies; copy-on-onboard from the standard set) ----
+
+model FundType {
+  id         String   @id @default(cuid())
+  districtId String
+  code       String
+  name       String
+  isStandard Boolean  @default(false)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  funds    Fund[]
+
+  @@unique([districtId, code])
+  @@index([districtId])
+}
+
+model Fund {
+  id         String   @id @default(cuid())
+  districtId String
+  code       String
+  name       String
+  fundTypeId String?
+  isStandard Boolean  @default(false)
+  sortOrder  Int?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  district District  @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  fundType FundType? @relation(fields: [fundTypeId], references: [id], onDelete: SetNull)
+  grants   Grant[]
+
+  @@unique([districtId, code])
+  @@index([districtId])
+  @@index([fundTypeId])
+}
+
+model RevenueSource {
+  id         String   @id @default(cuid())
+  districtId String
+  code       String
+  name       String
+  isStandard Boolean  @default(false)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, code])
+  @@index([districtId])
+}
+
+/// "Function" in the chart of accounts. Renamed to avoid the JS `Function` identifier clash.
+model AccountFunction {
+  id         String   @id @default(cuid())
+  districtId String
+  code       String
+  name       String
+  isStandard Boolean  @default(false)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, code])
+  @@index([districtId])
+  @@map("functions")
+}
+
+/// "Object" in the chart of accounts. Renamed to avoid the JS `Object` identifier clash.
+model AccountObject {
+  id         String   @id @default(cuid())
+  districtId String
+  code       String
+  name       String
+  isStandard Boolean  @default(false)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, code])
+  @@index([districtId])
+  @@map("objects")
+}
+
+model Status {
+  id         String   @id @default(cuid())
+  districtId String
+  code       String
+  name       String
+  isStandard Boolean  @default(false)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, code])
+  @@index([districtId])
+}

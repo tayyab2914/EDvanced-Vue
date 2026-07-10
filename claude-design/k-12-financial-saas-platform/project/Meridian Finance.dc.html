@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;background:#eef1f5;color:#16202e;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#c7cfdb;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+  ::-webkit-scrollbar-thumb:hover{background:#a9b4c6;background-clip:content-box}
+  select,input,button{font-family:inherit}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @keyframes barGrow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes dash{to{stroke-dashoffset:0}}
+</style>
+</helmet>
+
+<sc-if value="{{ isLogin }}" hint-placeholder-val="{{ false }}">
+  <div style="min-height:100vh;display:grid;grid-template-columns:1.05fr 1fr;background:#0d1b2e">
+    <div style="position:relative;padding:56px 60px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(160deg,#0f2038 0%,#0a1524 100%);overflow:hidden">
+      <div style="position:absolute;inset:0;opacity:.06;background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);background-size:34px 34px"></div>
+      <div style="position:relative;display:flex;align-items:center;gap:11px">
+        <div style="width:34px;height:34px;border-radius:8px;background:#2f6bf6;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:16px">M</div>
+        <span style="color:#fff;font-weight:600;font-size:17px;letter-spacing:.2px">Meridian</span>
+        <span style="color:#7d8ba3;font-size:13px;font-weight:500;border-left:1px solid #2a3a52;padding-left:11px;margin-left:3px">for School Districts</span>
+      </div>
+      <div style="position:relative;max-width:420px">
+        <div style="font-size:13px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:#4f8bff;margin-bottom:18px">District Finance, Clarified</div>
+        <h1 style="font-size:34px;line-height:1.22;font-weight:600;color:#fff;margin:0 0 18px">Turn ledgers and spreadsheets into decisions your board can trust.</h1>
+        <p style="font-size:15px;line-height:1.6;color:#9fadc4;margin:0">Upload, validate, and analyze district financial data in one secure workspace — built for finance teams, not engineers.</p>
+      </div>
+      <div style="position:relative;display:flex;gap:28px;color:#7d8ba3;font-size:12.5px">
+        <span>SOC 2 Type II</span><span>FERPA-aligned</span><span>Data isolated per district</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;background:#f6f8fb;padding:40px">
+      <div style="width:100%;max-width:372px;animation:fadeUp .4s ease both">
+        <sc-if value="{{ authViewLogin }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <h2 style="font-size:23px;font-weight:600;margin:0 0 6px">Sign in</h2>
+            <p style="font-size:14px;color:#64728a;margin:0 0 28px">Access your district's finance workspace.</p>
+            <label style="display:block;font-size:13px;font-weight:500;color:#344055;margin-bottom:7px">Work email</label>
+            <input type="email" value="m.chen@riversideusd.org" style="width:100%;height:44px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:14.5px;background:#fff;margin-bottom:18px;outline:none" />
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">
+              <label style="font-size:13px;font-weight:500;color:#344055">Password</label>
+              <span onClick="{{ toForgot }}" style="font-size:12.5px;color:#2f6bf6;font-weight:500;cursor:pointer">Forgot password?</span>
+            </div>
+            <input type="password" value="••••••••••" style="width:100%;height:44px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:14.5px;background:#fff;margin-bottom:16px;outline:none" />
+            <label style="display:flex;align-items:center;gap:9px;font-size:13.5px;color:#475069;margin-bottom:24px;cursor:pointer">
+              <span style="width:17px;height:17px;border-radius:4px;background:#2f6bf6;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px">✓</span>
+              Keep me signed in on this device
+            </label>
+            <button onClick="{{ signIn }}" style="width:100%;height:46px;border:none;border-radius:8px;background:#2f6bf6;color:#fff;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 1px 2px rgba(15,32,56,.2)" style-hover="background:#245ce0">Sign in to workspace</button>
+            <div style="text-align:center;margin-top:22px;font-size:13px;color:#8592a6">Need access? <span style="color:#2f6bf6;font-weight:500;cursor:pointer">Contact your district admin</span></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ authViewForgot }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <h2 style="font-size:23px;font-weight:600;margin:0 0 6px">Reset your password</h2>
+            <p style="font-size:14px;color:#64728a;margin:0 0 28px;line-height:1.55">Enter your work email and we'll send a secure reset link. Links expire after 30 minutes.</p>
+            <label style="display:block;font-size:13px;font-weight:500;color:#344055;margin-bottom:7px">Work email</label>
+            <input type="email" placeholder="you@district.org" style="width:100%;height:44px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:14.5px;background:#fff;margin-bottom:20px;outline:none" />
+            <button onClick="{{ toReset }}" style="width:100%;height:46px;border:none;border-radius:8px;background:#2f6bf6;color:#fff;font-size:15px;font-weight:600;cursor:pointer">Send reset link</button>
+            <div onClick="{{ toLogin }}" style="text-align:center;margin-top:20px;font-size:13.5px;color:#2f6bf6;font-weight:500;cursor:pointer">← Back to sign in</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ authViewReset }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="width:46px;height:46px;border-radius:50%;background:#e4f2ea;display:flex;align-items:center;justify-content:center;margin-bottom:18px;color:#0f8a52;font-size:22px">✓</div>
+            <h2 style="font-size:23px;font-weight:600;margin:0 0 6px">Check your inbox</h2>
+            <p style="font-size:14px;color:#64728a;margin:0 0 26px;line-height:1.55">We sent a reset link to <strong style="color:#344055">m.chen@riversideusd.org</strong>. Set a new password below to continue.</p>
+            <label style="display:block;font-size:13px;font-weight:500;color:#344055;margin-bottom:7px">New password</label>
+            <input type="password" placeholder="Enter new password" style="width:100%;height:44px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:14.5px;background:#fff;margin-bottom:14px;outline:none" />
+            <label style="display:block;font-size:13px;font-weight:500;color:#344055;margin-bottom:7px">Confirm password</label>
+            <input type="password" placeholder="Re-enter new password" style="width:100%;height:44px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:14.5px;background:#fff;margin-bottom:20px;outline:none" />
+            <button onClick="{{ signIn }}" style="width:100%;height:46px;border:none;border-radius:8px;background:#2f6bf6;color:#fff;font-size:15px;font-weight:600;cursor:pointer">Set password & sign in</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}">
+  <div style="display:flex;min-height:100vh;background:#eef1f5">
+
+    <!-- SIDEBAR -->
+    <aside style="width:250px;flex:none;background:#0d1b2e;display:flex;flex-direction:column;position:sticky;top:0;height:100vh">
+      <div style="padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.07)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <div style="width:30px;height:30px;border-radius:7px;background:#2f6bf6;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px">M</div>
+          <span style="color:#fff;font-weight:600;font-size:15.5px">Meridian</span>
+        </div>
+        <div onClick="{{ go_settings }}" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;background:rgba(255,255,255,.05);cursor:pointer" style-hover="background:rgba(255,255,255,.09)">
+          <div style="width:26px;height:26px;border-radius:6px;background:#20406b;display:flex;align-items:center;justify-content:center;color:#9cc0ff;font-weight:600;font-size:12px;flex:none">RU</div>
+          <div style="min-width:0;flex:1">
+            <div style="color:#e7edf6;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Riverside USD</div>
+            <div style="color:#6f8099;font-size:11px">FY 2024–25 · Workspace</div>
+          </div>
+          <span style="color:#5f7391;font-size:11px">▾</span>
+        </div>
+      </div>
+
+      <nav style="padding:14px 12px;flex:1;overflow-y:auto">
+        <div style="color:#5b6b84;font-size:10.5px;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:6px 10px 8px">Overview</div>
+        <sc-for list="{{ navMain }}" as="item" hint-placeholder-count="4">
+          <div onClick="{{ item.go }}" style="{{ item.style }}">
+            <span style="width:19px;height:19px;display:inline-flex;flex:none">{{ item.icon }}</span>
+            <span>{{ item.label }}</span>
+          </div>
+        </sc-for>
+        <div style="color:#5b6b84;font-size:10.5px;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:16px 10px 8px">Administration</div>
+        <sc-for list="{{ navAdmin }}" as="item" hint-placeholder-count="2">
+          <div onClick="{{ item.go }}" style="{{ item.style }}">
+            <span style="width:19px;height:19px;display:inline-flex;flex:none">{{ item.icon }}</span>
+            <span>{{ item.label }}</span>
+          </div>
+        </sc-for>
+      </nav>
+
+      <div style="padding:12px;border-top:1px solid rgba(255,255,255,.07)">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px" style-hover="background:rgba(255,255,255,.05)">
+          <div style="width:32px;height:32px;border-radius:50%;background:#3a5680;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12.5px;font-weight:600;flex:none">MC</div>
+          <div style="flex:1;min-width:0">
+            <div style="color:#e7edf6;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Maria Chen</div>
+            <div style="color:#6f8099;font-size:11px">Finance Director</div>
+          </div>
+          <span onClick="{{ signOut }}" title="Sign out" style="color:#6f8099;font-size:15px;cursor:pointer;padding:4px" style-hover="color:#cfd9e8">⏻</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <!-- TOPBAR -->
+      <header style="height:62px;flex:none;background:#fff;border-bottom:1px solid #e2e7ef;display:flex;align-items:center;gap:16px;padding:0 26px;position:sticky;top:0;z-index:20">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:16.5px;font-weight:600;color:#16202e;line-height:1.1;white-space:nowrap">{{ pageTitle }}</div>
+          <div style="font-size:12px;color:#8592a6">{{ pageSub }}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid #e2e7ef;border-radius:8px;background:#f7f9fc;width:230px;color:#93a0b4">
+          <span style="font-size:13px">⌕</span><span style="font-size:13px">Search transactions, reports…</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border:1px solid #e2e7ef;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;font-weight:500;color:#344055" style-hover="border-color:#c4cdda">
+          <span style="color:#8592a6;font-size:12px">Fiscal Year</span><strong style="font-weight:600">2024–25</strong><span style="color:#93a0b4;font-size:10px">▾</span>
+        </div>
+        <div style="position:relative;width:36px;height:36px;border:1px solid #e2e7ef;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#5b6a82" style-hover="border-color:#c4cdda">
+          <span style="font-size:15px">◔</span>
+          <span style="position:absolute;top:7px;right:8px;width:7px;height:7px;background:#e0553d;border-radius:50%;border:1.5px solid #fff"></span>
+        </div>
+      </header>
+
+      <main style="flex:1;overflow-y:auto;padding:26px 30px 40px">
+        <div style="max-width:1180px;margin:0 auto">
+
+          <!-- ============ DASHBOARD ============ -->
+          <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+            <div style="animation:fadeUp .35s ease both">
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px">
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:17px 18px">
+                  <div style="font-size:12.5px;color:#64728a;font-weight:500;margin-bottom:9px">Total Budget</div>
+                  <div style="font-size:26px;font-weight:600;letter-spacing:-.5px">$142.6M</div>
+                  <div style="font-size:12px;color:#8592a6;margin-top:7px">Adopted · FY 2024–25</div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:17px 18px">
+                  <div style="font-size:12.5px;color:#64728a;font-weight:500;margin-bottom:9px">Revenue YTD</div>
+                  <div style="font-size:26px;font-weight:600;letter-spacing:-.5px">$138.2M</div>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:7px"><span style="font-size:11.5px;font-weight:600;color:#0f8a52;background:#e4f2ea;padding:2px 7px;border-radius:20px">▲ 3.2%</span><span style="font-size:11.5px;color:#8592a6">vs last FY</span></div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:17px 18px">
+                  <div style="font-size:12.5px;color:#64728a;font-weight:500;margin-bottom:9px">Expenses YTD</div>
+                  <div style="font-size:26px;font-weight:600;letter-spacing:-.5px">$96.4M</div>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:7px"><span style="font-size:11.5px;font-weight:600;color:#c2542e;background:#fbeae2;padding:2px 7px;border-radius:20px">▲ 5.1%</span><span style="font-size:11.5px;color:#8592a6">vs last FY</span></div>
+                </div>
+                <div style="background:#0d1b2e;border:1px solid #0d1b2e;border-radius:12px;padding:17px 18px">
+                  <div style="font-size:12.5px;color:#9fb0c9;font-weight:500;margin-bottom:9px">Remaining Budget</div>
+                  <div style="font-size:26px;font-weight:600;letter-spacing:-.5px;color:#fff">$46.2M</div>
+                  <div style="font-size:12px;color:#8ba0bf;margin-top:7px">32.4% of adopted budget</div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1.62fr 1fr;gap:16px;margin-bottom:18px">
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:18px 20px 6px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+                    <div>
+                      <div style="font-size:14.5px;font-weight:600">Revenue vs. Expenses</div>
+                      <div style="font-size:12px;color:#8592a6;margin-top:2px">Monthly, fiscal year to date ($M)</div>
+                    </div>
+                    <div style="display:flex;gap:14px;font-size:11.5px;color:#64728a">
+                      <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:2px;background:#2f6bf6"></span>Revenue</span>
+                      <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:2px;background:#c8d3e4"></span>Expenses</span>
+                    </div>
+                  </div>
+                  {{ chartRevExpA }}
+                </div>
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:18px 20px">
+                  <div style="font-size:14.5px;font-weight:600;margin-bottom:2px">Budget Utilization</div>
+                  <div style="font-size:12px;color:#8592a6;margin-bottom:14px">Spent against adopted budget</div>
+                  <div style="display:flex;flex-direction:column;align-items:center;padding:6px 0 4px">
+                    {{ donut }}
+                  </div>
+                  <div style="display:flex;justify-content:space-between;padding-top:14px;margin-top:12px;border-top:1px solid #eef1f5;font-size:12.5px">
+                    <span style="color:#64728a">Spent</span><strong style="font-weight:600">$96.4M</strong>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;padding-top:9px;font-size:12.5px">
+                    <span style="color:#64728a">Remaining</span><strong style="font-weight:600">$46.2M</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:18px 20px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                    <div style="font-size:14.5px;font-weight:600">Recent Uploads</div>
+                    <span onClick="{{ go_upload }}" style="font-size:12.5px;color:#2f6bf6;font-weight:500;cursor:pointer">View all</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #f0f3f7">
+                      <span style="width:30px;height:30px;border-radius:7px;background:#e8f0e9;color:#0f8a52;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">▦</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">FY25_Q2_GeneralLedger.xlsx</div><div style="font-size:11.5px;color:#8592a6">12,480 rows · 2 hours ago</div></div>
+                      <span style="font-size:11px;font-weight:600;color:#0f8a52;background:#e4f2ea;padding:3px 9px;border-radius:20px;white-space:nowrap">Validated</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #f0f3f7">
+                      <span style="width:30px;height:30px;border-radius:7px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">▤</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Payroll_Dec2024.csv</div><div style="font-size:11.5px;color:#8592a6">3,205 rows · Jan 3</div></div>
+                      <span style="font-size:11px;font-weight:600;color:#0f8a52;background:#e4f2ea;padding:3px 9px;border-radius:20px;white-space:nowrap">Validated</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #f0f3f7">
+                      <span style="width:30px;height:30px;border-radius:7px;background:#fbf1df;color:#b57a17;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">▦</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Grants_Federal_FY25.xlsx</div><div style="font-size:11.5px;color:#8592a6">842 rows · Jan 2</div></div>
+                      <span style="font-size:11px;font-weight:600;color:#b57a17;background:#fbf1df;padding:3px 9px;border-radius:20px;white-space:nowrap">3 warnings</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;padding:9px 0">
+                      <span style="width:30px;height:30px;border-radius:7px;background:#eef0f3;color:#64728a;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">▤</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">CapitalProjects_Q2.csv</div><div style="font-size:11.5px;color:#8592a6">1,120 rows · Jan 2</div></div>
+                      <span style="font-size:11px;font-weight:600;color:#64728a;background:#eef0f3;padding:3px 9px;border-radius:20px;white-space:nowrap">Processing</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:18px 20px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                    <div style="font-size:14.5px;font-weight:600">Recent Reports</div>
+                    <span onClick="{{ go_reports }}" style="font-size:12.5px;color:#2f6bf6;font-weight:500;cursor:pointer">View all</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #f0f3f7">
+                      <span style="width:30px;height:30px;border-radius:7px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">▣</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">Q2 Budget vs. Actual</div><div style="font-size:11.5px;color:#8592a6">Generated Jan 4 · Maria Chen</div></div>
+                      <span style="font-size:15px;color:#93a0b4;cursor:pointer">↓</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #f0f3f7">
+                      <span style="width:30px;height:30px;border-radius:7px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">▣</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">Revenue Summary FY25</div><div style="font-size:11.5px;color:#8592a6">Generated Jan 3 · Maria Chen</div></div>
+                      <span style="font-size:15px;color:#93a0b4;cursor:pointer">↓</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #f0f3f7">
+                      <span style="width:30px;height:30px;border-radius:7px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">▣</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">Department Spend Analysis</div><div style="font-size:11.5px;color:#8592a6">Generated Dec 30 · J. Okafor</div></div>
+                      <span style="font-size:15px;color:#93a0b4;cursor:pointer">↓</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:12px;padding:9px 0">
+                      <span style="width:30px;height:30px;border-radius:7px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">▣</span>
+                      <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500">Year-over-Year Overview</div><div style="font-size:11.5px;color:#8592a6">Generated Dec 28 · Maria Chen</div></div>
+                      <span style="font-size:15px;color:#93a0b4;cursor:pointer">↓</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ============ UPLOAD ============ -->
+          <sc-if value="{{ isUpload }}" hint-placeholder-val="{{ false }}">
+            <div style="animation:fadeUp .35s ease both">
+              <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:22px 24px;margin-bottom:18px">
+                <div style="display:flex;align-items:center">
+                  <sc-for list="{{ steps }}" as="st" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;flex:1">
+                      <div style="display:flex;align-items:center;gap:11px">
+                        <div style="{{ st.circle }}">{{ st.mark }}</div>
+                        <div>
+                          <div style="{{ st.labelStyle }}">{{ st.label }}</div>
+                          <div style="font-size:11px;color:#93a0b4">{{ st.sub }}</div>
+                        </div>
+                      </div>
+                      <div style="{{ st.connector }}"></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <sc-if value="{{ up0 }}" hint-placeholder-val="{{ true }}">
+                <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:18px">
+                  <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:24px">
+                    <div style="font-size:15px;font-weight:600;margin-bottom:4px">Upload financial data</div>
+                    <div style="font-size:12.5px;color:#8592a6;margin-bottom:18px">CSV or Excel · up to 50MB · general ledger, payroll, grants, capital projects</div>
+                    <div onClick="{{ uploadNext }}" style="border:1.5px dashed #c2cee0;border-radius:12px;background:#f7f9fc;padding:42px 20px;text-align:center;cursor:pointer" style-hover="border-color:#2f6bf6;background:#f2f7ff">
+                      <div style="width:52px;height:52px;border-radius:12px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px">↥</div>
+                      <div style="font-size:14.5px;font-weight:600;margin-bottom:5px">Drag & drop your file here</div>
+                      <div style="font-size:12.5px;color:#8592a6;margin-bottom:16px">or click to browse from your computer</div>
+                      <span style="display:inline-block;padding:9px 18px;background:#2f6bf6;color:#fff;border-radius:8px;font-size:13px;font-weight:600">Select file</span>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:16px">
+                      <div style="flex:1;border:1px solid #eef1f5;border-radius:9px;padding:11px 13px;display:flex;gap:9px;align-items:center">
+                        <span style="color:#0f8a52">▦</span><div><div style="font-size:12.5px;font-weight:500">Excel template</div><div style="font-size:11px;color:#93a0b4">Download starter file</div></div>
+                      </div>
+                      <div style="flex:1;border:1px solid #eef1f5;border-radius:9px;padding:11px 13px;display:flex;gap:9px;align-items:center">
+                        <span style="color:#2f6bf6">▤</span><div><div style="font-size:12.5px;font-weight:500">Field guide</div><div style="font-size:11px;color:#93a0b4">Required columns</div></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:20px 22px">
+                    <div style="font-size:14.5px;font-weight:600;margin-bottom:14px">Import History</div>
+                    <div style="display:flex;flex-direction:column">
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f3f7"><div><div style="font-size:12.5px;font-weight:500">FY25_Q2_GeneralLedger.xlsx</div><div style="font-size:11px;color:#93a0b4">Jan 6 · 12,480 rows</div></div><span style="font-size:10.5px;font-weight:600;color:#0f8a52;background:#e4f2ea;padding:3px 8px;border-radius:20px">Validated</span></div>
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f3f7"><div><div style="font-size:12.5px;font-weight:500">Payroll_Dec2024.csv</div><div style="font-size:11px;color:#93a0b4">Jan 3 · 3,205 rows</div></div><span style="font-size:10.5px;font-weight:600;color:#0f8a52;background:#e4f2ea;padding:3px 8px;border-radius:20px">Validated</span></div>
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f3f7"><div><div style="font-size:12.5px;font-weight:500">Grants_Federal_FY25.xlsx</div><div style="font-size:11px;color:#93a0b4">Jan 2 · 842 rows</div></div><span style="font-size:10.5px;font-weight:600;color:#b57a17;background:#fbf1df;padding:3px 8px;border-radius:20px">3 warnings</span></div>
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0"><div><div style="font-size:12.5px;font-weight:500">Enrollment_Q1.csv</div><div style="font-size:11px;color:#93a0b4">Dec 18 · 6 errors</div></div><span style="font-size:10.5px;font-weight:600;color:#c2542e;background:#fbeae2;padding:3px 8px;border-radius:20px">Failed</span></div>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ up1 }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:24px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+                    <div><div style="font-size:15px;font-weight:600">Map your columns</div><div style="font-size:12.5px;color:#8592a6;margin-top:3px">We matched your file's headers to Meridian fields. Review and adjust before validating.</div></div>
+                    <span style="font-size:12px;font-weight:500;color:#0f8a52;background:#e4f2ea;padding:5px 11px;border-radius:20px">FY25_Q2_GeneralLedger.xlsx</span>
+                  </div>
+                  <div style="border:1px solid #eef1f5;border-radius:10px;overflow:hidden;margin-top:16px">
+                    <div style="display:grid;grid-template-columns:1.1fr 1.1fr 1fr;background:#f7f9fc;padding:11px 16px;font-size:11.5px;font-weight:600;color:#64728a;text-transform:uppercase;letter-spacing:.4px">
+                      <span>Source column</span><span>Sample value</span><span>Meridian field</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1.1fr 1.1fr 1fr;padding:12px 16px;border-top:1px solid #f0f3f7;align-items:center;font-size:13px"><span style="font-weight:500">Acct_No</span><span style="color:#64728a">01-000-1110</span><select style="height:34px;border:1px solid #d3dae5;border-radius:7px;padding:0 8px;font-size:12.5px"><option>Account Code ✓</option></select></div>
+                    <div style="display:grid;grid-template-columns:1.1fr 1.1fr 1fr;padding:12px 16px;border-top:1px solid #f0f3f7;align-items:center;font-size:13px"><span style="font-weight:500">Description</span><span style="color:#64728a">Certificated Salaries</span><select style="height:34px;border:1px solid #d3dae5;border-radius:7px;padding:0 8px;font-size:12.5px"><option>Account Name ✓</option></select></div>
+                    <div style="display:grid;grid-template-columns:1.1fr 1.1fr 1fr;padding:12px 16px;border-top:1px solid #f0f3f7;align-items:center;font-size:13px"><span style="font-weight:500">Fund</span><span style="color:#64728a">General Fund</span><select style="height:34px;border:1px solid #d3dae5;border-radius:7px;padding:0 8px;font-size:12.5px"><option>Fund ✓</option></select></div>
+                    <div style="display:grid;grid-template-columns:1.1fr 1.1fr 1fr;padding:12px 16px;border-top:1px solid #f0f3f7;align-items:center;font-size:13px"><span style="font-weight:500">Dept_Code</span><span style="color:#64728a">2100</span><select style="height:34px;border:1px solid #d3dae5;border-radius:7px;padding:0 8px;font-size:12.5px"><option>Department ✓</option></select></div>
+                    <div style="display:grid;grid-template-columns:1.1fr 1.1fr 1fr;padding:12px 16px;border-top:1px solid #f0f3f7;align-items:center;font-size:13px"><span style="font-weight:500">Budget_Amt</span><span style="color:#64728a">1,240,000.00</span><select style="height:34px;border:1px solid #d3dae5;border-radius:7px;padding:0 8px;font-size:12.5px"><option>Budgeted Amount ✓</option></select></div>
+                    <div style="display:grid;grid-template-columns:1.1fr 1.1fr 1fr;padding:12px 16px;border-top:1px solid #f0f3f7;align-items:center;font-size:13px;background:#fffaf2"><span style="font-weight:500">Actual</span><span style="color:#64728a">1,187,540.22</span><select style="height:34px;border:1px solid #e0b060;border-radius:7px;padding:0 8px;font-size:12.5px;background:#fffdf8"><option>— Select field —</option><option>Actual Amount</option></select></div>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;margin-top:20px">
+                    <button onClick="{{ uploadBack }}" style="height:42px;padding:0 20px;border:1px solid #d3dae5;background:#fff;border-radius:8px;font-size:13.5px;font-weight:600;color:#344055;cursor:pointer">← Back</button>
+                    <button onClick="{{ uploadNext }}" style="height:42px;padding:0 22px;border:none;background:#2f6bf6;color:#fff;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer">Validate data →</button>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ up2 }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px">
+                    <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:18px 20px;border-left:3px solid #0f8a52"><div style="font-size:12.5px;color:#64728a;margin-bottom:8px">Valid rows</div><div style="font-size:24px;font-weight:600">12,466</div><div style="font-size:11.5px;color:#0f8a52;margin-top:5px">99.9% ready to import</div></div>
+                    <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:18px 20px;border-left:3px solid #d59a20"><div style="font-size:12.5px;color:#64728a;margin-bottom:8px">Warnings</div><div style="font-size:24px;font-weight:600">11</div><div style="font-size:11.5px;color:#b57a17;margin-top:5px">Importable, review advised</div></div>
+                    <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:18px 20px;border-left:3px solid #c2542e"><div style="font-size:12.5px;color:#64728a;margin-bottom:8px">Errors</div><div style="font-size:24px;font-weight:600">3</div><div style="font-size:11.5px;color:#c2542e;margin-top:5px">Must fix before import</div></div>
+                  </div>
+                  <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:22px 24px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+                      <div style="font-size:14.5px;font-weight:600">Validation details</div>
+                      <div style="display:flex;gap:8px"><span style="font-size:11.5px;font-weight:600;color:#c2542e;background:#fbeae2;padding:4px 10px;border-radius:20px">3 Errors</span><span style="font-size:11.5px;font-weight:600;color:#b57a17;background:#fbf1df;padding:4px 10px;border-radius:20px">11 Warnings</span></div>
+                    </div>
+                    <div style="border:1px solid #eef1f5;border-radius:10px;overflow:hidden">
+                      <div style="display:grid;grid-template-columns:70px 1fr 1.4fr 90px;background:#f7f9fc;padding:10px 16px;font-size:11px;font-weight:600;color:#64728a;text-transform:uppercase;letter-spacing:.4px"><span>Row</span><span>Column</span><span>Issue</span><span>Type</span></div>
+                      <div style="display:grid;grid-template-columns:70px 1fr 1.4fr 90px;padding:11px 16px;border-top:1px solid #f0f3f7;font-size:12.5px;align-items:center"><span style="color:#64728a">418</span><span style="font-weight:500">Actual Amount</span><span style="color:#475069">Non-numeric value "N/A"</span><span style="font-size:10.5px;font-weight:600;color:#c2542e;background:#fbeae2;padding:2px 8px;border-radius:20px;justify-self:start">Error</span></div>
+                      <div style="display:grid;grid-template-columns:70px 1fr 1.4fr 90px;padding:11px 16px;border-top:1px solid #f0f3f7;font-size:12.5px;align-items:center"><span style="color:#64728a">1,204</span><span style="font-weight:500">Account Code</span><span style="color:#475069">Unknown code "09-999-0000"</span><span style="font-size:10.5px;font-weight:600;color:#c2542e;background:#fbeae2;padding:2px 8px;border-radius:20px;justify-self:start">Error</span></div>
+                      <div style="display:grid;grid-template-columns:70px 1fr 1.4fr 90px;padding:11px 16px;border-top:1px solid #f0f3f7;font-size:12.5px;align-items:center"><span style="color:#64728a">2,871</span><span style="font-weight:500">Fund</span><span style="color:#475069">Blank required field</span><span style="font-size:10.5px;font-weight:600;color:#c2542e;background:#fbeae2;padding:2px 8px;border-radius:20px;justify-self:start">Error</span></div>
+                      <div style="display:grid;grid-template-columns:70px 1fr 1.4fr 90px;padding:11px 16px;border-top:1px solid #f0f3f7;font-size:12.5px;align-items:center"><span style="color:#64728a">905</span><span style="font-weight:500">Department</span><span style="color:#475069">Dept "8300" not in chart of accounts</span><span style="font-size:10.5px;font-weight:600;color:#b57a17;background:#fbf1df;padding:2px 8px;border-radius:20px;justify-self:start">Warning</span></div>
+                      <div style="display:grid;grid-template-columns:70px 1fr 1.4fr 90px;padding:11px 16px;border-top:1px solid #f0f3f7;font-size:12.5px;align-items:center"><span style="color:#64728a">1,559</span><span style="font-weight:500">Budgeted Amount</span><span style="color:#475069">Negative value flagged for review</span><span style="font-size:10.5px;font-weight:600;color:#b57a17;background:#fbf1df;padding:2px 8px;border-radius:20px;justify-self:start">Warning</span></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px">
+                      <button onClick="{{ uploadBack }}" style="height:42px;padding:0 20px;border:1px solid #d3dae5;background:#fff;border-radius:8px;font-size:13.5px;font-weight:600;color:#344055;cursor:pointer">← Back to mapping</button>
+                      <div style="display:flex;gap:10px">
+                        <button style="height:42px;padding:0 18px;border:1px solid #d3dae5;background:#fff;border-radius:8px;font-size:13.5px;font-weight:600;color:#344055;cursor:pointer">Download error report</button>
+                        <button onClick="{{ uploadNext }}" style="height:42px;padding:0 22px;border:none;background:#2f6bf6;color:#fff;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer">Import 12,477 valid rows →</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ up3 }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:48px 24px;text-align:center;animation:fadeUp .35s ease both">
+                  <div style="width:66px;height:66px;border-radius:50%;background:#e4f2ea;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;color:#0f8a52;font-size:30px">✓</div>
+                  <div style="font-size:20px;font-weight:600;margin-bottom:8px">Import complete</div>
+                  <div style="font-size:13.5px;color:#64728a;max-width:440px;margin:0 auto 26px;line-height:1.55">12,477 rows from <strong style="color:#344055">FY25_Q2_GeneralLedger.xlsx</strong> were imported into your FY 2024–25 workspace. Dashboards and analytics have been updated.</div>
+                  <div style="display:flex;gap:24px;justify-content:center;margin-bottom:30px">
+                    <div><div style="font-size:20px;font-weight:600">12,477</div><div style="font-size:11.5px;color:#8592a6">Imported</div></div>
+                    <div style="border-left:1px solid #eef1f5;padding-left:24px"><div style="font-size:20px;font-weight:600;color:#b57a17">11</div><div style="font-size:11.5px;color:#8592a6">With warnings</div></div>
+                    <div style="border-left:1px solid #eef1f5;padding-left:24px"><div style="font-size:20px;font-weight:600;color:#c2542e">3</div><div style="font-size:11.5px;color:#8592a6">Skipped</div></div>
+                  </div>
+                  <div style="display:flex;gap:12px;justify-content:center">
+                    <button onClick="{{ go_dashboard }}" style="height:44px;padding:0 22px;border:none;background:#2f6bf6;color:#fff;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer">Go to dashboard</button>
+                    <button onClick="{{ uploadReset }}" style="height:44px;padding:0 22px;border:1px solid #d3dae5;background:#fff;border-radius:8px;font-size:13.5px;font-weight:600;color:#344055;cursor:pointer">Upload another file</button>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- ============ REPORTS ============ -->
+          <sc-if value="{{ isReports }}" hint-placeholder-val="{{ false }}">
+            <div style="animation:fadeUp .35s ease both">
+              <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+                <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 12px;border:1px solid #e2e7ef;border-radius:8px;background:#fff;color:#93a0b4;flex:1;min-width:220px"><span>⌕</span><span style="font-size:13px">Search reports…</span></div>
+                <div style="display:flex;align-items:center;gap:7px;height:38px;padding:0 13px;border:1px solid #e2e7ef;border-radius:8px;background:#fff;font-size:13px;font-weight:500;cursor:pointer"><span style="color:#8592a6">Type</span><strong>All</strong><span style="color:#93a0b4;font-size:10px">▾</span></div>
+                <div style="display:flex;align-items:center;gap:7px;height:38px;padding:0 13px;border:1px solid #e2e7ef;border-radius:8px;background:#fff;font-size:13px;font-weight:500;cursor:pointer"><span style="color:#8592a6">Period</span><strong>FY 2024–25</strong><span style="color:#93a0b4;font-size:10px">▾</span></div>
+                <div onClick="{{ toggleCompare }}" style="{{ compareBtnStyle }}"><span style="font-size:13px">⇄</span>Compare fiscal years</div>
+                <button style="height:38px;padding:0 16px;border:none;background:#2f6bf6;color:#fff;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px"><span>↓</span>Export</button>
+              </div>
+
+              <sc-if value="{{ compareOn }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:20px 22px;margin-bottom:16px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                    <div style="font-size:14.5px;font-weight:600">Fiscal Year Comparison</div>
+                    <div style="display:flex;gap:8px;font-size:12.5px">
+                      <span style="padding:5px 11px;border:1px solid #d3dae5;border-radius:7px;font-weight:500">FY 2023–24</span>
+                      <span style="color:#93a0b4;align-self:center">vs</span>
+                      <span style="padding:5px 11px;border:1px solid #2f6bf6;color:#2f6bf6;border-radius:7px;font-weight:600;background:#f2f7ff">FY 2024–25</span>
+                    </div>
+                  </div>
+                  <div style="display:grid;grid-template-columns:2fr 1.2fr 1.2fr 1fr;gap:0;border:1px solid #eef1f5;border-radius:10px;overflow:hidden">
+                    <div style="background:#f7f9fc;padding:10px 16px;font-size:11px;font-weight:600;color:#64728a;text-transform:uppercase;letter-spacing:.4px">Category</div>
+                    <div style="background:#f7f9fc;padding:10px 16px;font-size:11px;font-weight:600;color:#64728a;text-transform:uppercase;letter-spacing:.4px;text-align:right">FY 23–24</div>
+                    <div style="background:#f7f9fc;padding:10px 16px;font-size:11px;font-weight:600;color:#64728a;text-transform:uppercase;letter-spacing:.4px;text-align:right">FY 24–25</div>
+                    <div style="background:#f7f9fc;padding:10px 16px;font-size:11px;font-weight:600;color:#64728a;text-transform:uppercase;letter-spacing:.4px;text-align:right">Change</div>
+                    <div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;font-weight:500">Total Revenue</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right">$133.9M</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right;font-weight:600">$138.2M</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right;color:#0f8a52;font-weight:600">+3.2%</div>
+                    <div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;font-weight:500">Total Expenses</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right">$91.7M</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right;font-weight:600">$96.4M</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right;color:#c2542e;font-weight:600">+5.1%</div>
+                    <div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;font-weight:500">Instruction</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right">$52.1M</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right;font-weight:600">$54.8M</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right;color:#c2542e;font-weight:600">+5.2%</div>
+                    <div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;font-weight:500">Fund Balance</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right">$42.2M</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right;font-weight:600">$46.2M</div><div style="padding:11px 16px;border-top:1px solid #f0f3f7;font-size:13px;text-align:right;color:#0f8a52;font-weight:600">+9.5%</div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;overflow:hidden">
+                <div style="display:grid;grid-template-columns:2.2fr 1fr 1.1fr 1fr 70px;background:#f7f9fc;padding:12px 20px;font-size:11px;font-weight:600;color:#64728a;text-transform:uppercase;letter-spacing:.4px"><span>Report</span><span>Type</span><span>Period</span><span>Generated</span><span></span></div>
+                <div style="display:grid;grid-template-columns:2.2fr 1fr 1.1fr 1fr 70px;padding:14px 20px;border-top:1px solid #f0f3f7;align-items:center" style-hover="background:#fafbfd"><div style="display:flex;gap:11px;align-items:center"><span style="width:32px;height:32px;border-radius:8px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;flex:none">▣</span><div><div style="font-size:13.5px;font-weight:600">Q2 Budget vs. Actual</div><div style="font-size:11.5px;color:#8592a6">Maria Chen · PDF, XLSX</div></div></div><span style="font-size:12px;color:#475069">Budget</span><span style="font-size:12px;color:#475069">Q2 FY24–25</span><span style="font-size:12px;color:#475069">Jan 4, 2025</span><div style="display:flex;gap:12px;color:#93a0b4"><span style="cursor:pointer">↓</span><span style="cursor:pointer">⋯</span></div></div>
+                <div style="display:grid;grid-template-columns:2.2fr 1fr 1.1fr 1fr 70px;padding:14px 20px;border-top:1px solid #f0f3f7;align-items:center" style-hover="background:#fafbfd"><div style="display:flex;gap:11px;align-items:center"><span style="width:32px;height:32px;border-radius:8px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;flex:none">▣</span><div><div style="font-size:13.5px;font-weight:600">Revenue Summary FY25</div><div style="font-size:11.5px;color:#8592a6">Maria Chen · PDF</div></div></div><span style="font-size:12px;color:#475069">Revenue</span><span style="font-size:12px;color:#475069">FY24–25 YTD</span><span style="font-size:12px;color:#475069">Jan 3, 2025</span><div style="display:flex;gap:12px;color:#93a0b4"><span style="cursor:pointer">↓</span><span style="cursor:pointer">⋯</span></div></div>
+                <div style="display:grid;grid-template-columns:2.2fr 1fr 1.1fr 1fr 70px;padding:14px 20px;border-top:1px solid #f0f3f7;align-items:center" style-hover="background:#fafbfd"><div style="display:flex;gap:11px;align-items:center"><span style="width:32px;height:32px;border-radius:8px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;flex:none">▣</span><div><div style="font-size:13.5px;font-weight:600">Department Spend Analysis</div><div style="font-size:11.5px;color:#8592a6">J. Okafor · XLSX</div></div></div><span style="font-size:12px;color:#475069">Expense</span><span style="font-size:12px;color:#475069">FY24–25 YTD</span><span style="font-size:12px;color:#475069">Dec 30, 2024</span><div style="display:flex;gap:12px;color:#93a0b4"><span style="cursor:pointer">↓</span><span style="cursor:pointer">⋯</span></div></div>
+                <div style="display:grid;grid-template-columns:2.2fr 1fr 1.1fr 1fr 70px;padding:14px 20px;border-top:1px solid #f0f3f7;align-items:center" style-hover="background:#fafbfd"><div style="display:flex;gap:11px;align-items:center"><span style="width:32px;height:32px;border-radius:8px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;flex:none">▣</span><div><div style="font-size:13.5px;font-weight:600">Year-over-Year Overview</div><div style="font-size:11.5px;color:#8592a6">Maria Chen · PDF</div></div></div><span style="font-size:12px;color:#475069">Comparison</span><span style="font-size:12px;color:#475069">FY23 vs FY24</span><span style="font-size:12px;color:#475069">Dec 28, 2024</span><div style="display:flex;gap:12px;color:#93a0b4"><span style="cursor:pointer">↓</span><span style="cursor:pointer">⋯</span></div></div>
+                <div style="display:grid;grid-template-columns:2.2fr 1fr 1.1fr 1fr 70px;padding:14px 20px;border-top:1px solid #f0f3f7;align-items:center" style-hover="background:#fafbfd"><div style="display:flex;gap:11px;align-items:center"><span style="width:32px;height:32px;border-radius:8px;background:#e8eef7;color:#2f6bf6;display:flex;align-items:center;justify-content:center;flex:none">▣</span><div><div style="font-size:13.5px;font-weight:600">Grant Fund Utilization</div><div style="font-size:11.5px;color:#8592a6">J. Okafor · PDF, XLSX</div></div></div><span style="font-size:12px;color:#475069">Grants</span><span style="font-size:12px;color:#475069">FY24–25 YTD</span><span style="font-size:12px;color:#475069">Dec 22, 2024</span><div style="display:flex;gap:12px;color:#93a0b4"><span style="cursor:pointer">↓</span><span style="cursor:pointer">⋯</span></div></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ============ ANALYTICS ============ -->
+          <sc-if value="{{ isAnalytics }}" hint-placeholder-val="{{ false }}">
+            <div style="animation:fadeUp .35s ease both">
+              <div style="display:flex;gap:4px;background:#e7ebf1;padding:4px;border-radius:10px;margin-bottom:18px;width:fit-content">
+                <sc-for list="{{ anTabs }}" as="t" hint-placeholder-count="4">
+                  <div onClick="{{ t.go }}" style="{{ t.style }}">{{ t.label }}</div>
+                </sc-for>
+              </div>
+
+              <sc-if value="{{ anRevExp }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px">
+                    <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:16px 18px"><div style="font-size:12px;color:#64728a;margin-bottom:7px">Net Position YTD</div><div style="font-size:22px;font-weight:600;color:#0f8a52">+$41.8M</div></div>
+                    <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:16px 18px"><div style="font-size:12px;color:#64728a;margin-bottom:7px">Avg. Monthly Revenue</div><div style="font-size:22px;font-weight:600">$11.5M</div></div>
+                    <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:16px 18px"><div style="font-size:12px;color:#64728a;margin-bottom:7px">Avg. Monthly Expense</div><div style="font-size:22px;font-weight:600">$8.0M</div></div>
+                  </div>
+                  <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:20px 22px 8px">
+                    <div style="font-size:14.5px;font-weight:600;margin-bottom:2px">Revenue vs. Expenses — Monthly</div>
+                    <div style="font-size:12px;color:#8592a6;margin-bottom:6px">Fiscal year 2024–25 ($M)</div>
+                    {{ chartRevExpB }}
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ anBudget }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:20px 22px 8px">
+                  <div style="font-size:14.5px;font-weight:600;margin-bottom:2px">Budget Utilization Trend</div>
+                  <div style="font-size:12px;color:#8592a6;margin-bottom:6px">Cumulative % of adopted budget spent, by month</div>
+                  {{ chartTrend }}
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ anDept }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:22px 24px">
+                  <div style="font-size:14.5px;font-weight:600;margin-bottom:3px">Department Spending</div>
+                  <div style="font-size:12px;color:#8592a6;margin-bottom:20px">Expenses by function · FY 2024–25 YTD ($96.4M total)</div>
+                  <div style="display:flex;flex-direction:column;gap:15px">
+                    <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="font-weight:500">Instruction</span><span style="color:#475069">$54.8M · 56.8%</span></div><div style="height:9px;background:#eef1f5;border-radius:6px;overflow:hidden"><div style="height:100%;width:96%;background:#2f6bf6;border-radius:6px"></div></div></div>
+                    <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="font-weight:500">Support Services</span><span style="color:#475069">$12.4M · 12.9%</span></div><div style="height:9px;background:#eef1f5;border-radius:6px;overflow:hidden"><div style="height:100%;width:22%;background:#3f7bf7;border-radius:6px"></div></div></div>
+                    <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="font-weight:500">Operations & Facilities</span><span style="color:#475069">$9.6M · 10.0%</span></div><div style="height:9px;background:#eef1f5;border-radius:6px;overflow:hidden"><div style="height:100%;width:17%;background:#5f92f9;border-radius:6px"></div></div></div>
+                    <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="font-weight:500">Transportation</span><span style="color:#475069">$8.9M · 9.2%</span></div><div style="height:9px;background:#eef1f5;border-radius:6px;overflow:hidden"><div style="height:100%;width:16%;background:#7ba6fb;border-radius:6px"></div></div></div>
+                    <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="font-weight:500">Food Service</span><span style="color:#475069">$5.1M · 5.3%</span></div><div style="height:9px;background:#eef1f5;border-radius:6px;overflow:hidden"><div style="height:100%;width:9%;background:#9dbcfc;border-radius:6px"></div></div></div>
+                    <div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="font-weight:500">Administration</span><span style="color:#475069">$3.8M · 3.9%</span></div><div style="height:9px;background:#eef1f5;border-radius:6px;overflow:hidden"><div style="height:100%;width:7%;background:#bcd971;border-radius:6px;background:#bfd0fd"></div></div></div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ anYoy }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:20px 22px 8px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                    <div><div style="font-size:14.5px;font-weight:600;margin-bottom:2px">Year-over-Year Revenue</div><div style="font-size:12px;color:#8592a6;margin-bottom:6px">Monthly revenue, current vs. prior fiscal year ($M)</div></div>
+                    <div style="display:flex;gap:14px;font-size:11.5px;color:#64728a;padding-top:4px"><span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:3px;border-radius:2px;background:#2f6bf6"></span>FY 24–25</span><span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:3px;border-radius:2px;background:#c8d3e4"></span>FY 23–24</span></div>
+                  </div>
+                  {{ chartYoy }}
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- ============ USERS ============ -->
+          <sc-if value="{{ isUsers }}" hint-placeholder-val="{{ false }}">
+            <div style="animation:fadeUp .35s ease both">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+                <div style="display:flex;gap:20px;font-size:13px"><span style="font-weight:600;border-bottom:2px solid #2f6bf6;padding-bottom:10px;color:#16202e">All users · 6</span><span style="color:#8592a6;padding-bottom:10px">Pending · 1</span><span style="color:#8592a6;padding-bottom:10px">Roles & permissions</span></div>
+                <button onClick="{{ openInvite }}" style="height:38px;padding:0 16px;border:none;background:#2f6bf6;color:#fff;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">+ Invite user</button>
+              </div>
+              <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;overflow:hidden">
+                <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr 60px;background:#f7f9fc;padding:12px 20px;font-size:11px;font-weight:600;color:#64728a;text-transform:uppercase;letter-spacing:.4px"><span>User</span><span>Role</span><span>Status</span><span>Last active</span><span></span></div>
+                <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr 60px;padding:13px 20px;border-top:1px solid #f0f3f7;align-items:center"><div style="display:flex;gap:11px;align-items:center"><span style="width:34px;height:34px;border-radius:50%;background:#3a5680;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">MC</span><div><div style="font-size:13px;font-weight:600">Maria Chen</div><div style="font-size:11.5px;color:#8592a6">m.chen@riversideusd.org</div></div></div><span style="font-size:12.5px;font-weight:500;color:#2f6bf6">Finance Director</span><span><span style="font-size:11px;font-weight:600;color:#0f8a52;background:#e4f2ea;padding:3px 9px;border-radius:20px">● Active</span></span><span style="font-size:12px;color:#8592a6">2h ago</span><span style="color:#93a0b4;cursor:pointer;justify-self:center">⋯</span></div>
+                <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr 60px;padding:13px 20px;border-top:1px solid #f0f3f7;align-items:center"><div style="display:flex;gap:11px;align-items:center"><span style="width:34px;height:34px;border-radius:50%;background:#6a5a92;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">JO</span><div><div style="font-size:13px;font-weight:600">James Okafor</div><div style="font-size:11.5px;color:#8592a6">j.okafor@riversideusd.org</div></div></div><span style="font-size:12.5px;color:#475069">Finance Staff</span><span><span style="font-size:11px;font-weight:600;color:#0f8a52;background:#e4f2ea;padding:3px 9px;border-radius:20px">● Active</span></span><span style="font-size:12px;color:#8592a6">Yesterday</span><span style="color:#93a0b4;cursor:pointer;justify-self:center">⋯</span></div>
+                <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr 60px;padding:13px 20px;border-top:1px solid #f0f3f7;align-items:center"><div style="display:flex;gap:11px;align-items:center"><span style="width:34px;height:34px;border-radius:50%;background:#2f6b57;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">PL</span><div><div style="font-size:13px;font-weight:600">Dr. Patricia Lowe</div><div style="font-size:11.5px;color:#8592a6">p.lowe@riversideusd.org</div></div></div><span style="font-size:12.5px;color:#475069">Superintendent</span><span><span style="font-size:11px;font-weight:600;color:#0f8a52;background:#e4f2ea;padding:3px 9px;border-radius:20px">● Active</span></span><span style="font-size:12px;color:#8592a6">Jan 2</span><span style="color:#93a0b4;cursor:pointer;justify-self:center">⋯</span></div>
+                <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr 60px;padding:13px 20px;border-top:1px solid #f0f3f7;align-items:center"><div style="display:flex;gap:11px;align-items:center"><span style="width:34px;height:34px;border-radius:50%;background:#8a5a3a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">KB</span><div><div style="font-size:13px;font-weight:600">Kevin Brooks</div><div style="font-size:11.5px;color:#8592a6">k.brooks@riversideusd.org</div></div></div><span style="font-size:12.5px;color:#475069">School Administrator</span><span><span style="font-size:11px;font-weight:600;color:#0f8a52;background:#e4f2ea;padding:3px 9px;border-radius:20px">● Active</span></span><span style="font-size:12px;color:#8592a6">Dec 21</span><span style="color:#93a0b4;cursor:pointer;justify-self:center">⋯</span></div>
+                <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr 60px;padding:13px 20px;border-top:1px solid #f0f3f7;align-items:center"><div style="display:flex;gap:11px;align-items:center"><span style="width:34px;height:34px;border-radius:50%;background:#5a6b7d;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">AP</span><div><div style="font-size:13px;font-weight:600">Audit Partners LLP</div><div style="font-size:11.5px;color:#8592a6">team@auditpartners.com</div></div></div><span style="font-size:12.5px;color:#475069">Read-only Auditor</span><span><span style="font-size:11px;font-weight:600;color:#b57a17;background:#fbf1df;padding:3px 9px;border-radius:20px">● Pending</span></span><span style="font-size:12px;color:#8592a6">Invited Jan 4</span><span style="color:#93a0b4;cursor:pointer;justify-self:center">⋯</span></div>
+                <div style="display:grid;grid-template-columns:2fr 1.4fr 1fr 1fr 60px;padding:13px 20px;border-top:1px solid #f0f3f7;align-items:center;opacity:.62"><div style="display:flex;gap:11px;align-items:center"><span style="width:34px;height:34px;border-radius:50%;background:#9aa4b2;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">TR</span><div><div style="font-size:13px;font-weight:600">Tom Reyes</div><div style="font-size:11.5px;color:#8592a6">t.reyes@riversideusd.org</div></div></div><span style="font-size:12.5px;color:#475069">Finance Staff</span><span><span style="font-size:11px;font-weight:600;color:#64728a;background:#eef0f3;padding:3px 9px;border-radius:20px">● Deactivated</span></span><span style="font-size:12px;color:#8592a6">Nov 12</span><span style="color:#93a0b4;cursor:pointer;justify-self:center">⋯</span></div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- ============ SETTINGS ============ -->
+          <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:210px 1fr;gap:24px;animation:fadeUp .35s ease both">
+              <div style="display:flex;flex-direction:column;gap:3px">
+                <sc-for list="{{ setTabs }}" as="t" hint-placeholder-count="4">
+                  <div onClick="{{ t.go }}" style="{{ t.style }}">{{ t.label }}</div>
+                </sc-for>
+              </div>
+              <div style="background:#fff;border:1px solid #e2e7ef;border-radius:12px;padding:26px 28px">
+                <sc-if value="{{ setDistrict }}" hint-placeholder-val="{{ true }}">
+                  <div>
+                    <div style="font-size:16px;font-weight:600;margin-bottom:3px">District Information</div>
+                    <div style="font-size:12.5px;color:#8592a6;margin-bottom:24px">Your district's identity and workspace details. Visible to all members.</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:600px">
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">District name</label><input value="Riverside Unified School District" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">District code (CDS)</label><input value="33-67215-0000000" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">State</label><input value="California" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Enrollment</label><input value="28,400 students" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:26px"><button style="height:42px;padding:0 20px;border:none;background:#2f6bf6;color:#fff;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer">Save changes</button><button style="height:42px;padding:0 18px;border:1px solid #d3dae5;background:#fff;border-radius:8px;font-size:13.5px;font-weight:600;color:#344055;cursor:pointer">Cancel</button></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ setFiscal }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="font-size:16px;font-weight:600;margin-bottom:3px">Fiscal Year Settings</div>
+                    <div style="font-size:12.5px;color:#8592a6;margin-bottom:24px">Define how your district's financial year is structured. Affects reports and analytics.</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:600px">
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Current fiscal year</label><input value="FY 2024–25" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Year starts</label><input value="July 1" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Year ends</label><input value="June 30" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Reporting cadence</label><input value="Quarterly" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                    </div>
+                    <div style="margin-top:22px;padding:14px 16px;background:#f2f7ff;border:1px solid #d5e3fb;border-radius:9px;font-size:12.5px;color:#345;display:flex;gap:10px"><span style="color:#2f6bf6">ⓘ</span><span>Changing fiscal year boundaries will re-bucket imported transactions. Archived reports are unaffected.</span></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ setProfile }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="font-size:16px;font-weight:600;margin-bottom:3px">Profile Settings</div>
+                    <div style="font-size:12.5px;color:#8592a6;margin-bottom:24px">Manage your personal account information.</div>
+                    <div style="display:flex;gap:16px;align-items:center;margin-bottom:24px"><span style="width:56px;height:56px;border-radius:50%;background:#3a5680;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600">MC</span><button style="height:36px;padding:0 15px;border:1px solid #d3dae5;background:#fff;border-radius:8px;font-size:12.5px;font-weight:600;color:#344055;cursor:pointer">Change photo</button></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:600px">
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Full name</label><input value="Maria Chen" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Email</label><input value="m.chen@riversideusd.org" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Role</label><input value="Finance Director" disabled style="width:100%;height:42px;padding:0 13px;border:1px solid #e2e7ef;border-radius:8px;font-size:13.5px;background:#f7f9fc;color:#8592a6;outline:none" /></div>
+                      <div><label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Phone</label><input value="(951) 555-0142" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;outline:none" /></div>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ setNotif }}" hint-placeholder-val="{{ false }}">
+                  <div>
+                    <div style="font-size:16px;font-weight:600;margin-bottom:3px">Notification Preferences</div>
+                    <div style="font-size:12.5px;color:#8592a6;margin-bottom:22px">Choose what Meridian emails you about.</div>
+                    <div style="display:flex;flex-direction:column;max-width:560px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:15px 0;border-bottom:1px solid #f0f3f7"><div><div style="font-size:13.5px;font-weight:500">Upload validation complete</div><div style="font-size:12px;color:#8592a6">When a file finishes processing</div></div><div style="width:40px;height:23px;border-radius:20px;background:#2f6bf6;position:relative;cursor:pointer"><span style="position:absolute;top:2.5px;right:2.5px;width:18px;height:18px;border-radius:50%;background:#fff"></span></div></div>
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:15px 0;border-bottom:1px solid #f0f3f7"><div><div style="font-size:13.5px;font-weight:500">Validation errors detected</div><div style="font-size:12px;color:#8592a6">When an import contains errors</div></div><div style="width:40px;height:23px;border-radius:20px;background:#2f6bf6;position:relative;cursor:pointer"><span style="position:absolute;top:2.5px;right:2.5px;width:18px;height:18px;border-radius:50%;background:#fff"></span></div></div>
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:15px 0;border-bottom:1px solid #f0f3f7"><div><div style="font-size:13.5px;font-weight:500">Weekly budget summary</div><div style="font-size:12px;color:#8592a6">Every Monday morning</div></div><div style="width:40px;height:23px;border-radius:20px;background:#cbd3e0;position:relative;cursor:pointer"><span style="position:absolute;top:2.5px;left:2.5px;width:18px;height:18px;border-radius:50%;background:#fff"></span></div></div>
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:15px 0"><div><div style="font-size:13.5px;font-weight:500">New user joins district</div><div style="font-size:12px;color:#8592a6">When an invite is accepted</div></div><div style="width:40px;height:23px;border-radius:20px;background:#2f6bf6;position:relative;cursor:pointer"><span style="position:absolute;top:2.5px;right:2.5px;width:18px;height:18px;border-radius:50%;background:#fff"></span></div></div>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+
+        </div>
+      </main>
+    </div>
+
+    <!-- INVITE MODAL -->
+    <sc-if value="{{ inviteOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeInvite }}" style="position:fixed;inset:0;background:rgba(13,27,46,.42);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px">
+        <div style="width:100%;max-width:440px;background:#fff;border-radius:14px;padding:26px 28px;box-shadow:0 20px 60px rgba(13,27,46,.3);animation:fadeUp .25s ease both">
+          <div style="font-size:17px;font-weight:600;margin-bottom:4px">Invite a user</div>
+          <div style="font-size:12.5px;color:#8592a6;margin-bottom:22px">They'll receive a secure email invitation to join Riverside USD.</div>
+          <label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Email address</label>
+          <input placeholder="name@riversideusd.org" style="width:100%;height:42px;padding:0 13px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;margin-bottom:16px;outline:none" />
+          <label style="display:block;font-size:12.5px;font-weight:500;color:#344055;margin-bottom:7px">Role</label>
+          <select style="width:100%;height:42px;padding:0 11px;border:1px solid #d3dae5;border-radius:8px;font-size:13.5px;margin-bottom:8px;background:#fff"><option>Finance Staff</option><option>School Administrator</option><option>Superintendent</option><option>Read-only Auditor</option><option>Finance Director</option></select>
+          <div style="font-size:11.5px;color:#8592a6;margin-bottom:22px;line-height:1.5">Finance Staff can upload data and generate reports, but cannot manage users or district settings.</div>
+          <div style="display:flex;gap:10px;justify-content:flex-end"><button onClick="{{ closeInvite }}" style="height:42px;padding:0 18px;border:1px solid #d3dae5;background:#fff;border-radius:8px;font-size:13.5px;font-weight:600;color:#344055;cursor:pointer">Cancel</button><button onClick="{{ closeInvite }}" style="height:42px;padding:0 20px;border:none;background:#2f6bf6;color:#fff;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer">Send invitation</button></div>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    authed: true,
+    authView: 'login',
+    screen: 'dashboard',
+    uploadStep: 0,
+    anTab: 'revexp',
+    setTab: 'district',
+    compare: false,
+    inviteOpen: false,
+  };
+
+  icon(name) {
+    const s = 'width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"';
+    const paths = {
+      dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.2"/><rect x="14" y="3" width="7" height="5" rx="1.2"/><rect x="14" y="12" width="7" height="9" rx="1.2"/><rect x="3" y="16" width="7" height="5" rx="1.2"/>',
+      upload: '<path d="M12 15V4M12 4l-4 4M12 4l4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+      reports: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
+      analytics: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+      users: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3.2 3.2 0 0 1 0 6M18 20a5.5 5.5 0 0 0-3-4.9"/>',
+      settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+    };
+    return React.createElement('svg', { width: 19, height: 19, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round', dangerouslySetInnerHTML: { __html: paths[name] } });
+  }
+
+  navStyle(key) {
+    const active = this.state.screen === key;
+    return 'display:flex;align-items:center;gap:11px;padding:9px 11px;margin-bottom:2px;border-radius:9px;font-size:13.5px;font-weight:500;cursor:pointer;transition:background .12s;' +
+      (active ? 'background:rgba(76,124,246,.18);color:#fff;box-shadow:inset 2px 0 0 #4c7cf6' : 'color:#9aa8bd;');
+  }
+
+  nav(key) { this.setState({ screen: key }); this.scrollTop(); }
+  scrollTop() { try { const m = document.querySelector('main'); if (m) m.scrollTop = 0; } catch (e) {} }
+
+  // ---- charts ----
+  groupedBars(rev, exp, months, W, H) {
+    const pad = { t: 14, r: 10, b: 30, l: 40 };
+    const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+    const max = 16, ticks = [0, 4, 8, 12, 16];
+    let g = '';
+    ticks.forEach(t => {
+      const y = pad.t + ih - (t / max) * ih;
+      g += `<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${W - pad.r}" y2="${y.toFixed(1)}" stroke="#eef1f5" stroke-width="1"/>`;
+      g += `<text x="${pad.l - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="#93a0b4">${t}</text>`;
+    });
+    const gw = iw / months.length;
+    let bars = '';
+    months.forEach((m, i) => {
+      const cx = pad.l + gw * i + gw / 2;
+      const bw = Math.min(gw * 0.3, 12);
+      const rH = (rev[i] / max) * ih, eH = (exp[i] / max) * ih;
+      bars += `<rect x="${(cx - bw - 1.5).toFixed(1)}" y="${(pad.t + ih - rH).toFixed(1)}" width="${bw.toFixed(1)}" height="${rH.toFixed(1)}" rx="2" fill="#2f6bf6"/>`;
+      bars += `<rect x="${(cx + 1.5).toFixed(1)}" y="${(pad.t + ih - eH).toFixed(1)}" width="${bw.toFixed(1)}" height="${eH.toFixed(1)}" rx="2" fill="#c8d3e4"/>`;
+      bars += `<text x="${cx.toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="10" fill="#93a0b4">${m}</text>`;
+    });
+    return this.svg(`<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${g}${bars}</svg>`, H);
+  }
+
+  lineChart(seriesA, seriesB, months, W, H, opts) {
+    opts = opts || {};
+    const pad = { t: 14, r: 12, b: 30, l: 40 };
+    const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+    const max = opts.max || 16, ticks = opts.ticks || [0, 4, 8, 12, 16];
+    let g = '';
+    ticks.forEach(t => {
+      const y = pad.t + ih - (t / max) * ih;
+      g += `<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${W - pad.r}" y2="${y.toFixed(1)}" stroke="#eef1f5" stroke-width="1"/>`;
+      g += `<text x="${pad.l - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="10" fill="#93a0b4">${opts.fmt ? opts.fmt(t) : t}</text>`;
+    });
+    const x = i => pad.l + (iw / (months.length - 1)) * i;
+    const y = v => pad.t + ih - (v / max) * ih;
+    const path = arr => arr.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+    let lbl = '';
+    months.forEach((m, i) => { lbl += `<text x="${x(i).toFixed(1)}" y="${H - 10}" text-anchor="middle" font-size="10" fill="#93a0b4">${m}</text>`; });
+    let extra = '';
+    if (opts.area) {
+      const areaPath = path(seriesA) + ` L${x(months.length - 1).toFixed(1)} ${(pad.t + ih).toFixed(1)} L${x(0).toFixed(1)} ${(pad.t + ih).toFixed(1)} Z`;
+      extra = `<path d="${areaPath}" fill="#2f6bf6" opacity="0.08"/>`;
+    }
+    let dots = '';
+    if (opts.dots) seriesA.forEach((v, i) => { dots += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3" fill="#2f6bf6" stroke="#fff" stroke-width="1.5"/>`; });
+    const b = seriesB ? `<path d="${path(seriesB)}" fill="none" stroke="#c8d3e4" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>` : '';
+    const a = `<path d="${path(seriesA)}" fill="none" stroke="#2f6bf6" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+    return this.svg(`<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${g}${extra}${b}${a}${dots}${lbl}</svg>`, H);
+  }
+
+  donutEl() {
+    const pct = 67.6, r = 62, c = 2 * Math.PI * r, off = c * (1 - pct / 100);
+    const html = `<svg viewBox="0 0 160 160" width="150" height="150">
+      <circle cx="80" cy="80" r="${r}" fill="none" stroke="#eef1f5" stroke-width="16"/>
+      <circle cx="80" cy="80" r="${r}" fill="none" stroke="#2f6bf6" stroke-width="16" stroke-linecap="round"
+        stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 80 80)"/>
+      <text x="80" y="76" text-anchor="middle" font-size="30" font-weight="600" fill="#16202e">67.6%</text>
+      <text x="80" y="96" text-anchor="middle" font-size="11" fill="#8592a6">utilized</text>
+    </svg>`;
+    return this.svg(html, 150, true);
+  }
+
+  svg(html, h, center) {
+    return React.createElement('div', { style: { width: '100%', display: center ? 'flex' : 'block', justifyContent: 'center' }, dangerouslySetInnerHTML: { __html: html } });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    const rev = [11.8, 11.9, 12.1, 11.6, 12.4, 11.7, 12.0, 11.5, 12.3, 11.9, 12.2, 11.8];
+    const exp = [7.4, 7.9, 8.1, 8.6, 7.7, 9.2, 8.0, 8.4, 8.9, 7.6, 8.3, 8.3];
+    const revPrior = [11.2, 11.4, 11.6, 11.3, 11.9, 11.1, 11.5, 11.0, 11.8, 11.4, 11.7, 11.0];
+    const util = [8, 15, 23, 31, 37, 45, 51, 57, 62, 65, 66, 67.6];
+
+    const titles = {
+      dashboard: ['Financial Overview', 'Riverside USD · Fiscal Year 2024–25'],
+      upload: ['Upload Financial Data', 'Import, validate, and confirm district data'],
+      reports: ['Reports', 'Generate, filter, and export financial reports'],
+      analytics: ['Analytics', 'Trends, comparisons, and department insights'],
+      users: ['User Management', 'Manage members, roles, and access'],
+      settings: ['Settings', 'District, fiscal year, profile, and notifications'],
+    };
+    const t = titles[s.screen] || ['', ''];
+
+    const mkNav = (key, label, ic) => ({ label, icon: this.icon(ic), style: this.navStyle(key), go: () => this.nav(key) });
+
+    const anTabStyle = k => 'padding:7px 15px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;' +
+      (s.anTab === k ? 'background:#fff;color:#16202e;box-shadow:0 1px 2px rgba(13,27,46,.1)' : 'color:#64728a;');
+    const setTabStyle = k => 'padding:10px 13px;border-radius:8px;font-size:13.5px;font-weight:500;cursor:pointer;' +
+      (s.setTab === k ? 'background:#eef3fd;color:#2f6bf6;font-weight:600' : 'color:#475069;');
+
+    return {
+      isLogin: !s.authed,
+      isApp: s.authed,
+      authViewLogin: s.authView === 'login',
+      authViewForgot: s.authView === 'forgot',
+      authViewReset: s.authView === 'reset',
+      toForgot: () => this.setState({ authView: 'forgot' }),
+      toReset: () => this.setState({ authView: 'reset' }),
+      toLogin: () => this.setState({ authView: 'login' }),
+      signIn: () => this.setState({ authed: true, authView: 'login', screen: 'dashboard' }),
+      signOut: () => this.setState({ authed: false, authView: 'login' }),
+
+      navMain: [mkNav('dashboard', 'Dashboard', 'dashboard'), mkNav('upload', 'Upload Data', 'upload'), mkNav('reports', 'Reports', 'reports'), mkNav('analytics', 'Analytics', 'analytics')],
+      navAdmin: [mkNav('users', 'Users', 'users'), mkNav('settings', 'Settings', 'settings')],
+      go_dashboard: () => this.nav('dashboard'),
+      go_upload: () => this.nav('upload'),
+      go_reports: () => this.nav('reports'),
+      go_settings: () => this.nav('settings'),
+
+      pageTitle: t[0],
+      pageSub: t[1],
+
+      isDashboard: s.screen === 'dashboard',
+      isUpload: s.screen === 'upload',
+      isReports: s.screen === 'reports',
+      isAnalytics: s.screen === 'analytics',
+      isUsers: s.screen === 'users',
+      isSettings: s.screen === 'settings',
+
+      chartRevExpA: this.groupedBars(rev, exp, months, 640, 240),
+      chartRevExpB: this.groupedBars(rev, exp, months, 900, 300),
+      chartTrend: this.lineChart(util, null, months, 900, 300, { max: 100, ticks: [0, 25, 50, 75, 100], fmt: v => v + '%', area: true, dots: true }),
+      chartYoy: this.lineChart(rev, revPrior, months, 900, 300, { max: 16, ticks: [0, 4, 8, 12, 16] }),
+      donut: this.donutEl(),
+
+      // upload wizard
+      up0: s.uploadStep === 0, up1: s.uploadStep === 1, up2: s.uploadStep === 2, up3: s.uploadStep === 3,
+      uploadNext: () => this.setState(st => ({ uploadStep: Math.min(3, st.uploadStep + 1) })),
+      uploadBack: () => this.setState(st => ({ uploadStep: Math.max(0, st.uploadStep - 1) })),
+      uploadReset: () => this.setState({ uploadStep: 0 }),
+      steps: ['Select File', 'Map Columns', 'Validate', 'Confirm'].map((label, i) => {
+        const subs = ['Choose CSV or Excel', 'Match to fields', 'Check for errors', 'Import complete'];
+        const done = i < s.uploadStep, active = i === s.uploadStep;
+        const circle = 'width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;flex:none;' +
+          (done ? 'background:#2f6bf6;color:#fff' : active ? 'background:#2f6bf6;color:#fff;box-shadow:0 0 0 4px rgba(47,107,246,.16)' : 'background:#eef1f5;color:#93a0b4');
+        return {
+          label, sub: subs[i], mark: done ? '✓' : String(i + 1),
+          circle,
+          labelStyle: 'font-size:13px;font-weight:600;color:' + (active || done ? '#16202e' : '#93a0b4'),
+          connector: i < 3 ? 'flex:1;height:2px;margin:0 12px;border-radius:2px;background:' + (done ? '#2f6bf6' : '#e6eaf0') : 'display:none',
+        };
+      }),
+
+      // reports
+      compare: s.compare,
+      compareOn: s.compare,
+      toggleCompare: () => this.setState(st => ({ compare: !st.compare })),
+      compareBtnStyle: 'display:flex;align-items:center;gap:7px;height:38px;padding:0 13px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid ' +
+        (s.compare ? '#2f6bf6;background:#f2f7ff;color:#2f6bf6' : '#e2e7ef;background:#fff;color:#344055'),
+
+      // analytics tabs
+      anTabs: [['revexp', 'Revenue vs. Expenses'], ['budget', 'Budget Utilization'], ['dept', 'Department Spending'], ['yoy', 'Year-over-Year']].map(([k, label]) => ({ label, style: anTabStyle(k), go: () => this.setState({ anTab: k }) })),
+      anRevExp: s.anTab === 'revexp', anBudget: s.anTab === 'budget', anDept: s.anTab === 'dept', anYoy: s.anTab === 'yoy',
+
+      // users
+      openInvite: () => this.setState({ inviteOpen: true }),
+      closeInvite: () => this.setState({ inviteOpen: false }),
+      inviteOpen: s.inviteOpen,
+
+      // settings
+      setTabs: [['district', 'District Information'], ['fiscal', 'Fiscal Year'], ['profile', 'Profile'], ['notif', 'Notifications']].map(([k, label]) => ({ label, style: setTabStyle(k), go: () => this.setState({ setTab: k }) })),
+      setDistrict: s.setTab === 'district', setFiscal: s.setTab === 'fiscal', setProfile: s.setTab === 'profile', setNotif: s.setTab === 'notif',
+    };
+  }
+}
+</script>
+</body>
+</html>
