@@ -16,6 +16,7 @@ export default async function DistrictSettingsPage() {
       name: true,
       code: true,
       fiscalYearStartMonth: true,
+      state: true,
     },
   });
   if (!district) redirect("/dashboard");
@@ -32,6 +33,7 @@ export default async function DistrictSettingsPage() {
             id: district.id,
             name: district.name,
             fiscalYearStartMonth: district.fiscalYearStartMonth,
+            state: district.state,
           }}
         />
       </Card>

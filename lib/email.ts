@@ -14,7 +14,7 @@ type Mailer = ReturnType<typeof nodemailer.createTransport>;
 const SMTP_HOST = env.SMTP_HOST?.trim();
 const SMTP_CONFIGURED = !!SMTP_HOST;
 const FROM =
-  env.EMAIL_FROM?.trim() || "K-12 School Finance <no-reply@k12finance.local>";
+  env.EMAIL_FROM?.trim() || "EDvanced Vue <no-reply@edvancedvue.local>";
 
 const globalForMail = globalThis as unknown as { mailer?: Mailer };
 
@@ -108,7 +108,7 @@ function renderHtml(opts: {
       <tr><td align="center">
         <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e2e7ef;border-radius:12px">
           <tr><td style="padding:28px 32px">
-            <div style="font-weight:700;font-size:16px;color:#2f6bf6;margin-bottom:20px">K&#8211;12 School Finance</div>
+            <div style="font-weight:700;font-size:16px;color:#2f6bf6;margin-bottom:20px">EDvanced Vue</div>
             <div style="font-size:20px;font-weight:600;margin-bottom:12px">${escapeHtml(opts.heading)}</div>
             <p style="font-size:14px;line-height:1.6;color:#475069;margin:0 0 22px">Hi ${escapeHtml(opts.name)},<br/>${escapeHtml(opts.intro)}</p>
             <a href="${url}" style="display:inline-block;background:#2f6bf6;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:8px">${escapeHtml(opts.buttonLabel)}</a>
@@ -129,13 +129,13 @@ export async function sendInviteEmail(
 ): Promise<void> {
   await sendEmail({
     to,
-    subject: "You've been invited to the K-12 School Finance Platform",
+    subject: "You've been invited to EDvanced Vue",
     text: `Hi ${name},\n\nAn account has been created for you. Set your password to get started:\n\n${link}\n\nThis link expires in 7 days.`,
     html: renderHtml({
       name,
       heading: "Set your password",
       intro:
-        "an account has been created for you on the K-12 School Finance Platform. Set your password to get started.",
+        "an account has been created for you on EDvanced Vue. Set your password to get started.",
       buttonLabel: "Set your password",
       url: link,
       expiry: "This link expires in 7 days.",
@@ -150,7 +150,7 @@ export async function sendPasswordResetEmail(
 ): Promise<void> {
   await sendEmail({
     to,
-    subject: "Reset your K-12 School Finance Platform password",
+    subject: "Reset your EDvanced Vue password",
     text: `Hi ${name},\n\nWe received a request to reset your password. Use the link below (valid for 1 hour):\n\n${link}\n\nIf you didn't request this, you can safely ignore this email.`,
     html: renderHtml({
       name,

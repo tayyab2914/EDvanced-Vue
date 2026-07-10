@@ -45,7 +45,7 @@ export function UsersManager({
   const now = new Date();
   return (
     <div className="space-y-5">
-      <Disclosure label="Add user">
+      <Disclosure label="Invite users">
         <AddUserForm districtId={districtId} />
       </Disclosure>
 

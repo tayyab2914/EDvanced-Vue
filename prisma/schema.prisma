@@ -52,6 +52,7 @@ model District {
   code                 String         @unique
   name                 String
   status               DistrictStatus @default(ACTIVE)
+  state                String         @default("FL") // 2-letter US state code
   fiscalYearStartMonth Int            @default(7) // July
   settings             Json           @default("{}")
   createdAt            DateTime       @default(now())

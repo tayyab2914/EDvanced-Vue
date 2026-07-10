@@ -16,7 +16,11 @@ export default async function PlatformLayout({
       label: "Overview",
       items: [
         { label: "Overview", href: "/platform", icon: "dashboard", exact: true },
-        { label: "Districts", href: "/platform/districts", icon: "building" },
+        {
+          label: "District Management",
+          href: "/platform/districts",
+          icon: "building",
+        },
       ],
     },
     {
@@ -26,7 +30,7 @@ export default async function PlatformLayout({
   ];
   return (
     <AppShell
-      brand="K–12 Finance"
+      brand="EDvanced Vue"
       workspaceName="Platform Console"
       workspaceSub="All districts"
       nav={nav}

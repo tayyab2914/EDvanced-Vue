@@ -35,7 +35,7 @@ export default async function DistrictsPage() {
   return (
     <div>
       <PageHeader
-        title="Districts"
+        title="District Management"
         description="Create and manage district tenants. Each new district is seeded with the standard chart of accounts."
       />
       <div className="mb-5">

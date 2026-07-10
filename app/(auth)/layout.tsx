@@ -18,13 +18,13 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         />
         <div className="relative flex items-center gap-3">
           <div className="flex h-[34px] w-[34px] items-center justify-center rounded-lg bg-brand text-[16px] font-bold text-white">
-            K
+            E
           </div>
           <span className="text-[17px] font-semibold text-white">
-            K–12 Finance
+            EDvanced Vue
           </span>
           <span className="ml-1 border-l border-[#2a3a52] pl-3 text-[13px] font-medium text-[#7d8ba3]">
-            for School Districts
+            Finance Leadership Tools
           </span>
         </div>
         <div className="relative max-w-[420px]">

@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { createDistrict } from "@/app/actions/districts";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/forms";
 import { MONTHS } from "@/lib/format";
+import { US_STATES, DEFAULT_STATE } from "@/lib/us-states";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
@@ -45,6 +46,19 @@ export function CreateDistrictForm() {
               {MONTHS.map((m, i) => (
                 <option key={m} value={i + 1}>
                   {m}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field
+            label="State"
+            htmlFor="d-state"
+            error={state.fieldErrors?.state?.[0]}
+          >
+            <Select id="d-state" name="state" defaultValue={DEFAULT_STATE}>
+              {US_STATES.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.name}
                 </option>
               ))}
             </Select>

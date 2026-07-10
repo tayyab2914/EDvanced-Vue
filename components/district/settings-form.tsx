@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { updateDistrictSettings } from "@/app/actions/districts";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/forms";
 import { MONTHS } from "@/lib/format";
+import { US_STATES } from "@/lib/us-states";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ export function DistrictSettingsForm({
     id: string;
     name: string;
     fiscalYearStartMonth: number;
+    state: string;
   };
 }) {
   const [state, action, pending] = useActionState<FormState, FormData>(
@@ -49,6 +51,19 @@ export function DistrictSettingsForm({
             {MONTHS.map((m, i) => (
               <option key={m} value={i + 1}>
                 {m}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field
+          label="State"
+          htmlFor="s-state"
+          error={state.fieldErrors?.state?.[0]}
+        >
+          <Select id="s-state" name="state" defaultValue={district.state}>
+            {US_STATES.map((s) => (
+              <option key={s.code} value={s.code}>
+                {s.name}
               </option>
             ))}
           </Select>

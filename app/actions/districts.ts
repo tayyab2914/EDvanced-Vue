@@ -31,6 +31,7 @@ export async function createDistrict(
     name: formData.get("name"),
     code: formData.get("code"),
     fiscalYearStartMonth: formData.get("fiscalYearStartMonth"),
+    state: formData.get("state"),
   });
   if (!parsed.success) {
     return {
@@ -80,6 +81,7 @@ export async function createDistrict(
         name: parsed.data.name,
         code,
         fiscalYearStartMonth: parsed.data.fiscalYearStartMonth,
+        state: parsed.data.state,
         status: DistrictStatus.ACTIVE,
       },
       select: { id: true },
@@ -153,6 +155,7 @@ export async function updateDistrictSettings(
   const parsed = districtSettingsSchema.safeParse({
     name: formData.get("name"),
     fiscalYearStartMonth: formData.get("fiscalYearStartMonth"),
+    state: formData.get("state"),
   });
   if (!parsed.success) {
     return {
@@ -166,6 +169,7 @@ export async function updateDistrictSettings(
     data: {
       name: parsed.data.name,
       fiscalYearStartMonth: parsed.data.fiscalYearStartMonth,
+      state: parsed.data.state,
     },
   });
   await writeAudit({

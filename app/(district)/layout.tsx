@@ -34,7 +34,7 @@ export default async function DistrictLayout({
 
   return (
     <AppShell
-      brand="K–12 Finance"
+      brand="EDvanced Vue"
       workspaceName={user.districtName ?? "District"}
       workspaceSub="Finance workspace"
       contextTag="2024–25"

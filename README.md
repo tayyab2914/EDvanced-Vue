@@ -1,4 +1,4 @@
-# K–12 School Finance Platform
+# EDvanced Vue — Finance Leadership Tools
 
 A secure, multi-district SaaS platform for K–12 school finance reporting & analytics.
 

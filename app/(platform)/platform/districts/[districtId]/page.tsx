@@ -40,6 +40,7 @@ export default async function DistrictDetailPage({
       code: true,
       status: true,
       fiscalYearStartMonth: true,
+      state: true,
       _count: {
         select: { users: true, schools: true, grants: true, funds: true },
       },
@@ -93,6 +94,7 @@ export default async function DistrictDetailPage({
             id: district.id,
             name: district.name,
             fiscalYearStartMonth: district.fiscalYearStartMonth,
+            state: district.state,
           }}
         />
       </Card>

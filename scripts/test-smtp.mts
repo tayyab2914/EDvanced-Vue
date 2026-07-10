@@ -38,15 +38,21 @@ async function main() {
   }
 
   await transporter.verify();
-  console.log("✔ SMTP connection verified.");
+  console.log("✔ SMTP connection + credentials verified.");
 
-  const to = process.argv[2] || "recipient@example.com";
+  const to = process.argv[2];
+  if (!to) {
+    console.log(
+      "No recipient given — nothing sent. To send a real test email:\n  npm run test:smtp -- you@example.com",
+    );
+    return;
+  }
+
   const info = await transporter.sendMail({
     from:
-      process.env.EMAIL_FROM ||
-      "K-12 School Finance <no-reply@k12finance.local>",
+      process.env.EMAIL_FROM || "EDvanced Vue <no-reply@edvancedvue.local>",
     to,
-    subject: "K-12 Finance — SMTP test",
+    subject: "EDvanced Vue — SMTP test",
     text: "This confirms SMTP is wired up.\n\nExample link: http://localhost:3000/reset-password?token=demo",
     html: "<p>This confirms <b>SMTP</b> is wired up.</p>",
   });
