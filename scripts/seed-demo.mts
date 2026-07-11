@@ -31,9 +31,9 @@ async function main() {
 
   const passwordHash = await hashPassword(PW);
   const users = [
-    { email: "demo.admin@k12finance.local", name: "Dana Admin", role: "DISTRICT_ADMIN" as const },
-    { email: "demo.finance@k12finance.local", name: "Finn Finance", role: "FINANCE_USER" as const },
-    { email: "demo.viewer@k12finance.local", name: "Vera Viewer", role: "VIEWER" as const },
+    { email: "demo.admin@k12finance.local", name: "Dana Admin", firstName: "Dana", lastName: "Admin", role: "DISTRICT_ADMIN" as const },
+    { email: "demo.finance@k12finance.local", name: "Finn Finance", firstName: "Finn", lastName: "Finance", role: "FINANCE_USER" as const },
+    { email: "demo.viewer@k12finance.local", name: "Vera Viewer", firstName: "Vera", lastName: "Viewer", role: "VIEWER" as const },
   ];
   for (const u of users) {
     const existing = await prisma.user.findUnique({ where: { email: u.email } });

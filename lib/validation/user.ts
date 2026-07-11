@@ -7,8 +7,27 @@ export const ASSIGNABLE_ROLES = [
   "VIEWER",
 ] as const;
 
+const firstName = z
+  .string()
+  .trim()
+  .min(1, { error: "First name is required." })
+  .max(60);
+const lastName = z
+  .string()
+  .trim()
+  .min(1, { error: "Last name is required." })
+  .max(60);
+const role = z.enum(ASSIGNABLE_ROLES, { error: "Choose a role." });
+
 export const createUserSchema = z.object({
-  name: z.string().trim().min(2, { error: "Name is required." }).max(120),
+  firstName,
+  lastName,
   email: z.email({ error: "Enter a valid email address." }).trim(),
-  role: z.enum(ASSIGNABLE_ROLES, { error: "Choose a role." }),
+  role,
 });
+
+export const editUserSchema = z.object({ firstName, lastName, role });
+
+export function fullName(first: string, last: string): string {
+  return `${first} ${last}`.trim();
+}

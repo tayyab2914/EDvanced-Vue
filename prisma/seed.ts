@@ -36,6 +36,8 @@ async function main() {
         data: {
           email,
           name: "Platform Administrator",
+          firstName: "Platform",
+          lastName: "Administrator",
           role: "PLATFORM_ADMIN",
           status: "ACTIVE",
           passwordHash,

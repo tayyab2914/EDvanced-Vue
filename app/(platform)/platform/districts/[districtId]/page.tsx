@@ -80,16 +80,14 @@ export default async function DistrictDetailPage({
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <SummaryStat label="Users" value={district._count.users} />
-        <SummaryStat label="Schools" value={district._count.schools} />
+        <SummaryStat label="Cost Centers" value={district._count.schools} />
         <SummaryStat label="Grants" value={district._count.grants} />
         <SummaryStat label="Funds" value={district._count.funds} />
       </div>
 
       <Card>
-        <h2 className="mb-4 text-sm font-semibold text-ink">
-          District settings
-        </h2>
         <DistrictSettingsForm
+          title="District settings"
           district={{
             id: district.id,
             name: district.name,

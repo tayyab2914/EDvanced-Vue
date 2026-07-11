@@ -14,6 +14,8 @@ export default async function DistrictUsersPage() {
     select: {
       id: true,
       name: true,
+      firstName: true,
+      lastName: true,
       email: true,
       role: true,
       status: true,

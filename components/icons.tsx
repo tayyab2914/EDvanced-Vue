@@ -13,7 +13,10 @@ export type IconName =
   | "trash"
   | "power"
   | "filter"
-  | "eye";
+  | "eye"
+  | "mail"
+  | "key"
+  | "unlock";
 
 const PATHS: Record<IconName, string> = {
   dashboard:
@@ -37,6 +40,9 @@ const PATHS: Record<IconName, string> = {
   power: '<path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>',
   filter: '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/><path d="m14 9 3 3"/>',
+  unlock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.9-1"/>',
 };
 
 export function Icon({

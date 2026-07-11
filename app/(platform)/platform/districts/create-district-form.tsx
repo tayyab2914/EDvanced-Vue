@@ -5,21 +5,19 @@ import { createDistrict } from "@/app/actions/districts";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/forms";
 import { MONTHS } from "@/lib/format";
 import { US_STATES, DEFAULT_STATE } from "@/lib/us-states";
-import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 
-export function CreateDistrictForm() {
+export function CreateDistrictForm({ onCancel }: { onCancel?: () => void }) {
   const [state, action, pending] = useActionState<FormState, FormData>(
     createDistrict,
     EMPTY_FORM_STATE,
   );
 
   return (
-    <Card>
-      <form action={action} className="space-y-4">
+    <form action={action} className="space-y-4">
         {state.error && <Alert tone="error">{state.error}</Alert>}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
@@ -85,10 +83,16 @@ export function CreateDistrictForm() {
           </div>
         </div>
 
-        <Button type="submit" disabled={pending}>
-          {pending ? "Creating…" : "Create district"}
-        </Button>
-      </form>
-    </Card>
+        <div className="flex justify-end gap-2">
+          {onCancel && (
+            <Button type="button" variant="secondary" onClick={onCancel}>
+              Cancel
+            </Button>
+          )}
+          <Button type="submit" disabled={pending}>
+            {pending ? "Creating…" : "Create district"}
+          </Button>
+        </div>
+    </form>
   );
 }

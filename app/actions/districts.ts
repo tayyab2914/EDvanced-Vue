@@ -4,8 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { requireAuth, requireRole, type CurrentUser } from "@/lib/auth/dal";
+import * as z from "zod";
 import { districtSchema, districtSettingsSchema } from "@/lib/validation/district";
-import { createUserSchema } from "@/lib/validation/user";
+import { fullName } from "@/lib/validation/user";
 import { createVerificationToken, INVITE_TTL_MS } from "@/lib/tokens";
 import { sendInviteEmail, buildTokenLink } from "@/lib/email";
 import { writeAudit } from "@/lib/audit";
@@ -41,23 +42,27 @@ export async function createDistrict(
   const code = parsed.data.code.toLowerCase();
 
   // Optional first District Admin.
-  const wantsAdmin = !!(formData.get("adminEmail") as string | null)?.trim();
+  const adminEmailRaw = String(formData.get("adminEmail") ?? "").trim();
+  const wantsAdmin = !!adminEmailRaw;
   let adminEmail = "";
   let adminName = "";
+  let adminFirst = "";
+  let adminLast = "";
   if (wantsAdmin) {
-    const adminParsed = createUserSchema.safeParse({
-      name: (formData.get("adminName") as string | null)?.trim() || "District Administrator",
-      email: formData.get("adminEmail"),
-      role: Role.DISTRICT_ADMIN,
-    });
-    if (!adminParsed.success) {
+    const emailParsed = z.email().safeParse(adminEmailRaw);
+    if (!emailParsed.success) {
       return {
         error: "Please fix the errors below.",
-        fieldErrors: adminParsed.error.flatten().fieldErrors,
+        fieldErrors: { adminEmail: ["Enter a valid email address."] },
       };
     }
-    adminEmail = adminParsed.data.email.toLowerCase();
-    adminName = adminParsed.data.name;
+    adminEmail = emailParsed.data.toLowerCase();
+    adminName =
+      String(formData.get("adminName") ?? "").trim() || "District Administrator";
+    const parts = adminName.split(/\s+/);
+    adminFirst = parts[0];
+    adminLast = parts.slice(1).join(" ");
+    adminName = fullName(adminFirst, adminLast);
     if (await prisma.user.findUnique({ where: { email: adminEmail } })) {
       return {
         error: "That admin email is already in use.",
@@ -92,6 +97,8 @@ export async function createDistrict(
       const user = await tx.user.create({
         data: {
           name: adminName,
+          firstName: adminFirst,
+          lastName: adminLast,
           email: adminEmail,
           role: Role.DISTRICT_ADMIN,
           status: UserStatus.INVITED,

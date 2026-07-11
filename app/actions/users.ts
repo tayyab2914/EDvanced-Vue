@@ -3,9 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAuth, type CurrentUser } from "@/lib/auth/dal";
-import { createUserSchema, ASSIGNABLE_ROLES } from "@/lib/validation/user";
-import { createVerificationToken, INVITE_TTL_MS } from "@/lib/tokens";
-import { sendInviteEmail, buildTokenLink } from "@/lib/email";
+import {
+  createUserSchema,
+  editUserSchema,
+  fullName,
+} from "@/lib/validation/user";
+import {
+  createVerificationToken,
+  INVITE_TTL_MS,
+  RESET_TTL_MS,
+} from "@/lib/tokens";
+import {
+  sendInviteEmail,
+  sendPasswordResetEmail,
+  buildTokenLink,
+} from "@/lib/email";
 import { revokeUserSessions } from "@/lib/auth/session";
 import { writeAudit } from "@/lib/audit";
 import { Role, UserStatus, TokenType } from "@/lib/enums";
@@ -19,9 +31,9 @@ function canManageUsers(actor: CurrentUser, districtId: string): boolean {
   );
 }
 
-function revalidateUsers(districtId: string) {
-  revalidatePath(`/platform/districts/${districtId}/users`);
-  revalidatePath("/district/users");
+function revalidateUsers() {
+  revalidatePath("/users");
+  revalidatePath("/platform/districts/[districtId]/users", "page");
 }
 
 export async function createUser(
@@ -35,7 +47,8 @@ export async function createUser(
   }
 
   const parsed = createUserSchema.safeParse({
-    name: formData.get("name"),
+    firstName: formData.get("firstName"),
+    lastName: formData.get("lastName"),
     email: formData.get("email"),
     role: formData.get("role"),
   });
@@ -54,20 +67,23 @@ export async function createUser(
     };
   }
 
+  const name = fullName(parsed.data.firstName, parsed.data.lastName);
   const user = await prisma.user.create({
     data: {
-      name: parsed.data.name,
+      name,
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
       email,
       role: parsed.data.role as Role,
       status: UserStatus.INVITED,
       districtId,
     },
-    select: { id: true, name: true, email: true },
+    select: { id: true, email: true },
   });
   const link = buildTokenLink(
     await createVerificationToken(user.id, TokenType.INVITE, INVITE_TTL_MS),
   );
-  await sendInviteEmail(user.email, user.name, link);
+  await sendInviteEmail(user.email, name, link);
   await writeAudit({
     action: "USER_INVITED",
     actorUserId: actor.id,
@@ -76,7 +92,7 @@ export async function createUser(
     entityId: user.id,
     metadata: { email, role: parsed.data.role },
   });
-  revalidateUsers(districtId);
+  revalidateUsers();
 
   return {
     success: isProduction
@@ -85,34 +101,59 @@ export async function createUser(
   };
 }
 
-export async function changeUserRole(formData: FormData): Promise<void> {
+export async function editUser(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
   const districtId = String(formData.get("districtId") ?? "");
   const userId = String(formData.get("userId") ?? "");
-  const role = String(formData.get("role") ?? "");
   const actor = await requireAuth();
-  if (!canManageUsers(actor, districtId)) return;
-  if (!ASSIGNABLE_ROLES.includes(role as (typeof ASSIGNABLE_ROLES)[number])) return;
+  if (!districtId || !canManageUsers(actor, districtId)) {
+    return { error: "You are not authorized to manage users for this district." };
+  }
+
+  const parsed = editUserSchema.safeParse({
+    firstName: formData.get("firstName"),
+    lastName: formData.get("lastName"),
+    role: formData.get("role"),
+  });
+  if (!parsed.success) {
+    return {
+      error: "Please fix the errors below.",
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    };
+  }
 
   const target = await prisma.user.findUnique({
     where: { id: userId },
     select: { districtId: true, role: true },
   });
-  if (!target || target.districtId !== districtId) return;
-  if (target.role === Role.PLATFORM_ADMIN) return;
+  if (!target || target.districtId !== districtId) {
+    return { error: "User not found in this district." };
+  }
+  if (target.role === Role.PLATFORM_ADMIN) {
+    return { error: "Platform admins cannot be edited here." };
+  }
 
   await prisma.user.update({
     where: { id: userId },
-    data: { role: role as Role },
+    data: {
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
+      name: fullName(parsed.data.firstName, parsed.data.lastName),
+      role: parsed.data.role as Role,
+    },
   });
   await writeAudit({
-    action: "USER_ROLE_CHANGED",
+    action: "USER_UPDATED",
     actorUserId: actor.id,
     districtId,
     entityType: "User",
     entityId: userId,
-    metadata: { role },
+    metadata: { role: parsed.data.role },
   });
-  revalidateUsers(districtId);
+  revalidateUsers();
+  return { success: "User updated." };
 }
 
 export async function setUserStatus(formData: FormData): Promise<void> {
@@ -143,7 +184,7 @@ export async function setUserStatus(formData: FormData): Promise<void> {
     entityType: "User",
     entityId: userId,
   });
-  revalidateUsers(districtId);
+  revalidateUsers();
 }
 
 export async function resendInvite(formData: FormData): Promise<void> {
@@ -170,7 +211,34 @@ export async function resendInvite(formData: FormData): Promise<void> {
     entityType: "User",
     entityId: userId,
   });
-  revalidateUsers(districtId);
+  revalidateUsers();
+}
+
+export async function adminResetPassword(formData: FormData): Promise<void> {
+  const districtId = String(formData.get("districtId") ?? "");
+  const userId = String(formData.get("userId") ?? "");
+  const actor = await requireAuth();
+  if (!canManageUsers(actor, districtId)) return;
+
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, email: true, districtId: true, role: true },
+  });
+  if (!target || target.districtId !== districtId) return;
+  if (target.role === Role.PLATFORM_ADMIN) return;
+
+  const link = buildTokenLink(
+    await createVerificationToken(target.id, TokenType.PASSWORD_RESET, RESET_TTL_MS),
+  );
+  await sendPasswordResetEmail(target.email, target.name, link);
+  await writeAudit({
+    action: "PASSWORD_RESET_SENT",
+    actorUserId: actor.id,
+    districtId,
+    entityType: "User",
+    entityId: userId,
+  });
+  revalidateUsers();
 }
 
 export async function unlockUser(formData: FormData): Promise<void> {
@@ -196,5 +264,5 @@ export async function unlockUser(formData: FormData): Promise<void> {
     entityType: "User",
     entityId: userId,
   });
-  revalidateUsers(districtId);
+  revalidateUsers();
 }
