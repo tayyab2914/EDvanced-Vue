@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { requireAuth, requireRole, type CurrentUser } from "@/lib/auth/dal";
+import { requireAuth, requireRole } from "@/lib/auth/dal";
 import * as z from "zod";
 import { districtSchema, districtSettingsSchema } from "@/lib/validation/district";
 import { fullName } from "@/lib/validation/user";
@@ -13,13 +13,6 @@ import { writeAudit } from "@/lib/audit";
 import { Role, DistrictStatus, UserStatus, TokenType } from "@/lib/enums";
 import { isProduction } from "@/lib/env";
 import type { FormState } from "@/lib/forms";
-
-function canConfigureDistrict(actor: CurrentUser, districtId: string): boolean {
-  return (
-    actor.role === Role.PLATFORM_ADMIN ||
-    (actor.role === Role.DISTRICT_ADMIN && actor.districtId === districtId)
-  );
-}
 
 export async function createDistrict(
   _prev: FormState,
@@ -154,8 +147,9 @@ export async function updateDistrictSettings(
 ): Promise<FormState> {
   const districtId = String(formData.get("districtId") ?? "");
   const actor = await requireAuth();
-  if (!districtId || !canConfigureDistrict(actor, districtId)) {
-    return { error: "You are not authorized to change these settings." };
+  // Core district settings (name / state / fiscal year) are platform-managed.
+  if (!districtId || actor.role !== Role.PLATFORM_ADMIN) {
+    return { error: "Only a platform administrator can change these settings." };
   }
 
   const parsed = districtSettingsSchema.safeParse({

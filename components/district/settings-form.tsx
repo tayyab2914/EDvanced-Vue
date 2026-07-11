@@ -17,6 +17,7 @@ const STATE_NAME = new Map(US_STATES.map((s) => [s.code, s.name]));
 export function DistrictSettingsForm({
   district,
   title,
+  editable = true,
 }: {
   district: {
     id: string;
@@ -25,6 +26,7 @@ export function DistrictSettingsForm({
     state: string;
   };
   title?: string;
+  editable?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [state, action, pending] = useActionState<FormState, FormData>(
@@ -42,25 +44,27 @@ export function DistrictSettingsForm({
 
   return (
     <div>
-      <div
-        className={cn(
-          "mb-4 flex items-center gap-3",
-          title ? "justify-between" : "justify-end",
-        )}
-      >
-        {title && <h2 className="text-sm font-semibold text-ink">{title}</h2>}
-        {!editing && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setEditing(true)}
-          >
-            <Icon name="pencil" size={14} />
-            Edit
-          </Button>
-        )}
-      </div>
+      {(title || (editable && !editing)) && (
+        <div
+          className={cn(
+            "mb-4 flex items-center gap-3",
+            title ? "justify-between" : "justify-end",
+          )}
+        >
+          {title && <h2 className="text-sm font-semibold text-ink">{title}</h2>}
+          {editable && !editing && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setEditing(true)}
+            >
+              <Icon name="pencil" size={14} />
+              Edit
+            </Button>
+          )}
+        </div>
+      )}
 
       {state.error && (
         <div className="mb-4">

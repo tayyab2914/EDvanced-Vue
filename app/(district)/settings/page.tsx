@@ -25,7 +25,7 @@ export default async function DistrictSettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="District settings"
-        description={`Code: ${district.code}`}
+        description={`Code: ${district.code} · Managed by your platform administrator.`}
       />
       <Card>
         <DistrictSettingsForm
@@ -35,6 +35,7 @@ export default async function DistrictSettingsPage() {
             fiscalYearStartMonth: district.fiscalYearStartMonth,
             state: district.state,
           }}
+          editable={false}
         />
       </Card>
     </div>
