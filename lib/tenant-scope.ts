@@ -1,16 +1,17 @@
 // Pure, dependency-free tenant-scoping logic (no server-only / no db import) so it
 // can be unit-tested and shared. lib/tenant-db.ts wires this onto the real client.
 
+// Platform-managed global lookups (FundType, RevenueType, ObjectType, FunctionType,
+// Status) are intentionally NOT here — they are shared across districts and must not
+// be district-scoped. Only district-owned data is tenant-scoped.
 const TENANT_MODELS = new Set([
   "School",
   "Grant",
   "CapitalProject",
-  "FundType",
   "Fund",
   "RevenueSource",
   "AccountFunction",
   "AccountObject",
-  "Status",
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

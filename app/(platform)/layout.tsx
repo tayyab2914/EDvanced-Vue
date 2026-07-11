@@ -25,7 +25,14 @@ export default async function PlatformLayout({
     },
     {
       label: "Administration",
-      items: [{ label: "Audit log", href: "/platform/audit", icon: "activity" }],
+      items: [
+        {
+          label: "Configuration",
+          href: "/platform/config",
+          icon: "settings",
+        },
+        { label: "Audit log", href: "/platform/audit", icon: "activity" },
+      ],
     },
   ];
   return (

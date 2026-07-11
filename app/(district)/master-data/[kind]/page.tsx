@@ -1,5 +1,6 @@
 import { redirect, notFound } from "next/navigation";
 import { requirePermission, getTenantDb } from "@/lib/auth/dal";
+import { prisma } from "@/lib/db";
 import { hasPermission } from "@/lib/auth/permissions";
 import { RESOURCES, type MasterKind } from "@/lib/master-data/registry";
 import { PageHeader } from "@/components/page-header";
@@ -33,18 +34,17 @@ export default async function MasterDataKindPage({
   const relLabels: Record<string, Map<string, string>> = {};
 
   if (def.kind === "funds") {
-    const fundTypes = await db.fundType.findMany({
+    // Fund types are a platform-managed global lookup (not district-scoped).
+    const fundTypes = await prisma.fundType.findMany({
       where: { active: true },
-      orderBy: { code: "asc" },
-      select: { id: true, code: true, name: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true },
     });
     options.fundTypes = fundTypes.map((x) => ({
       value: x.id,
-      label: `${x.code} — ${x.name}`,
+      label: x.name,
     }));
-    relLabels.fundTypeId = new Map(
-      fundTypes.map((x) => [x.id, `${x.code} — ${x.name}`]),
-    );
+    relLabels.fundTypeId = new Map(fundTypes.map((x) => [x.id, x.name]));
   }
   if (def.kind === "grants") {
     const funds = await db.fund.findMany({

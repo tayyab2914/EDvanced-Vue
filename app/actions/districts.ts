@@ -6,7 +6,6 @@ import { prisma } from "@/lib/db";
 import { requireAuth, requireRole, type CurrentUser } from "@/lib/auth/dal";
 import { districtSchema, districtSettingsSchema } from "@/lib/validation/district";
 import { createUserSchema } from "@/lib/validation/user";
-import { seedDistrictReferenceData } from "@/lib/reference-data/florida-red-book";
 import { createVerificationToken, INVITE_TTL_MS } from "@/lib/tokens";
 import { sendInviteEmail, buildTokenLink } from "@/lib/email";
 import { writeAudit } from "@/lib/audit";
@@ -74,7 +73,8 @@ export async function createDistrict(
     };
   }
 
-  // Create district + copy standard reference data + (optional) first admin, atomically.
+  // Create district + (optional) first admin, atomically. Districts start with no
+  // account data — each district enters/imports its own (no seeded standards).
   const { districtId, adminUserId } = await prisma.$transaction(async (tx) => {
     const district = await tx.district.create({
       data: {
@@ -86,7 +86,6 @@ export async function createDistrict(
       },
       select: { id: true },
     });
-    await seedDistrictReferenceData(tx, district.id);
 
     let adminUserId: string | null = null;
     if (wantsAdmin) {

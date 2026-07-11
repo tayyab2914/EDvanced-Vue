@@ -2,7 +2,6 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { makeTenantExtension } from "@/lib/tenant-scope";
-import { seedDistrictReferenceData } from "@/lib/reference-data/florida-red-book";
 import { hasPermission } from "@/lib/auth/permissions";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 
@@ -36,30 +35,20 @@ async function cleanup() {
 async function main() {
   await cleanup();
 
-  console.log("\n[1] Onboarding + reference-data seeding");
-  const a = await prisma.$transaction(async (tx) => {
-    const d = await tx.district.create({
-      data: { name: "Alpha ISD", code: A_CODE, status: "ACTIVE" },
-      select: { id: true },
-    });
-    await seedDistrictReferenceData(tx, d.id);
-    return d;
+  console.log("\n[1] Onboarding — districts start empty (no seeded standards)");
+  const a = await prisma.district.create({
+    data: { name: "Alpha ISD", code: A_CODE, status: "ACTIVE" },
+    select: { id: true },
   });
-  const b = await prisma.$transaction(async (tx) => {
-    const d = await tx.district.create({
-      data: { name: "Beta ISD", code: B_CODE, status: "ACTIVE" },
-      select: { id: true },
-    });
-    await seedDistrictReferenceData(tx, d.id);
-    return d;
+  const b = await prisma.district.create({
+    data: { name: "Beta ISD", code: B_CODE, status: "ACTIVE" },
+    select: { id: true },
   });
 
-  const aFundTypes = await t(a.id).fundType.count();
   const aFunds = await t(a.id).fund.count();
   const bFunds = await t(b.id).fund.count();
-  assert(aFundTypes === 8, `District A seeded 8 fund types (got ${aFundTypes})`);
-  assert(aFunds === 11, `District A seeded 11 standard funds (got ${aFunds})`);
-  assert(bFunds === 11, `District B seeded its own 11 funds (got ${bFunds})`);
+  assert(aFunds === 0, `District A starts with no funds (got ${aFunds})`);
+  assert(bFunds === 0, `District B starts with no funds (got ${bFunds})`);
 
   console.log("\n[2] Tenant scoping injects districtId on create");
   // Cast create() to bypass the base type's districtId requirement — the scoped
@@ -82,8 +71,8 @@ async function main() {
 
   const aFundsNow = await t(a.id).fund.count();
   const bFundsNow = await t(b.id).fund.count();
-  assert(aFundsNow === 12, `District A now has 12 funds incl. custom (got ${aFundsNow})`);
-  assert(bFundsNow === 11, `District B unaffected by A's custom fund (got ${bFundsNow})`);
+  assert(aFundsNow === 1, `District A now has its 1 custom fund (got ${aFundsNow})`);
+  assert(bFundsNow === 0, `District B unaffected by A's custom fund (got ${bFundsNow})`);
   const bSeesCustom = await t(b.id).fund.findFirst({ where: { code: "C001" } });
   assert(bSeesCustom === null, "District B cannot read A's custom fund by code");
 

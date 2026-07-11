@@ -1,11 +1,10 @@
-// OPTIONAL sample data: a "Demo ISD" district with one user per role (all ACTIVE),
-// standard reference data, and a couple of schools. Idempotent.
+// OPTIONAL sample data: a "Demo ISD" district with one user per role (all ACTIVE)
+// and a couple of schools. Districts start with no account data (no seeded standards).
 // Run: npm run seed:demo   |   Remove: npm run db:reset && npm run db:seed
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { hashPassword } from "../lib/auth/password";
-import { seedDistrictReferenceData } from "../lib/reference-data/florida-red-book";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({
@@ -20,15 +19,11 @@ async function main() {
     select: { id: true },
   });
   if (!d) {
-    d = await prisma.$transaction(async (tx) => {
-      const created = await tx.district.create({
-        data: { name: "Demo ISD", code: "demo", status: "ACTIVE" },
-        select: { id: true },
-      });
-      await seedDistrictReferenceData(tx, created.id);
-      return created;
+    d = await prisma.district.create({
+      data: { name: "Demo ISD", code: "demo", status: "ACTIVE" },
+      select: { id: true },
     });
-    console.log("✔ Created Demo ISD + standard reference data");
+    console.log("✔ Created Demo ISD");
   } else {
     console.log("• Demo ISD already exists");
   }

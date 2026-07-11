@@ -4,12 +4,10 @@ export type MasterKind =
   | "schools"
   | "grants"
   | "capital-projects"
-  | "fund-types"
   | "funds"
   | "revenue-sources"
   | "functions"
-  | "objects"
-  | "statuses";
+  | "objects";
 
 export interface FieldDef {
   name: string;
@@ -114,7 +112,6 @@ export const RESOURCES: Record<MasterKind, ResourceDef> = {
       description: optionalText,
     }),
   },
-  "fund-types": refDef("fund-types", "fundType", "Fund types", "Fund type"),
   funds: {
     kind: "funds",
     model: "fund",
@@ -146,7 +143,6 @@ export const RESOURCES: Record<MasterKind, ResourceDef> = {
   ),
   functions: refDef("functions", "accountFunction", "Functions", "Function"),
   objects: refDef("objects", "accountObject", "Objects", "Object"),
-  statuses: refDef("statuses", "status", "Statuses", "Status"),
 };
 
 export const MASTER_KINDS = Object.keys(RESOURCES) as MasterKind[];

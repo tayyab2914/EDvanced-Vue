@@ -62,12 +62,10 @@ model District {
   schools         School[]
   grants          Grant[]
   capitalProjects CapitalProject[]
-  fundTypes       FundType[]
   funds           Fund[]
   revenueSources  RevenueSource[]
   functions       AccountFunction[]
   objects         AccountObject[]
-  statuses        Status[]
   auditLogs       AuditLog[]
 }
 
@@ -194,24 +192,7 @@ model CapitalProject {
   @@index([districtId])
 }
 
-// ---- Reference lists (controlled vocabularies; copy-on-onboard from the standard set) ----
-
-model FundType {
-  id         String   @id @default(cuid())
-  districtId String
-  code       String
-  name       String
-  isStandard Boolean  @default(false)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  funds    Fund[]
-
-  @@unique([districtId, code])
-  @@index([districtId])
-}
+// ---- District-owned account dimensions (each district uploads/enters its own; no standards) ----
 
 model Fund {
   id         String   @id @default(cuid())
@@ -286,18 +267,53 @@ model AccountObject {
   @@map("objects")
 }
 
+// ===================== Platform-managed global lookups =====================
+// Standardization/roll-up categories owned by EDvanced Vue (Platform Admin), shared
+// by every district so cross-district reporting groups consistently. NOT tenant-scoped.
+
+model FundType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  funds Fund[]
+}
+
+model RevenueType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ObjectType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FunctionType {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Status {
-  id         String   @id @default(cuid())
-  districtId String
-  code       String
-  name       String
-  isStandard Boolean  @default(false)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
-
-  @@unique([districtId, code])
-  @@index([districtId])
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

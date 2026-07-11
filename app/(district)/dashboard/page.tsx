@@ -69,19 +69,17 @@ function StatTile({
 
 export default async function DistrictDashboard() {
   const { db, user, districtId } = await getTenantDb();
-  const [schools, grants, projects, funds, fundTypes, revenueSources, functions, objects, statuses] =
+  const [schools, grants, projects, funds, revenueSources, functions, objects] =
     await Promise.all([
       db.school.count(),
       db.grant.count(),
       db.capitalProject.count(),
       db.fund.count(),
-      db.fundType.count(),
       db.revenueSource.count(),
       db.accountFunction.count(),
       db.accountObject.count(),
-      db.status.count(),
     ]);
-  const refCodes = funds + fundTypes + revenueSources + functions + objects + statuses;
+  const refCodes = funds + revenueSources + functions + objects;
 
   const canAudit = hasPermission(user.role, "view_audit");
   const activity = canAudit

@@ -88,7 +88,7 @@ lib/
   tenant-db.ts     tenantDb(districtId) — district-scoped client
   tenant-scope.ts  pure scoping extension (shared/testable)
   auth/            jwt · session · dal · password · permissions · lockout · routes
-  reference-data/  florida-red-book.ts (standard chart + seedDistrictReferenceData)
+  reference-data/  global-types.ts (platform-managed global lookup lists + seedGlobalTypes)
   master-data/     registry.ts (drives the 9 master-data resources)
   validation/      zod schemas
   audit.ts · email.ts · env.ts · forms.ts · format.ts · enums.ts · cn.ts
@@ -103,19 +103,20 @@ scripts/           verify-m1.mts · seed-demo.mts · dev-login.mts
 
 ### Extending
 
-- **Add a district**: Platform console → Districts → New district. Onboarding copies the standard reference set automatically (no code).
+- **Add a district**: Platform console → Districts → New district. Districts start empty — each enters/imports its own account data (no seeded standards).
 - **Add a user**: District console (or Platform → district → Users) → Add user → they receive an invite link to set a password.
-- **Add master data**: District console → Master data → pick a resource → Add. Reference lists ship with a standard "Red Book" set (marked *Standard*); districts add their own rows.
+- **Manage global lookups**: Platform console → Configuration → Fund/Revenue/Object/Function Types, Statuses. These are shared across all districts (Tier 1).
+- **Add master data**: District console → Master data → pick a resource → Add. Districts add their own rows; they reference the platform-managed types above.
 - **Add a validation rule / dataset / dashboard**: layered on this foundation in Milestones 2–3.
 
 ## Milestone 1 scope
 
-**Included**: secure login, password reset, account lockout, multi-district isolation, 4 roles + permission matrix, platform admin console (district CRUD, onboarding, cross-district user management, platform audit), district console (dashboard, users, settings, audit), per-district master data (schools, grants, capital projects; fund types, funds, revenue sources, functions, objects, statuses), audit log, seeding.
+**Included**: secure login, password reset, account lockout, multi-district isolation, 4 roles + permission matrix, platform admin console (district CRUD, onboarding, cross-district user management, platform audit), district console (dashboard, users, settings, audit), platform-managed global lookups (fund/revenue/object/function types, statuses), per-district master data (schools, grants, capital projects, funds, revenue sources, functions, objects), audit log, seeding.
 
 **Deferred (M2/M3)**: Excel upload + validation engine, periodic financial datasets, snapshots/version history, dashboards & charts, exports, email provider, MFA/SSO. The schema is designed so periodic data FKs cleanly into the master data built here.
 
 ## Notes & follow-ups to confirm with the client
 
-- The Florida "Red Book" reference set in `lib/reference-data/florida-red-book.ts` is a **representative starter set** — finalize the exact code lists in M2 (validation consumes them).
+- The platform-managed global lookup lists in `lib/reference-data/global-types.ts` (Fund/Revenue/Object/Function Types, Statuses) are a **representative starter set** — Platform Admins finalize them in-app under Configuration. Function Types in particular is intentionally short pending the client's full list.
 - Default: **Finance User** is read-only on master data (adjustable in `lib/auth/permissions.ts`).
 - Production email provider + verified sending domain.
