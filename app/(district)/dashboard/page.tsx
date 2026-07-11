@@ -87,10 +87,10 @@ export default async function DistrictDashboard() {
     : [];
 
   const masterRows: { label: string; count: number; href: string; icon: IconName }[] = [
-    { label: "Schools", count: schools, href: "/master-data/schools", icon: "building" },
-    { label: "Grants", count: grants, href: "/master-data/grants", icon: "reports" },
-    { label: "Capital projects", count: projects, href: "/master-data/capital-projects", icon: "database" },
-    { label: "Funds", count: funds, href: "/master-data/funds", icon: "database" },
+    { label: "Funds", count: funds, href: "/master-data?tab=funds", icon: "database" },
+    { label: "Cost centers", count: schools, href: "/master-data?tab=cost-centers", icon: "building" },
+    { label: "Grants", count: grants, href: "/master-data?tab=grants", icon: "reports" },
+    { label: "Capital projects", count: projects, href: "/master-data?tab=capital-projects", icon: "database" },
   ];
 
   return (

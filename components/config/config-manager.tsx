@@ -136,7 +136,7 @@ export function ConfigManager({
               <path d="M12 5v14" />
               <path d="M5 12h14" />
             </svg>
-            Add {def.singular}
+            New {def.singular}
           </Button>
         </div>
 
@@ -218,7 +218,7 @@ export function ConfigManager({
       <Modal
         open={adding}
         onClose={() => setAdding(false)}
-        title={`Add ${def.singular}`}
+        title={`New ${def.singular}`}
       >
         <NewConfigItemForm
           kind={def.kind}

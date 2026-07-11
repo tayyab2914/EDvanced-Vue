@@ -11,7 +11,9 @@ export type IconName =
   | "search"
   | "pencil"
   | "trash"
-  | "power";
+  | "power"
+  | "filter"
+  | "eye";
 
 const PATHS: Record<IconName, string> = {
   dashboard:
@@ -33,6 +35,8 @@ const PATHS: Record<IconName, string> = {
   trash:
     '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/>',
   power: '<path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/>',
+  filter: '<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
 };
 
 export function Icon({

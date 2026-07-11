@@ -44,6 +44,33 @@ enum TokenType {
   PASSWORD_RESET
 }
 
+enum GrantStatus {
+  PENDING
+  ACTIVE
+  ON_HOLD
+  CLOSE
+  CANCELLED
+}
+
+enum ProjectStatus {
+  PLANNING
+  DESIGN
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CLOSED
+}
+
+enum ProjectType {
+  NEW_CONSTRUCTION
+  RENOVATION
+  ADDITION
+  MAINTENANCE
+  TECHNOLOGY
+  SAFETY_SECURITY
+  OTHER
+}
+
 // ===================== Tenancy / Auth / Audit =====================
 
 /// The tenant root. Every tenant-owned row carries `districtId`.
@@ -157,34 +184,40 @@ model School {
 }
 
 model Grant {
-  id          String   @id @default(cuid())
-  districtId  String
-  grantId     String
-  name        String
-  description String?
-  fiscalYear  String?
-  fundId      String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String      @id @default(cuid())
+  districtId    String
+  grantId       String // "Grant Number"
+  name          String // "Grant Name"
+  revenueTypeId String?
+  awardAmount   Decimal?
+  status        GrantStatus @default(PENDING)
+  grantPeriod   String? // e.g. "2026-27"
+  grantManager  String?
+  description   String?
+  cfdaNumber    String?
+  active        Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
-  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  fund     Fund?    @relation(fields: [fundId], references: [id], onDelete: SetNull)
+  district    District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  revenueType RevenueType? @relation(fields: [revenueTypeId], references: [id], onDelete: SetNull)
 
   @@unique([districtId, grantId])
   @@index([districtId])
-  @@index([fundId])
+  @@index([revenueTypeId])
 }
 
 model CapitalProject {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   districtId  String
-  projectId   String
-  name        String
+  projectId   String // "Project Number"
+  name        String // "Project Name"
   description String?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      ProjectStatus @default(PLANNING)
+  projectType ProjectType?
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
 
@@ -200,7 +233,6 @@ model Fund {
   code       String
   name       String
   fundTypeId String?
-  isStandard Boolean  @default(false)
   sortOrder  Int?
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
@@ -208,7 +240,6 @@ model Fund {
 
   district District  @relation(fields: [districtId], references: [id], onDelete: Cascade)
   fundType FundType? @relation(fields: [fundTypeId], references: [id], onDelete: SetNull)
-  grants   Grant[]
 
   @@unique([districtId, code])
   @@index([districtId])
@@ -216,54 +247,60 @@ model Fund {
 }
 
 model RevenueSource {
-  id         String   @id @default(cuid())
-  districtId String
-  code       String
-  name       String
-  isStandard Boolean  @default(false)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String   @id @default(cuid())
+  districtId    String
+  code          String
+  name          String
+  revenueTypeId String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  district    District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  revenueType RevenueType? @relation(fields: [revenueTypeId], references: [id], onDelete: SetNull)
 
   @@unique([districtId, code])
   @@index([districtId])
+  @@index([revenueTypeId])
 }
 
 /// "Function" in the chart of accounts. Renamed to avoid the JS `Function` identifier clash.
 model AccountFunction {
-  id         String   @id @default(cuid())
-  districtId String
-  code       String
-  name       String
-  isStandard Boolean  @default(false)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String   @id @default(cuid())
+  districtId     String
+  code           String
+  name           String
+  functionTypeId String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  district     District      @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  functionType FunctionType? @relation(fields: [functionTypeId], references: [id], onDelete: SetNull)
 
   @@unique([districtId, code])
   @@index([districtId])
+  @@index([functionTypeId])
   @@map("functions")
 }
 
 /// "Object" in the chart of accounts. Renamed to avoid the JS `Object` identifier clash.
 model AccountObject {
-  id         String   @id @default(cuid())
-  districtId String
-  code       String
-  name       String
-  isStandard Boolean  @default(false)
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String   @id @default(cuid())
+  districtId   String
+  code         String
+  name         String
+  objectTypeId String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  district   District    @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  objectType ObjectType? @relation(fields: [objectTypeId], references: [id], onDelete: SetNull)
 
   @@unique([districtId, code])
   @@index([districtId])
+  @@index([objectTypeId])
   @@map("objects")
 }
 
@@ -289,6 +326,9 @@ model RevenueType {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  revenueSources RevenueSource[]
+  grants         Grant[]
 }
 
 model ObjectType {
@@ -298,6 +338,8 @@ model ObjectType {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  objects AccountObject[]
 }
 
 model FunctionType {
@@ -307,6 +349,8 @@ model FunctionType {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  functions AccountFunction[]
 }
 
 model Status {
