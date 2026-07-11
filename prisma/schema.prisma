@@ -170,11 +170,14 @@ model AuditLog {
 
 // ===================== Master data (tenant-owned) =====================
 
+/// Cost Center (kept as `School` internally; relabeled "Cost Center" in the UI).
 model School {
   id           String   @id @default(cuid())
   districtId   String
   schoolNumber String
   name         String
+  category     String? // Cost Center Category (School / Department / Operations / Other)
+  type         String? // Cost Center Type (depends on category)
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -312,6 +315,7 @@ model AccountObject {
 
 model FundType {
   id        String   @id @default(cuid())
+  code      String?  @unique
   name      String   @unique
   sortOrder Int      @default(0)
   active    Boolean  @default(true)
@@ -323,6 +327,7 @@ model FundType {
 
 model RevenueType {
   id        String   @id @default(cuid())
+  code      String?  @unique
   name      String   @unique
   sortOrder Int      @default(0)
   active    Boolean  @default(true)
@@ -335,6 +340,7 @@ model RevenueType {
 
 model ObjectType {
   id        String   @id @default(cuid())
+  code      String?  @unique
   name      String   @unique
   sortOrder Int      @default(0)
   active    Boolean  @default(true)
@@ -346,6 +352,7 @@ model ObjectType {
 
 model FunctionType {
   id        String   @id @default(cuid())
+  code      String?  @unique
   name      String   @unique
   sortOrder Int      @default(0)
   active    Boolean  @default(true)
@@ -357,6 +364,7 @@ model FunctionType {
 
 model Status {
   id        String   @id @default(cuid())
+  code      String?  @unique
   name      String   @unique
   sortOrder Int      @default(0)
   active    Boolean  @default(true)

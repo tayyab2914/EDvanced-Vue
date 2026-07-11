@@ -12,7 +12,7 @@ import { Role } from "@/lib/enums";
 interface LookupReadDelegate {
   findMany(args: {
     orderBy: Array<{ sortOrder: "asc" } | { name: "asc" }>;
-    select: { id: true; name: true; active: true };
+    select: { id: true; code: true; name: true; active: true };
   }): Promise<ConfigRow[]>;
 }
 
@@ -27,7 +27,7 @@ export default async function ConfigPage() {
         CONFIG_RESOURCES[k].model
       ].findMany({
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-        select: { id: true, name: true, active: true },
+        select: { id: true, code: true, name: true, active: true },
       }),
     ),
   );

@@ -53,8 +53,12 @@ export function MasterDataManager({
   const [viewing, setViewing] = useState<MasterRow | null>(null);
   const [, startTransition] = useTransition();
 
-  const textFields = def.fields.filter((f) => f.type !== "select");
-  const selectFields = def.fields.filter((f) => f.type === "select");
+  const textFields = def.fields.filter(
+    (f) => f.type === "text" || f.type === "textarea",
+  );
+  const selectFields = def.fields.filter(
+    (f) => f.type === "select" || f.type === "radio",
+  );
   const columnFields = def.columns
     .map((name) => def.fields.find((f) => f.name === name))
     .filter((f): f is FieldDef => !!f);

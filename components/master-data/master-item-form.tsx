@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { createMasterItem, updateMasterItem } from "@/app/actions/master-data";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/forms";
 import type { ClientResourceDef } from "@/lib/master-data/registry";
@@ -44,6 +44,22 @@ export function MasterItemForm({
 
   const val = (name: string) => (row ? String(row[name] ?? "") : "");
 
+  // Radio + dependent fields are controlled so the Type can react to Category.
+  const [vals, setVals] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const f of def.fields) {
+      if (f.type === "radio" || f.dependsOn) init[f.name] = val(f.name);
+    }
+    return init;
+  });
+  const setVal = (name: string, value: string) =>
+    setVals((prev) => {
+      const next = { ...prev, [name]: value };
+      // Reset any field that depends on the one we just changed.
+      for (const f of def.fields) if (f.dependsOn === name) next[f.name] = "";
+      return next;
+    });
+
   return (
     <form action={action} className="space-y-4">
       <input type="hidden" name="kind" value={def.kind} />
@@ -55,22 +71,62 @@ export function MasterItemForm({
         {def.fields.map((f) => {
           const opts: { value: string; label: string }[] =
             f.staticOptions ?? options[f.optionsKey ?? ""] ?? [];
-          // Required + placeholder (the Type fields) → start blank so the user must
-          // pick. Required without a placeholder (statuses) → default to the first.
           const selectDefault =
             val(f.name) ||
             (f.required && !f.placeholder ? (opts[0]?.value ?? "") : "");
+          const fullWidth = f.type === "textarea" || f.type === "radio";
           return (
-            <div
-              key={f.name}
-              className={f.type === "textarea" ? "sm:col-span-2" : ""}
-            >
+            <div key={f.name} className={fullWidth ? "sm:col-span-2" : ""}>
               <Field
                 label={f.label}
                 htmlFor={`f-${f.name}`}
                 error={state.fieldErrors?.[f.name]?.[0]}
               >
-                {f.type === "textarea" ? (
+                {f.type === "radio" ? (
+                  <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
+                    {(f.staticOptions ?? []).map((o) => (
+                      <label
+                        key={o.value}
+                        className="inline-flex items-center gap-1.5 text-[13.5px] text-ink-soft"
+                      >
+                        <input
+                          type="radio"
+                          name={f.name}
+                          value={o.value}
+                          checked={vals[f.name] === o.value}
+                          onChange={() => setVal(f.name, o.value)}
+                          required={f.required}
+                          className="h-4 w-4 accent-brand"
+                        />
+                        {o.label}
+                      </label>
+                    ))}
+                  </div>
+                ) : f.dependsOn ? (
+                  (() => {
+                    const parent = vals[f.dependsOn] ?? "";
+                    const depOpts = f.optionsByParent?.[parent] ?? [];
+                    return (
+                      <Select
+                        id={`f-${f.name}`}
+                        name={f.name}
+                        required={f.required}
+                        disabled={!parent}
+                        value={vals[f.name] ?? ""}
+                        onChange={(e) => setVal(f.name, e.target.value)}
+                      >
+                        <option value="" disabled>
+                          {parent ? "Select…" : "Select a category first"}
+                        </option>
+                        {depOpts.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </Select>
+                    );
+                  })()
+                ) : f.type === "textarea" ? (
                   <Textarea
                     id={`f-${f.name}`}
                     name={f.name}

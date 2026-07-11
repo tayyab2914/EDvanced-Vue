@@ -232,7 +232,7 @@ export async function importMasterData(
   const globalMaps: Record<string, Map<string, string>> = {};
   const staticMaps: Record<string, Map<string, string>> = {};
   for (const f of def.fields) {
-    if (f.type !== "select") continue;
+    if (f.type !== "select" && f.type !== "radio") continue;
     if (f.globalType) {
       const items = await (prisma as unknown as Record<string, AnyDelegate>)[
         f.globalType
@@ -260,7 +260,7 @@ export async function importMasterData(
     for (const f of def.fields) {
       const idx = colOf(f.name, f.label);
       let value = idx >= 0 ? (cells[idx] ?? "").trim() : "";
-      if (value && f.type === "select") {
+      if (value && (f.type === "select" || f.type === "radio")) {
         const resolved = (globalMaps[f.name] ?? staticMaps[f.name])?.get(
           norm(value),
         );

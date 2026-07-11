@@ -19,9 +19,20 @@ export interface ConfigDef {
 
 export interface ConfigRow {
   id: string;
+  code: string | null;
   name: string;
   active: boolean;
 }
+
+export interface ConfigImportResult {
+  ok: boolean;
+  error?: string;
+  imported?: number;
+  failed?: number;
+  errors?: { row: number; message: string }[];
+}
+
+export const EMPTY_CONFIG_IMPORT: ConfigImportResult = { ok: false };
 
 export const CONFIG_RESOURCES: Record<ConfigKind, ConfigDef> = {
   "fund-types": {

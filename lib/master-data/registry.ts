@@ -6,6 +6,13 @@ import {
   values,
   type EnumOption,
 } from "@/lib/master-data/enums";
+import {
+  COST_CENTER_CATEGORIES,
+  COST_CENTER_TYPES_BY_CATEGORY,
+  ALL_COST_CENTER_TYPES,
+  COST_CENTER_CATEGORY_VALUES,
+  isValidCostCenterType,
+} from "@/lib/master-data/cost-center";
 
 // District-owned account dimensions. Order here drives the nav order.
 export type MasterKind =
@@ -27,14 +34,16 @@ export type GlobalTypeModel =
 export interface FieldDef {
   name: string;
   label: string;
-  type: "text" | "textarea" | "select";
+  type: "text" | "textarea" | "select" | "radio";
   required?: boolean;
   placeholder?: string;
   numeric?: boolean; // currency/number field (stored Decimal; shown formatted)
   optionsKey?: string; // key into the options map (for selects)
   relModel?: string; // tenant model the select references (ownership check)
   globalType?: GlobalTypeModel; // platform lookup the select references (existence check)
-  staticOptions?: EnumOption[]; // fixed dropdown values (no DB load)
+  staticOptions?: EnumOption[]; // fixed dropdown/radio values (no DB load)
+  dependsOn?: string; // this select's options depend on another field's value
+  optionsByParent?: Record<string, EnumOption[]>; // options keyed by the parent value
 }
 
 export interface ResourceDef {
@@ -164,9 +173,38 @@ export const RESOURCES: Record<MasterKind, ResourceDef> = {
         required: true,
       },
       { name: "name", label: "Name", type: "text", required: true },
+      {
+        name: "category",
+        label: "Category",
+        type: "radio",
+        required: true,
+        staticOptions: COST_CENTER_CATEGORIES,
+      },
+      {
+        name: "type",
+        label: "Type",
+        type: "select",
+        required: true,
+        dependsOn: "category",
+        optionsByParent: COST_CENTER_TYPES_BY_CATEGORY,
+        staticOptions: ALL_COST_CENTER_TYPES, // flat list, for column display
+      },
     ],
-    columns: ["schoolNumber", "name"],
-    schema: z.object({ schoolNumber: codeField, name: nameField }),
+    columns: ["schoolNumber", "name", "category", "type"],
+    schema: z
+      .object({
+        schoolNumber: codeField,
+        name: nameField,
+        category: z.enum(
+          COST_CENTER_CATEGORY_VALUES as [string, ...string[]],
+          { error: "Choose a category." },
+        ),
+        type: z.string().trim().min(1, { error: "Choose a type." }),
+      })
+      .refine((d) => isValidCostCenterType(d.category, d.type), {
+        error: "That type doesn't match the selected category.",
+        path: ["type"],
+      }),
   },
   grants: {
     kind: "grants",
@@ -204,7 +242,14 @@ export const RESOURCES: Record<MasterKind, ResourceDef> = {
       { name: "description", label: "Description", type: "textarea" },
       { name: "cfdaNumber", label: "CFDA Number", type: "text" },
     ],
-    columns: ["grantId", "name", "status", "awardAmount"],
+    columns: [
+      "grantId",
+      "name",
+      "grantPeriod",
+      "grantManager",
+      "status",
+      "awardAmount",
+    ],
     schema: z.object({
       grantId: codeField,
       name: nameField,
