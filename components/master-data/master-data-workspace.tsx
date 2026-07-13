@@ -17,6 +17,7 @@ export interface KindData {
 export function MasterDataWorkspace({
   kinds,
   options,
+  optionsByParent,
   relLabels,
   districtId,
   canManage,
@@ -24,6 +25,7 @@ export function MasterDataWorkspace({
 }: {
   kinds: KindData[];
   options: Record<string, Option[]>;
+  optionsByParent: Record<string, Record<string, Option[]>>;
   relLabels: Record<string, Map<string, string>>;
   districtId: string;
   canManage: boolean;
@@ -67,6 +69,7 @@ export function MasterDataWorkspace({
         districtId={districtId}
         rows={current.rows}
         options={options}
+        optionsByParent={optionsByParent}
         relLabels={relLabels}
         canManage={canManage}
       />

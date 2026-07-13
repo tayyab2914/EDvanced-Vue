@@ -2,19 +2,33 @@
 // Prisma model delegate and labels. These are NOT district-scoped — Platform Admins
 // manage one shared set for the whole platform.
 
+import type { EnumOption } from "@/lib/master-data/enums";
+import { COST_CENTER_CATEGORIES } from "@/lib/master-data/cost-center";
+
 export type ConfigKind =
   | "fund-types"
   | "revenue-types"
   | "object-types"
   | "function-types"
+  | "cost-center-types"
   | "statuses";
 
 export interface ConfigDef {
   kind: ConfigKind;
-  model: "fundType" | "revenueType" | "objectType" | "functionType" | "status";
+  model:
+    | "fundType"
+    | "revenueType"
+    | "objectType"
+    | "functionType"
+    | "costCenterType"
+    | "status";
   title: string;
   singular: string;
   description: string;
+  // Set when items in this list belong to a parent category (Cost Center Types are the
+  // only such list today). Adds a required Category column/field to the admin UI, and
+  // lets the Master Data dropdown filter its options by the parent the user picked.
+  categoryField?: { label: string; options: EnumOption[] };
 }
 
 export interface ConfigRow {
@@ -22,6 +36,7 @@ export interface ConfigRow {
   code: string | null;
   name: string;
   active: boolean;
+  category?: string | null;
 }
 
 export interface ConfigImportResult {
@@ -66,6 +81,15 @@ export const CONFIG_RESOURCES: Record<ConfigKind, ConfigDef> = {
     singular: "Function Type",
     description:
       "Function categories districts assign to their functions. Shared across all districts.",
+  },
+  "cost-center-types": {
+    kind: "cost-center-types",
+    model: "costCenterType",
+    title: "Cost Center Types",
+    singular: "Cost Center Type",
+    description:
+      "Types districts assign to their cost centers. Each type belongs to a category — only types in the selected category are offered when adding a cost center.",
+    categoryField: { label: "Category", options: COST_CENTER_CATEGORIES },
   },
   statuses: {
     kind: "statuses",

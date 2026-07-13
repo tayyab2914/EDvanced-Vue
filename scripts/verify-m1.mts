@@ -3,6 +3,13 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { makeTenantExtension } from "@/lib/tenant-scope";
 import { hasPermission } from "@/lib/auth/permissions";
+import {
+  MAX_ACCESS_DAYS,
+  deriveGrantState,
+  isGrantLive,
+  maxExpiryDate,
+  minExpiryDate,
+} from "@/lib/external-access";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 
 const prisma = new PrismaClient({
@@ -90,12 +97,85 @@ async function main() {
   assert(hasPermission("PLATFORM_ADMIN", "manage_districts"), "Platform Admin can manage districts");
   assert(!hasPermission("DISTRICT_ADMIN", "manage_districts"), "District Admin cannot manage districts");
   assert(hasPermission("DISTRICT_ADMIN", "manage_users_own"), "District Admin can manage own users");
-  assert(!hasPermission("FINANCE_USER", "manage_master_data"), "Finance User is read-only on master data (M1 default)");
+  assert(hasPermission("FINANCE_USER", "manage_master_data"), "Finance User can upload/manage master data");
   assert(hasPermission("FINANCE_USER", "view_master_data"), "Finance User can view master data");
+  assert(!hasPermission("FINANCE_USER", "manage_users_own"), "Finance User cannot manage users");
+  assert(!hasPermission("VIEWER", "manage_master_data"), "Viewer is read-only on master data");
   assert(!hasPermission("VIEWER", "manage_users_own"), "Viewer cannot manage users");
   assert(hasPermission("VIEWER", "view_dashboards"), "Viewer can view dashboards");
 
-  console.log("\n[6] Password hashing (argon2id)");
+  console.log("\n[6] External user access levels");
+  // Fail-closed: no level supplied => the LEAST privilege, never the most.
+  assert(
+    !hasPermission("EXTERNAL_USER", "manage_master_data"),
+    "External user with NO level cannot manage master data (fails closed)",
+  );
+  assert(
+    hasPermission("EXTERNAL_USER", "view_master_data"),
+    "External user with no level can still view master data",
+  );
+  assert(
+    !hasPermission("EXTERNAL_USER", "manage_master_data", "VIEW_ONLY"),
+    "External VIEW_ONLY is read-only on master data",
+  );
+  assert(
+    hasPermission("EXTERNAL_USER", "view_master_data", "VIEW_ONLY"),
+    "External VIEW_ONLY can view master data",
+  );
+  assert(
+    hasPermission("EXTERNAL_USER", "manage_master_data", "FULL_ACCESS"),
+    "External FULL_ACCESS can manage master data",
+  );
+  // Running the district is never an outsider's job, at ANY level.
+  for (const level of ["VIEW_ONLY", "FULL_ACCESS"] as const) {
+    assert(
+      !hasPermission("EXTERNAL_USER", "manage_users_own", level),
+      `External ${level} cannot manage users`,
+    );
+    assert(
+      !hasPermission("EXTERNAL_USER", "configure_district", level),
+      `External ${level} cannot configure the district`,
+    );
+    assert(
+      !hasPermission("EXTERNAL_USER", "view_audit", level),
+      `External ${level} cannot read the audit log`,
+    );
+    assert(
+      !hasPermission("EXTERNAL_USER", "manage_districts", level),
+      `External ${level} cannot manage districts`,
+    );
+  }
+  // The level must be inert for every other role — otherwise it's an escalation primitive.
+  assert(
+    !hasPermission("VIEWER", "manage_master_data", "FULL_ACCESS"),
+    "A FULL_ACCESS level cannot escalate a VIEWER",
+  );
+  assert(
+    !hasPermission("FINANCE_USER", "view_audit", "FULL_ACCESS"),
+    "A FULL_ACCESS level cannot escalate a FINANCE_USER",
+  );
+
+  console.log("\n[7] External access expiry is derived, not stored");
+  const live = { status: "ACTIVE" as const, expiresAt: new Date(Date.now() + 86_400_000) };
+  const lapsed = { status: "ACTIVE" as const, expiresAt: new Date(Date.now() - 1000) };
+  assert(isGrantLive(live), "An ACTIVE grant in date is live");
+  assert(!isGrantLive(lapsed), "An ACTIVE grant past its expiry is NOT live (no cron needed)");
+  assert(deriveGrantState(lapsed) === "EXPIRED", "A lapsed ACTIVE grant reads as EXPIRED");
+  assert(
+    !isGrantLive({ status: "ACTIVE", expiresAt: null }),
+    "An ACTIVE grant with no expiry is not live (fails closed)",
+  );
+  assert(
+    !isGrantLive({ status: "REVOKED", expiresAt: new Date(Date.now() + 86_400_000) }),
+    "A REVOKED grant is not live even before its expiry",
+  );
+  // The 30-day ceiling.
+  const span = Math.round(
+    (maxExpiryDate().getTime() - minExpiryDate().getTime()) / 86_400_000,
+  );
+  assert(span === MAX_ACCESS_DAYS, `A district may grant at most ${MAX_ACCESS_DAYS} days`);
+
+  console.log("\n[8] Password hashing (argon2id)");
   const hash = await hashPassword("Sup3r!Secret");
   assert(await verifyPassword(hash, "Sup3r!Secret"), "Correct password verifies");
   assert(!(await verifyPassword(hash, "wrong")), "Wrong password rejected");

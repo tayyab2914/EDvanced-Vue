@@ -13,6 +13,7 @@
     "db:reset": "prisma migrate reset",
     "seed:demo": "tsx scripts/seed-demo.mts",
     "verify:m1": "tsx scripts/verify-m1.mts",
+    "verify:external": "tsx scripts/verify-external.mts",
     "test:smtp": "tsx scripts/test-smtp.mts",
     "postinstall": "prisma generate"
   },

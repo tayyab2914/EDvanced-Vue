@@ -175,6 +175,8 @@ export async function setPassword(
     data: {
       passwordHash,
       status: UserStatus.ACTIVE,
+      // Consuming a link we emailed them proves they control the current address.
+      emailVerifiedAt: new Date(),
       failedLoginAttempts: 0,
       lockedUntil: null,
     },

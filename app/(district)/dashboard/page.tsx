@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { getTenantDb } from "@/lib/auth/dal";
+import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { getRecentAuditRows } from "@/lib/audit";
-import { hasPermission } from "@/lib/auth/permissions";
 import { Card } from "@/components/ui/card";
 import { RevenueExpenseBars, Donut } from "@/components/dashboard/charts";
 import { Icon, type IconName } from "@/components/icons";
@@ -81,7 +80,7 @@ export default async function DistrictDashboard() {
     ]);
   const refCodes = funds + revenueSources + functions + objects;
 
-  const canAudit = hasPermission(user.role, "view_audit");
+  const canAudit = userCan(user, "view_audit");
   const activity = canAudit
     ? await getRecentAuditRows({ districtId, take: 6 })
     : [];

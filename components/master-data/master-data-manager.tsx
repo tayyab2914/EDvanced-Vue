@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
+import { Pagination, usePagination } from "@/components/ui/pagination";
 import { Icon } from "@/components/icons";
 import { Modal } from "@/components/ui/modal";
 import { Menu, MenuItem } from "@/components/ui/menu";
@@ -33,6 +34,7 @@ export function MasterDataManager({
   districtId,
   rows,
   options,
+  optionsByParent,
   relLabels,
   canManage,
 }: {
@@ -40,6 +42,7 @@ export function MasterDataManager({
   districtId: string;
   rows: MasterRow[];
   options: Record<string, Option[]>;
+  optionsByParent: Record<string, Record<string, Option[]>>;
   relLabels: Record<string, Map<string, string>>;
   canManage: boolean;
 }) {
@@ -104,12 +107,15 @@ export function MasterDataManager({
     });
   }, [rows, query, status, selectFilters, selectFields, textFields]);
 
+  const pg = usePagination(filtered);
+
   const activeFilters =
     (status !== "all" ? 1 : 0) +
     selectFields.filter((f) => selectFilters[f.name]).length;
   const clearFilters = () => {
     setStatus("all");
     setSelectFilters({});
+    pg.reset();
   };
 
   function toggleRow(r: MasterRow) {
@@ -135,7 +141,10 @@ export function MasterDataManager({
             </span>
             <Input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                pg.reset();
+              }}
               placeholder={`Search ${def.title.toLowerCase()}…`}
               autoComplete="off"
               className="h-9 w-full pl-9"
@@ -179,7 +188,10 @@ export function MasterDataManager({
                   <span className="text-[12px] font-medium text-ink-soft">Status</span>
                   <Select
                     value={status}
-                    onChange={(e) => setStatus(e.target.value as StatusFilter)}
+                    onChange={(e) => {
+                      setStatus(e.target.value as StatusFilter);
+                      pg.reset();
+                    }}
                     className="h-9"
                   >
                     <option value="all">All statuses</option>
@@ -195,12 +207,13 @@ export function MasterDataManager({
                     </span>
                     <Select
                       value={selectFilters[f.name] ?? ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setSelectFilters((prev) => ({
                           ...prev,
                           [f.name]: e.target.value,
-                        }))
-                      }
+                        }));
+                        pg.reset();
+                      }}
                       className="h-9"
                     >
                       <option value="">All {f.label.toLowerCase()}</option>
@@ -278,7 +291,7 @@ export function MasterDataManager({
                 : "No matches for these filters."}
             </EmptyRow>
           )}
-          {filtered.map((r) => (
+          {pg.pageItems.map((r) => (
             <TR key={r.id}>
               {columnFields.map((f, i) =>
                 i === 0 ? (
@@ -367,6 +380,16 @@ export function MasterDataManager({
         </TBody>
       </Table>
 
+      <Pagination
+        page={pg.page}
+        pageCount={pg.pageCount}
+        total={pg.total}
+        from={pg.from}
+        to={pg.to}
+        onPage={pg.setPage}
+        noun={def.title.toLowerCase()}
+      />
+
       {canManage && (
         <Modal
           open={adding}
@@ -377,6 +400,7 @@ export function MasterDataManager({
             def={def}
             districtId={districtId}
             options={options}
+            optionsByParent={optionsByParent}
             onDone={() => setAdding(false)}
           />
         </Modal>
@@ -406,6 +430,7 @@ export function MasterDataManager({
             def={def}
             districtId={districtId}
             options={options}
+            optionsByParent={optionsByParent}
             row={editing}
             onDone={() => setEditing(null)}
           />

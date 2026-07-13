@@ -59,6 +59,7 @@ To wipe everything and start clean: `npm run db:reset && npm run db:seed`.
 | `npm run db:migrate` / `db:reset` / `db:studio` | Prisma Migrate / reset / Studio |
 | `npm run db:seed` / `seed:demo` | Seed Platform Admin / sample district |
 | `npm run verify:m1` | Integration checks: tenant isolation, RBAC matrix, argon2 |
+| `npm run verify:external` | External-user checks: approval required, derived expiry, district-local revoke |
 
 ## How email works (dev)
 
@@ -75,7 +76,18 @@ Shared database, shared schema, a `districtId` on every tenant-owned row. Isolat
 - **Sessions**: signed cookie (`jose`, `lib/auth/jwt.ts`) carrying a DB-backed session id (`Session` table) → revocable. Passwords hashed with argon2id (`lib/auth/password.ts`). Account lockout after 5 failed attempts for 15 min (`lib/auth/lockout.ts`).
 - **DAL** (`lib/auth/dal.ts`): `getCurrentUser()` (secure, React-cached), `requireAuth`, `requireRole`, `requirePermission`, `requireDistrictAccess`.
 - **Proxy** (`proxy.ts`): optimistic cookie check only (no DB) — redirects. The authoritative checks live in the DAL and in **every Server Action**.
-- **Roles**: Platform Admin, District Admin, Finance User, Viewer. Permission matrix in `lib/auth/permissions.ts`.
+- **Roles**: Platform Admin, District Admin, Finance User, Viewer, External User. Permission matrix in `lib/auth/permissions.ts`.
+
+### External users (cross-district access)
+
+Auditors/consultants who need into **several districts at once**. They break the one-user-one-district shape of `User.districtId` (which is NULL for them), so their access lives in `ExternalAccess` — **one grant per district**, each with its own status, permission level and expiry.
+
+- A **Platform Admin** (`/platform/external-users`) adds the user and assigns districts. That only *requests* access; it grants nothing.
+- Each **district** approves or denies on its own Users page (`/users?tab=external`), choosing **View Only** (≡ Viewer) or **Full Access** (≡ Finance User) and an expiry of **at most 30 days**. It can later extend, change the level, or revoke — and can also invite an external user directly, which starts ACTIVE (the district is the approver, so there's nobody left to ask). No level ever grants users/settings/audit.
+- The user signs in and lands on **`/districts`**, sees every assignment and its state, and enters one (a switcher in the sidebar moves between them). The selected district is held on `Session.activeDistrictId` and **re-validated against a live grant on every request**.
+- **Expiry is derived, never stored** (`status == ACTIVE && expiresAt > now`, see `lib/external-access.ts`) — there is no cron, and a lapsed grant cannot be left behind still granting access. Revoking is district-local: it never signs the user out of their other districts.
+
+`npm run verify:external` exercises all of the above against the database.
 
 ### Project structure
 

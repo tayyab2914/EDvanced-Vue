@@ -16,7 +16,10 @@ export type IconName =
   | "eye"
   | "mail"
   | "key"
-  | "unlock";
+  | "unlock"
+  | "shield"
+  | "book"
+  | "chart";
 
 const PATHS: Record<IconName, string> = {
   dashboard:
@@ -43,6 +46,11 @@ const PATHS: Record<IconName, string> = {
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
   key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/><path d="m14 9 3 3"/>',
   unlock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.9-1"/>',
+  shield:
+    '<path d="M12 2.8 20 6v5.2c0 4.8-3.3 8.4-8 10.1-4.7-1.7-8-5.3-8-10.1V6l8-3.2Z"/><path d="m8.8 11.8 2.2 2.2 4.2-4.4"/>',
+  book: '<path d="M12 6.6C10.6 5.1 8.6 4.4 6 4.4H3.2v13.9H6c2.6 0 4.6.7 6 2.2 1.4-1.5 3.4-2.2 6-2.2h2.8V4.4H18c-2.6 0-4.6.7-6 2.2Z"/><path d="M12 6.6v13.9"/>',
+  chart:
+    '<path d="M3.5 20.5h17"/><rect x="5.5" y="12.5" width="3.4" height="5"/><rect x="10.3" y="8.5" width="3.4" height="9"/><rect x="15.1" y="4.5" width="3.4" height="13"/>',
 };
 
 export function Icon({

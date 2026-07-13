@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { importConfigItems } from "@/app/actions/config";
 import {
+  CONFIG_RESOURCES,
   EMPTY_CONFIG_IMPORT,
   type ConfigImportResult,
   type ConfigKind,
@@ -24,8 +25,13 @@ export function ConfigImportForm({
     EMPTY_CONFIG_IMPORT,
   );
 
+  const categoryField = CONFIG_RESOURCES[kind].categoryField;
+
   function downloadTemplate() {
-    const csv = "Code,Name\n";
+    const csv =
+      ["Code", "Name", ...(categoryField ? [categoryField.label] : [])].join(
+        ",",
+      ) + "\n";
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const a = document.createElement("a");
     a.href = url;
@@ -39,9 +45,19 @@ export function ConfigImportForm({
       <input type="hidden" name="kind" value={kind} />
       <p className="text-[13px] leading-relaxed text-muted-2">
         Upload a CSV with a <span className="font-medium text-ink-soft">Name</span>{" "}
-        column and an optional{" "}
-        <span className="font-medium text-ink-soft">Code</span> column to add{" "}
-        {title.toLowerCase()} in bulk.
+        column
+        {categoryField && (
+          <>
+            , a required{" "}
+            <span className="font-medium text-ink-soft">
+              {categoryField.label}
+            </span>{" "}
+            column (
+            {categoryField.options.map((o) => o.label).join(", ")})
+          </>
+        )}{" "}
+        and an optional <span className="font-medium text-ink-soft">Code</span>{" "}
+        column to add {title.toLowerCase()} in bulk.
       </p>
 
       <button

@@ -17,7 +17,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EDvanced Vue — Finance Leadership Tools",
+  title: "EDvanced Vue — School Finance & Analytics",
   description:
     "Secure multi-district reporting & analytics for K-12 school finance.",
 };

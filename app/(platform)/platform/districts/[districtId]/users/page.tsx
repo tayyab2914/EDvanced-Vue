@@ -22,7 +22,7 @@ export default async function DistrictUsersPage({
 
   const users = await prisma.user.findMany({
     where: { districtId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { name: "asc" },
     select: {
       id: true,
       name: true,
@@ -31,6 +31,7 @@ export default async function DistrictUsersPage({
       email: true,
       role: true,
       status: true,
+      emailVerifiedAt: true,
       lastLoginAt: true,
       lockedUntil: true,
     },

@@ -21,6 +21,11 @@ export default async function PlatformLayout({
           href: "/platform/districts",
           icon: "building",
         },
+        {
+          label: "External Users",
+          href: "/platform/external-users",
+          icon: "shield",
+        },
       ],
     },
     {
@@ -37,7 +42,6 @@ export default async function PlatformLayout({
   ];
   return (
     <AppShell
-      brand="EDvanced Vue"
       workspaceName="Platform Console"
       workspaceSub="All districts"
       nav={nav}

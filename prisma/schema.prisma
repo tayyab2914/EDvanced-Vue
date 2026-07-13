@@ -26,6 +26,22 @@ enum Role {
   DISTRICT_ADMIN
   FINANCE_USER
   VIEWER
+  EXTERNAL_USER
+}
+
+/// A district's decision on one external user. EXPIRED is NOT stored — it is derived
+/// from `status == ACTIVE && expiresAt < now` (see lib/external-access.ts), so a lapsed
+/// grant can never be left behind still granting access.
+enum ExternalAccessStatus {
+  PENDING
+  ACTIVE
+  DENIED
+  REVOKED
+}
+
+enum ExternalAccessLevel {
+  VIEW_ONLY
+  FULL_ACCESS
 }
 
 enum UserStatus {
@@ -94,9 +110,11 @@ model District {
   functions       AccountFunction[]
   objects         AccountObject[]
   auditLogs       AuditLog[]
+  externalAccess  ExternalAccess[]
 }
 
-/// districtId is NULL for Platform Admins (cross-district); required for all others (enforced in app logic).
+/// districtId is NULL for Platform Admins (cross-district) and for External Users (whose
+/// district access lives in ExternalAccess, one row per district); required for all others.
 model User {
   id                  String     @id @default(cuid())
   districtId          String?
@@ -107,6 +125,7 @@ model User {
   lastName            String?
   passwordHash        String? // null until an INVITED user sets their password
   status              UserStatus @default(INVITED)
+  emailVerifiedAt     DateTime? // set when a token sent to this address is consumed; cleared on email change
   failedLoginAttempts Int        @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
@@ -116,8 +135,37 @@ model User {
   district           District?           @relation(fields: [districtId], references: [id], onDelete: Cascade)
   sessions           Session[]
   verificationTokens VerificationToken[]
+  externalAccess     ExternalAccess[]
 
   @@index([districtId])
+}
+
+/// One district's grant of access to one external user: its own status, permission level
+/// and expiry. This is what lets an External User span districts without breaking the
+/// one-user-one-district shape of User.districtId.
+///
+/// `requestedByUserId` / `decidedByUserId` are deliberately NOT foreign keys (same reasoning
+/// as AuditLog.actorUserId): deleting the admin who approved a grant must not cascade the
+/// grant away.
+model ExternalAccess {
+  id                String               @id @default(cuid())
+  userId            String
+  districtId        String
+  status            ExternalAccessStatus @default(PENDING)
+  level             ExternalAccessLevel? // null until the district approves and chooses one
+  expiresAt         DateTime? // set on approval; never more than 30 days out
+  requestedByUserId String? // platform admin who assigned, or district admin who invited
+  decidedByUserId   String? // district admin who approved / denied / revoked
+  decidedAt         DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, districtId])
+  @@index([districtId, status])
+  @@index([userId])
 }
 
 /// DB-backed sessions enable revocation and lockout-logout. The cookie carries a signed { sessionId, ... }.
@@ -128,6 +176,10 @@ model Session {
   createdAt DateTime @default(now())
   ipAddress String?
   userAgent String?
+  /// Which district an External User is currently working in. Untrusted UI state — it is
+  /// re-validated against ExternalAccess on every request, so a stale/dangling id is
+  /// harmless (hence no foreign key). NULL for every other role.
+  activeDistrictId String?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -177,15 +229,17 @@ model School {
   schoolNumber String
   name         String
   category     String? // Cost Center Category (School / Department / Operations / Other)
-  type         String? // Cost Center Type (depends on category)
+  typeId       String? // Cost Center Type — must belong to the chosen category
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  district District         @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  type     CostCenterType?  @relation(fields: [typeId], references: [id], onDelete: SetNull)
 
   @@unique([districtId, schoolNumber])
   @@index([districtId])
+  @@index([typeId])
 }
 
 model Grant {
@@ -370,4 +424,21 @@ model Status {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Unlike the other lookups, a Cost Center Type belongs to one Cost Center Category,
+/// so the Type dropdown in Master Data can stay filtered by the chosen Category.
+model CostCenterType {
+  id        String   @id @default(cuid())
+  code      String?  @unique
+  name      String   @unique
+  category  String // one of COST_CENTER_CATEGORY_VALUES
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  costCenters School[]
+
+  @@index([category])
 }

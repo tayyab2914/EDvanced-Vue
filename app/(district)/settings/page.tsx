@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/dal";
+import { homePathForUser } from "@/lib/auth/routes";
 import { prisma } from "@/lib/db";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
@@ -7,7 +8,7 @@ import { DistrictSettingsForm } from "@/components/district/settings-form";
 
 export default async function DistrictSettingsPage() {
   const me = await requirePermission("configure_district");
-  if (!me.districtId) redirect("/platform");
+  if (!me.districtId) redirect(homePathForUser(me));
 
   const district = await prisma.district.findUnique({
     where: { id: me.districtId },

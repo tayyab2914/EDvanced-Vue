@@ -21,6 +21,10 @@
   --color-warn-bg: #fbf1df;
   --color-bad: #c2542e;
   --color-bad-bg: #fbeae2;
+
+  /* EDvanced Vue brand marks (logo only — not the UI accent, which is --color-brand) */
+  --color-logo-navy: #14304e;
+  --color-logo-green: #2f9e4f;
 }
 
 @theme inline {

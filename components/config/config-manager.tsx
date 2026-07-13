@@ -26,6 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Pagination, usePagination } from "@/components/ui/pagination";
 import { Icon } from "@/components/icons";
 import { toggleConfigItem } from "@/app/actions/config";
 
@@ -45,6 +46,9 @@ export function ConfigManager({
 
   const def = CONFIG_RESOURCES[active];
   const rows = lists[active];
+  const categoryField = def.categoryField;
+  const categoryLabel = (value?: string | null) =>
+    categoryField?.options.find((o) => o.value === value)?.label ?? "—";
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -57,6 +61,8 @@ export function ConfigManager({
       : rows;
   }, [rows, query]);
 
+  const pg = usePagination(filtered);
+
   function switchTab(k: ConfigKind) {
     setActive(k);
     setQuery("");
@@ -65,6 +71,7 @@ export function ConfigManager({
     setEditing(null);
     setViewing(null);
     setDeleting(null);
+    pg.reset();
   }
 
   function toggleRow(r: ConfigRow) {
@@ -115,7 +122,10 @@ export function ConfigManager({
             </span>
             <Input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                pg.reset();
+              }}
               placeholder={`Search ${def.title.toLowerCase()}…`}
               autoComplete="off"
               className="h-9 w-full pl-9"
@@ -168,18 +178,19 @@ export function ConfigManager({
             <TR>
               <TH>Code</TH>
               <TH>Name</TH>
+              {categoryField && <TH>{categoryField.label}</TH>}
               <TH>Status</TH>
               <TH className="text-right">Actions</TH>
             </TR>
           </THead>
           <TBody>
             {filtered.length === 0 && (
-              <EmptyRow colSpan={4}>
+              <EmptyRow colSpan={categoryField ? 5 : 4}>
                 No {def.title.toLowerCase()}{" "}
                 {query ? "match your search." : "yet. Add one above."}
               </EmptyRow>
             )}
-            {filtered.map((r) => (
+            {pg.pageItems.map((r) => (
               <TR key={r.id}>
                 <TD className="font-medium">
                   <button
@@ -191,6 +202,9 @@ export function ConfigManager({
                   </button>
                 </TD>
                 <TD className="text-ink">{r.name}</TD>
+                {categoryField && (
+                  <TD className="text-ink-soft">{categoryLabel(r.category)}</TD>
+                )}
                 <TD>
                   {r.active ? (
                     <Badge tone="green">Active</Badge>
@@ -260,6 +274,16 @@ export function ConfigManager({
             ))}
           </TBody>
         </Table>
+
+        <Pagination
+          page={pg.page}
+          pageCount={pg.pageCount}
+          total={pg.total}
+          from={pg.from}
+          to={pg.to}
+          onPage={pg.setPage}
+          noun={def.title.toLowerCase()}
+        />
       </div>
 
       <Modal
@@ -316,6 +340,16 @@ export function ConfigManager({
                 {viewing.name}
               </dd>
             </div>
+            {categoryField && (
+              <div className="flex justify-between gap-6">
+                <dt className="text-[13px] text-muted-2">
+                  {categoryField.label}
+                </dt>
+                <dd className="text-right text-[13px] font-medium text-ink">
+                  {categoryLabel(viewing.category)}
+                </dd>
+              </div>
+            )}
             <div className="flex justify-between gap-6 border-t border-line-soft pt-2.5">
               <dt className="text-[13px] text-muted-2">Status</dt>
               <dd>

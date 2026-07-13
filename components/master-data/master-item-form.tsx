@@ -24,12 +24,14 @@ export function MasterItemForm({
   def,
   districtId,
   options,
+  optionsByParent,
   row,
   onDone,
 }: {
   def: ClientResourceDef;
   districtId: string;
   options: Record<string, Option[]>;
+  optionsByParent: Record<string, Record<string, Option[]>>;
   row?: MasterRow;
   onDone: () => void;
 }) {
@@ -105,7 +107,16 @@ export function MasterItemForm({
                 ) : f.dependsOn ? (
                   (() => {
                     const parent = vals[f.dependsOn] ?? "";
-                    const depOpts = f.optionsByParent?.[parent] ?? [];
+                    // Options come either from a static map or, for a globalType-backed
+                    // select, from the server-loaded parent→options map.
+                    const depOpts =
+                      f.optionsByParent?.[parent] ??
+                      optionsByParent[f.optionsByParentKey ?? ""]?.[parent] ??
+                      [];
+                    const parentLabel =
+                      def.fields
+                        .find((p) => p.name === f.dependsOn)
+                        ?.label.toLowerCase() ?? "parent";
                     return (
                       <Select
                         id={`f-${f.name}`}
@@ -116,7 +127,11 @@ export function MasterItemForm({
                         onChange={(e) => setVal(f.name, e.target.value)}
                       >
                         <option value="" disabled>
-                          {parent ? "Select…" : "Select a category first"}
+                          {!parent
+                            ? `Select a ${parentLabel} first`
+                            : depOpts.length
+                              ? "Select…"
+                              : `No types for this ${parentLabel} yet`}
                         </option>
                         {depOpts.map((o) => (
                           <option key={o.value} value={o.value}>

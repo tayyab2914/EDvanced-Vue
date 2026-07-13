@@ -8,10 +8,7 @@ import {
 } from "@/lib/master-data/enums";
 import {
   COST_CENTER_CATEGORIES,
-  COST_CENTER_TYPES_BY_CATEGORY,
-  ALL_COST_CENTER_TYPES,
   COST_CENTER_CATEGORY_VALUES,
-  isValidCostCenterType,
 } from "@/lib/master-data/cost-center";
 
 // District-owned account dimensions. Order here drives the nav order.
@@ -29,7 +26,8 @@ export type GlobalTypeModel =
   | "fundType"
   | "revenueType"
   | "objectType"
-  | "functionType";
+  | "functionType"
+  | "costCenterType";
 
 export interface FieldDef {
   name: string;
@@ -43,7 +41,11 @@ export interface FieldDef {
   globalType?: GlobalTypeModel; // platform lookup the select references (existence check)
   staticOptions?: EnumOption[]; // fixed dropdown/radio values (no DB load)
   dependsOn?: string; // this select's options depend on another field's value
-  optionsByParent?: Record<string, EnumOption[]>; // options keyed by the parent value
+  optionsByParent?: Record<string, EnumOption[]>; // static options keyed by the parent value
+  // For a dependent select backed by a `globalType`: the column on the lookup model that
+  // holds the parent value, and the key into the server-loaded parent→options map.
+  parentColumn?: string;
+  optionsByParentKey?: string;
 }
 
 export interface ResourceDef {
@@ -53,6 +55,7 @@ export interface ResourceDef {
   singular: string;
   fields: FieldDef[];
   columns: string[]; // field names shown as table columns (rest are form/view only)
+  defaultSort: string; // field the table sorts by, ascending (stated, not inferred)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schema: z.ZodType<any>;
 }
@@ -121,6 +124,7 @@ function typedDimension(
       },
     ],
     columns: ["code", "name", typeField.name],
+    defaultSort: "code",
     schema: z.object({
       code: codeField,
       name: nameField,
@@ -181,30 +185,29 @@ export const RESOURCES: Record<MasterKind, ResourceDef> = {
         staticOptions: COST_CENTER_CATEGORIES,
       },
       {
-        name: "type",
-        label: "Type",
+        // Platform-managed (CostCenterType), but each type belongs to a category, so the
+        // options stay filtered by the Category the user picked.
+        name: "typeId",
+        label: "Cost Center Type",
         type: "select",
         required: true,
         dependsOn: "category",
-        optionsByParent: COST_CENTER_TYPES_BY_CATEGORY,
-        staticOptions: ALL_COST_CENTER_TYPES, // flat list, for column display
+        parentColumn: "category",
+        optionsKey: "costCenterTypes", // flat list — column labels + filter dropdown
+        optionsByParentKey: "costCenterTypesByCategory",
+        globalType: "costCenterType",
       },
     ],
-    columns: ["schoolNumber", "name", "category", "type"],
-    schema: z
-      .object({
-        schoolNumber: codeField,
-        name: nameField,
-        category: z.enum(
-          COST_CENTER_CATEGORY_VALUES as [string, ...string[]],
-          { error: "Choose a category." },
-        ),
-        type: z.string().trim().min(1, { error: "Choose a type." }),
-      })
-      .refine((d) => isValidCostCenterType(d.category, d.type), {
-        error: "That type doesn't match the selected category.",
-        path: ["type"],
+    columns: ["schoolNumber", "name", "category", "typeId"],
+    defaultSort: "schoolNumber",
+    schema: z.object({
+      schoolNumber: codeField,
+      name: nameField,
+      category: z.enum(COST_CENTER_CATEGORY_VALUES as [string, ...string[]], {
+        error: "Choose a category.",
       }),
+      typeId: requiredSelect("Cost Center Type"),
+    }),
   },
   grants: {
     kind: "grants",
@@ -250,6 +253,7 @@ export const RESOURCES: Record<MasterKind, ResourceDef> = {
       "status",
       "awardAmount",
     ],
+    defaultSort: "grantId",
     schema: z.object({
       grantId: codeField,
       name: nameField,
@@ -288,6 +292,7 @@ export const RESOURCES: Record<MasterKind, ResourceDef> = {
       },
     ],
     columns: ["projectId", "name", "status", "projectType"],
+    defaultSort: "projectId",
     schema: z.object({
       projectId: codeField,
       name: nameField,

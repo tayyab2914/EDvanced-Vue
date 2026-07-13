@@ -9,22 +9,24 @@ import {
   type ConfigKind,
   type ConfigImportResult,
 } from "@/lib/config/registry";
-import { configItemSchema } from "@/lib/validation/config";
+import { configSchemaFor } from "@/lib/validation/config";
 import { parseCsvRows } from "@/lib/csv";
 import { writeAudit } from "@/lib/audit";
 import { Role } from "@/lib/enums";
 import type { FormState } from "@/lib/forms";
 
-// The five global lookup models share one shape (id, code, name, sortOrder, active),
-// so a single delegate type covers them all.
+// The global lookup models share one shape (id, code, name, sortOrder, active) plus an
+// optional `category` (Cost Center Types), so a single delegate type covers them all.
+interface LookupFields {
+  code?: string | null;
+  name?: string;
+  category?: string;
+  active?: boolean;
+}
+
 interface LookupDelegate {
-  create(args: {
-    data: { code?: string; name: string };
-  }): Promise<{ id: string }>;
-  update(args: {
-    where: { id: string };
-    data: { code?: string | null; name?: string; active?: boolean };
-  }): Promise<unknown>;
+  create(args: { data: LookupFields & { name: string } }): Promise<{ id: string }>;
+  update(args: { where: { id: string }; data: LookupFields }): Promise<unknown>;
   deleteMany(args: { where: { id: string } }): Promise<{ count: number }>;
 }
 
@@ -40,6 +42,15 @@ function parseContext(formData: FormData): {
   return { kind, def: CONFIG_RESOURCES[kind] };
 }
 
+/** Reads code/name — plus category for the lists that have one — off the form. */
+function readItem(def: ConfigDef, formData: FormData) {
+  return configSchemaFor(def).safeParse({
+    code: formData.get("code"),
+    name: formData.get("name"),
+    ...(def.categoryField ? { category: formData.get("category") } : {}),
+  });
+}
+
 export async function createConfigItem(
   _prev: FormState,
   formData: FormData,
@@ -49,10 +60,7 @@ export async function createConfigItem(
 
   const admin = await requireRole(Role.PLATFORM_ADMIN);
 
-  const parsed = configItemSchema.safeParse({
-    code: formData.get("code"),
-    name: formData.get("name"),
-  });
+  const parsed = readItem(def, formData);
   if (!parsed.success) {
     return {
       error: "Please fix the errors below.",
@@ -62,7 +70,11 @@ export async function createConfigItem(
 
   try {
     const created = await delegateFor(def).create({
-      data: { name: parsed.data.name, code: parsed.data.code },
+      data: {
+        name: parsed.data.name,
+        code: parsed.data.code,
+        ...(def.categoryField ? { category: parsed.data.category } : {}),
+      },
     });
     await writeAudit({
       action: "CONFIG_ITEM_CREATED",
@@ -92,10 +104,7 @@ export async function updateConfigItem(
 
   const admin = await requireRole(Role.PLATFORM_ADMIN);
 
-  const parsed = configItemSchema.safeParse({
-    code: formData.get("code"),
-    name: formData.get("name"),
-  });
+  const parsed = readItem(def, formData);
   if (!parsed.success) {
     return {
       error: "Please fix the errors below.",
@@ -106,7 +115,11 @@ export async function updateConfigItem(
   try {
     await delegateFor(def).update({
       where: { id },
-      data: { name: parsed.data.name, code: parsed.data.code ?? null },
+      data: {
+        name: parsed.data.name,
+        code: parsed.data.code ?? null,
+        ...(def.categoryField ? { category: parsed.data.category } : {}),
+      },
     });
   } catch {
     return {
@@ -188,12 +201,27 @@ export async function importConfigItems(
   const { headers, rows } = parseCsvRows(await file.text());
   if (!headers.length) return { ok: false, error: "The file appears to be empty." };
 
-  const headerNorm = headers.map((h) => h.trim().toLowerCase());
+  const norm = (s: string) => s.trim().toLowerCase();
+  const headerNorm = headers.map(norm);
   const nameCol = headerNorm.indexOf("name");
   const codeCol = headerNorm.indexOf("code");
   if (nameCol < 0) {
     return { ok: false, error: "Missing required column: Name." };
   }
+
+  // Lists with a category (Cost Center Types) need it on every row; accept either the
+  // label ("School") or the stored value ("SCHOOL").
+  const cat = def.categoryField;
+  const catCol = cat ? headerNorm.indexOf(norm(cat.label)) : -1;
+  if (cat && catCol < 0) {
+    return { ok: false, error: `Missing required column: ${cat.label}.` };
+  }
+  const catValues = new Map(
+    (cat?.options ?? []).flatMap((o) => [
+      [norm(o.label), o.value] as const,
+      [norm(o.value), o.value] as const,
+    ]),
+  );
 
   const delegate = delegateFor(def);
   let imported = 0;
@@ -207,8 +235,26 @@ export async function importConfigItems(
       errors.push({ row: rowNum, message: "Name is required." });
       continue;
     }
+
+    let category: string | undefined;
+    if (cat) {
+      const raw = (rows[r][catCol] ?? "").trim();
+      category = catValues.get(norm(raw));
+      if (!category) {
+        errors.push({
+          row: rowNum,
+          message: raw
+            ? `Unknown ${cat.label.toLowerCase()} “${raw}”.`
+            : `${cat.label} is required.`,
+        });
+        continue;
+      }
+    }
+
     try {
-      await delegate.create({ data: { name, ...(code ? { code } : {}) } });
+      await delegate.create({
+        data: { name, ...(code ? { code } : {}), ...(category ? { category } : {}) },
+      });
       imported++;
     } catch {
       errors.push({ row: rowNum, message: "Duplicate name or code." });

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requirePermission } from "@/lib/auth/dal";
+import { homePathForUser } from "@/lib/auth/routes";
 import { getAuditRows, getAuditFilterOptions } from "@/lib/audit";
 import { PageHeader } from "@/components/page-header";
 import { AuditView } from "@/components/audit/audit-view";
@@ -15,7 +16,7 @@ export default async function DistrictAuditPage({
   }>;
 }) {
   const me = await requirePermission("view_audit");
-  if (!me.districtId) redirect("/platform");
+  if (!me.districtId) redirect(homePathForUser(me));
   const sp = await searchParams;
   const days = sp.days ?? "30";
 

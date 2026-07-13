@@ -108,7 +108,8 @@ function renderHtml(opts: {
       <tr><td align="center">
         <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e2e7ef;border-radius:12px">
           <tr><td style="padding:28px 32px">
-            <div style="font-weight:700;font-size:16px;color:#2f6bf6;margin-bottom:20px">EDvanced Vue</div>
+            <div style="margin-bottom:4px;font-weight:700;font-size:17px;color:#14304e"><span style="color:#2f9e4f">ED</span>vanced <span style="color:#2f9e4f">V</span>ue</div>
+            <div style="margin-bottom:20px;font-size:10px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:#8592a6">School Finance &amp; Analytics</div>
             <div style="font-size:20px;font-weight:600;margin-bottom:12px">${escapeHtml(opts.heading)}</div>
             <p style="font-size:14px;line-height:1.6;color:#475069;margin:0 0 22px">Hi ${escapeHtml(opts.name)},<br/>${escapeHtml(opts.intro)}</p>
             <a href="${url}" style="display:inline-block;background:#2f6bf6;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:8px">${escapeHtml(opts.buttonLabel)}</a>
@@ -139,6 +140,87 @@ export async function sendInviteEmail(
       buttonLabel: "Set your password",
       url: link,
       expiry: "This link expires in 7 days.",
+    }),
+  });
+}
+
+function appLink(path: string): string {
+  return `${env.APP_URL}${path}`;
+}
+
+/** Tells a district's admins that an external user is waiting on their approval. */
+export async function sendAccessRequestEmail(
+  to: string,
+  adminName: string,
+  externalName: string,
+  districtName: string,
+): Promise<void> {
+  const url = appLink("/users?tab=external");
+  await sendEmail({
+    to,
+    subject: `Access request: ${externalName} — ${districtName}`,
+    text: `Hi ${adminName},\n\n${externalName} has requested access to ${districtName}. Review the request and choose their permission level and expiry date:\n\n${url}\n\nNo access is granted until you approve it.`,
+    html: renderHtml({
+      name: adminName,
+      heading: "New access request",
+      intro: `${externalName} has requested access to ${districtName}. Review the request and choose their permission level and expiry date. No access is granted until you approve it.`,
+      buttonLabel: "Review request",
+      url,
+      expiry: "You can revoke or change this access at any time.",
+    }),
+  });
+}
+
+/** Tells an external user a district let them in — and for how long. */
+export async function sendAccessApprovedEmail(
+  to: string,
+  name: string,
+  districtName: string,
+  levelLabel: string,
+  expiresLabel: string,
+): Promise<void> {
+  const url = appLink("/districts");
+  await sendEmail({
+    to,
+    subject: `Your access to ${districtName} has been approved`,
+    text: `Hi ${name},\n\n${districtName} has approved your access.\n\nPermission level: ${levelLabel}\nAccess expires: ${expiresLabel}\n\nOpen the district:\n\n${url}`,
+    html: renderHtml({
+      name,
+      heading: `Access to ${districtName} approved`,
+      intro: `${districtName} has approved your access. Permission level: ${levelLabel}. Your access expires on ${expiresLabel}.`,
+      buttonLabel: "Open district",
+      url,
+      expiry: `Your access expires on ${expiresLabel}.`,
+    }),
+  });
+}
+
+/** Tells an external user a district turned them down, or cut their access off. */
+export async function sendAccessClosedEmail(
+  to: string,
+  name: string,
+  districtName: string,
+  kind: "denied" | "revoked",
+): Promise<void> {
+  const url = appLink("/districts");
+  const line =
+    kind === "denied"
+      ? `${districtName} has declined your access request.`
+      : `Your access to ${districtName} has been revoked.`;
+  await sendEmail({
+    to,
+    subject:
+      kind === "denied"
+        ? `Your access request to ${districtName} was declined`
+        : `Your access to ${districtName} has been revoked`,
+    text: `Hi ${name},\n\n${line}\n\nYou can still see the districts you have access to here:\n\n${url}`,
+    html: renderHtml({
+      name,
+      heading: kind === "denied" ? "Access request declined" : "Access revoked",
+      intro: `${line} Contact the district directly if you believe this is a mistake.`,
+      buttonLabel: "View my districts",
+      url,
+      expiry: "",
     }),
   });
 }

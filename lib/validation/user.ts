@@ -19,14 +19,11 @@ const lastName = z
   .max(60);
 const role = z.enum(ASSIGNABLE_ROLES, { error: "Choose a role." });
 
-export const createUserSchema = z.object({
-  firstName,
-  lastName,
-  email: z.email({ error: "Enter a valid email address." }).trim(),
-  role,
-});
+const email = z.email({ error: "Enter a valid email address." }).trim();
 
-export const editUserSchema = z.object({ firstName, lastName, role });
+export const createUserSchema = z.object({ firstName, lastName, email, role });
+
+export const editUserSchema = z.object({ firstName, lastName, email, role });
 
 export function fullName(first: string, last: string): string {
   return `${first} ${last}`.trim();

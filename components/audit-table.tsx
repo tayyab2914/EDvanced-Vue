@@ -27,7 +27,7 @@ function humanize(action: string): string {
 function toneForAction(
   action: string,
 ): "gray" | "green" | "red" | "amber" | "blue" | "indigo" {
-  if (action.includes("FAILED") || action.includes("LOCKED") || action.includes("DISABLED") || action.includes("DEACTIVATED"))
+  if (action.includes("FAILED") || action.includes("LOCKED") || action.includes("DISABLED") || action.includes("DEACTIVATED") || action.includes("DELETED"))
     return "red";
   if (action.includes("CREATED") || action.includes("SUCCESS") || action.includes("ACTIVATED"))
     return "green";

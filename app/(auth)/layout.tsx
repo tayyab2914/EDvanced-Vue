@@ -1,6 +1,28 @@
 import type { ReactNode } from "react";
+import { Icon, type IconName } from "@/components/icons";
+import { Logo } from "@/components/logo";
+
+const FEATURES: { icon: IconName; title: string; detail: string }[] = [
+  {
+    icon: "shield",
+    title: "Secure Multi-Tenant Platform",
+    detail: "Enterprise-grade security for every district.",
+  },
+  {
+    icon: "book",
+    title: "Florida Red Book Validation",
+    detail: "Built-in rules. Built for compliance.",
+  },
+  {
+    icon: "chart",
+    title: "Executive Financial Dashboards",
+    detail: "Clarity today. Better decisions tomorrow.",
+  },
+];
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
+  const year = new Date().getFullYear();
+
   return (
     <div className="grid min-h-screen lg:grid-cols-[1.05fr_1fr]">
       {/* Marketing panel */}
@@ -16,33 +38,49 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             backgroundSize: "34px 34px",
           }}
         />
-        <div className="relative flex items-center gap-3">
-          <div className="flex h-[34px] w-[34px] items-center justify-center rounded-lg bg-brand text-[16px] font-bold text-white">
-            E
-          </div>
-          <span className="text-[17px] font-semibold text-white">
-            EDvanced Vue
-          </span>
-          <span className="ml-1 border-l border-[#2a3a52] pl-3 text-[13px] font-medium text-[#7d8ba3]">
-            Finance Leadership Tools
-          </span>
+
+        <div className="relative">
+          <Logo size={40} onDark tagline />
         </div>
-        <div className="relative max-w-[420px]">
-          <div className="mb-4 text-[13px] font-semibold uppercase tracking-[0.12em] text-[#4f8bff]">
-            District Finance, Clarified
+
+        <div className="relative max-w-115">
+          <div className="mb-4 text-[12px] font-semibold uppercase tracking-[0.16em] text-logo-green">
+            Financial Intelligence
           </div>
-          <h1 className="mb-4 text-[34px] font-semibold leading-[1.22] text-white">
-            Turn ledgers and spreadsheets into decisions your board can trust.
+          <h1 className="mb-5 text-[34px] font-semibold leading-[1.22] text-white">
+            Transforming Financial Data into Executive Insight
           </h1>
           <p className="text-[15px] leading-relaxed text-[#9fadc4]">
-            Upload, validate, and analyze district financial data in one secure
-            workspace — built for finance teams, not engineers.
+            Upload. Validate. Analyze.
+            <br />
+            Make confident decisions your board can trust.
           </p>
+
+          <ul className="mt-12 space-y-7">
+            {FEATURES.map((f) => (
+              <li key={f.title} className="flex items-center gap-4">
+                <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full border border-[#25354d] bg-white/4 text-logo-green">
+                  <Icon name={f.icon} size={20} />
+                </span>
+                <div>
+                  <div className="text-[14px] font-semibold text-white">
+                    {f.title}
+                  </div>
+                  <div className="mt-0.5 text-[13px] text-[#8fa1bb]">
+                    {f.detail}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="relative flex gap-7 text-[12.5px] text-[#7d8ba3]">
-          <span>Per-district isolation</span>
-          <span>Role-based access</span>
-          <span>Full audit trail</span>
+
+        <div className="relative flex items-center gap-4 text-[12px] text-[#7d8ba3]">
+          <span>© {year} EDvanced Vue, LLC. All rights reserved.</span>
+          <span className="text-[#2a3a52]">|</span>
+          <span>Privacy Policy</span>
+          <span className="text-[#2a3a52]">|</span>
+          <span>Terms of Service</span>
         </div>
       </div>
 

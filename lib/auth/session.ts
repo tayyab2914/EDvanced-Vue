@@ -65,3 +65,35 @@ export async function destroySession(): Promise<void> {
 export async function revokeUserSessions(userId: string): Promise<void> {
   await prisma.session.deleteMany({ where: { userId } });
 }
+
+/**
+ * Points the CURRENT session at a district (external users only). This is untrusted UI
+ * state — `getCurrentUser()` re-validates it against a live grant on every request — so it
+ * is safe to store without re-signing the cookie.
+ */
+export async function setActiveDistrict(districtId: string): Promise<void> {
+  const payload = await decryptSession(await getSessionToken());
+  if (!payload?.sessionId) return;
+  await prisma.session.updateMany({
+    where: { id: payload.sessionId },
+    data: { activeDistrictId: districtId },
+  });
+}
+
+/**
+ * Drops a district from any session currently pointing at it, after access is revoked or
+ * expires. Purely cosmetic — access is already gone, because the grant is re-read on every
+ * request — but it stops the user from landing on a district they can no longer open.
+ *
+ * Deliberately NOT `revokeUserSessions`: that would sign the user out of every OTHER
+ * district too, and one district's decision must not do that.
+ */
+export async function clearActiveDistrict(
+  userId: string,
+  districtId: string,
+): Promise<void> {
+  await prisma.session.updateMany({
+    where: { userId, activeDistrictId: districtId },
+    data: { activeDistrictId: null },
+  });
+}

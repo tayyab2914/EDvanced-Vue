@@ -11,8 +11,10 @@ import { Role } from "@/lib/enums";
 
 interface LookupReadDelegate {
   findMany(args: {
-    orderBy: Array<{ sortOrder: "asc" } | { name: "asc" }>;
-    select: { id: true; code: true; name: true; active: true };
+    orderBy: Array<
+      { code: { sort: "asc"; nulls: "last" } } | { name: "asc" }
+    >;
+    select: Record<string, true>;
   }): Promise<ConfigRow[]>;
 }
 
@@ -22,14 +24,22 @@ export default async function ConfigPage() {
   // One server render loads every list in parallel; the client then switches
   // tabs, edits, cancels, and searches with no further server round-trips.
   const results = await Promise.all(
-    CONFIG_KINDS.map((k) =>
-      (prisma as unknown as Record<string, LookupReadDelegate>)[
-        CONFIG_RESOURCES[k].model
+    CONFIG_KINDS.map((k) => {
+      const def = CONFIG_RESOURCES[k];
+      return (prisma as unknown as Record<string, LookupReadDelegate>)[
+        def.model
       ].findMany({
-        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-        select: { id: true, code: true, name: true, active: true },
-      }),
-    ),
+        // Code ascending; rows without a code fall to the bottom, ordered by name.
+        orderBy: [{ code: { sort: "asc", nulls: "last" } }, { name: "asc" }],
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          active: true,
+          ...(def.categoryField ? { category: true } : {}),
+        },
+      });
+    }),
   );
 
   const lists = Object.fromEntries(

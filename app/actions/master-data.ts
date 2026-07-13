@@ -3,10 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { tenantDb } from "@/lib/tenant-db";
-import { requireAuth, type CurrentUser } from "@/lib/auth/dal";
-import { hasPermission } from "@/lib/auth/permissions";
+import { requireAuth, userCan, type CurrentUser } from "@/lib/auth/dal";
 import {
   RESOURCES,
+  type FieldDef,
   type MasterKind,
   type ResourceDef,
   type ImportResult,
@@ -20,8 +20,10 @@ import type { FormState } from "@/lib/forms";
 type AnyDelegate = any;
 
 function canManage(user: CurrentUser, districtId: string): boolean {
+  // userCan (not hasPermission) so an external user's granted level decides this: a
+  // VIEW_ONLY external fails here even though they can read the same page.
   return (
-    hasPermission(user.role, "manage_master_data") &&
+    userCan(user, "manage_master_data") &&
     (user.role === Role.PLATFORM_ADMIN || user.districtId === districtId)
   );
 }
@@ -44,7 +46,9 @@ function readFields(def: ResourceDef, formData: FormData): Record<string, unknow
 
 /**
  * Validates select fields: `relModel` values must belong to THIS district (no
- * cross-tenant FKs); `globalType` values must exist in the platform lookup table.
+ * cross-tenant FKs); `globalType` values must exist in the platform lookup table — and
+ * for a dependent select, must also match the parent the user picked (a Cost Center Type
+ * has to belong to the chosen Category).
  * Returns a fieldErrors object if anything is invalid, else null.
  */
 async function validateSelects(
@@ -60,10 +64,25 @@ async function validateSelects(
       ].findFirst({ where: { id: data[f.name] }, select: { id: true } });
       if (!owned) return { [f.name]: ["Invalid selection."] };
     } else if (f.globalType) {
+      const where: Record<string, unknown> = { id: data[f.name] };
+      if (f.parentColumn && f.dependsOn) {
+        where[f.parentColumn] = data[f.dependsOn];
+      }
       const exists = await (prisma as unknown as Record<string, AnyDelegate>)[
         f.globalType
-      ].findFirst({ where: { id: data[f.name] }, select: { id: true } });
-      if (!exists) return { [f.name]: ["Invalid selection."] };
+      ].findFirst({ where, select: { id: true } });
+      if (!exists) {
+        const parentLabel = f.dependsOn
+          ? def.fields.find((p) => p.name === f.dependsOn)?.label.toLowerCase()
+          : undefined;
+        return {
+          [f.name]: [
+            parentLabel
+              ? `That ${f.label.toLowerCase()} doesn't match the selected ${parentLabel}.`
+              : "Invalid selection.",
+          ],
+        };
+      }
     }
   }
   return null;
@@ -228,17 +247,32 @@ export async function importMasterData(
     return { ok: false, error: `Missing required column(s): ${missing.join(", ")}.` };
   }
 
-  // Resolve type/status columns by name/label → id/enum value.
+  // Resolve type/status columns by name/label → id/enum value. For a dependent select
+  // (Cost Center Type) the key is scoped by its parent, so "Elementary" only resolves
+  // under the School category — that's what keeps a CSV from pairing a type with the
+  // wrong category now that the check lives in the DB rather than the Zod schema.
   const globalMaps: Record<string, Map<string, string>> = {};
   const staticMaps: Record<string, Map<string, string>> = {};
+  const globalKey = (f: FieldDef, parent: string, name: string) =>
+    f.parentColumn ? `${norm(parent)}|${norm(name)}` : norm(name);
+
   for (const f of def.fields) {
     if (f.type !== "select" && f.type !== "radio") continue;
     if (f.globalType) {
       const items = await (prisma as unknown as Record<string, AnyDelegate>)[
         f.globalType
-      ].findMany({ select: { id: true, name: true } });
+      ].findMany({
+        select: {
+          id: true,
+          name: true,
+          ...(f.parentColumn ? { [f.parentColumn]: true } : {}),
+        },
+      });
       globalMaps[f.name] = new Map(
-        items.map((x: { id: string; name: string }) => [norm(x.name), x.id]),
+        items.map((x: Record<string, string>) => [
+          globalKey(f, f.parentColumn ? (x[f.parentColumn] ?? "") : "", x.name),
+          x.id,
+        ]),
       );
     } else if (f.staticOptions) {
       staticMaps[f.name] = new Map(
@@ -257,15 +291,24 @@ export async function importMasterData(
     const raw: Record<string, unknown> = {};
     let rowError: string | null = null;
 
+    // Fields are read in registry order, so a parent (Category) is already resolved by
+    // the time its dependent (Cost Center Type) is looked up.
     for (const f of def.fields) {
       const idx = colOf(f.name, f.label);
       let value = idx >= 0 ? (cells[idx] ?? "").trim() : "";
       if (value && (f.type === "select" || f.type === "radio")) {
-        const resolved = (globalMaps[f.name] ?? staticMaps[f.name])?.get(
-          norm(value),
-        );
+        const gm = globalMaps[f.name];
+        const parent = f.dependsOn ? String(raw[f.dependsOn] ?? "") : "";
+        const resolved = gm
+          ? gm.get(globalKey(f, parent, value))
+          : staticMaps[f.name]?.get(norm(value));
         if (!resolved) {
-          rowError = `Unknown ${f.label.toLowerCase()} “${value}”`;
+          const parentLabel = f.dependsOn
+            ? def.fields.find((p) => p.name === f.dependsOn)?.label.toLowerCase()
+            : undefined;
+          rowError = parentLabel
+            ? `Unknown ${f.label.toLowerCase()} “${value}” for the selected ${parentLabel}`
+            : `Unknown ${f.label.toLowerCase()} “${value}”`;
           break;
         }
         value = resolved;

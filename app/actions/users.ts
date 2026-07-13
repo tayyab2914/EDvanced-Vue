@@ -31,6 +31,20 @@ function canManageUsers(actor: CurrentUser, districtId: string): boolean {
   );
 }
 
+/**
+ * This file manages a district's OWN members. External users are not members of any district
+ * (their User.districtId is NULL — access lives in ExternalAccess), so they must never be
+ * reachable here: a district manages an external user's *access* via app/actions/external-access.ts
+ * (approve / change level / revoke), and only a platform admin touches the account itself.
+ *
+ * The `target.districtId !== districtId` checks below already exclude them, since NULL never
+ * equals a district id. This makes that exclusion explicit rather than incidental, so that
+ * tightening or loosening those checks later can't silently expose external users.
+ */
+function isManageableTarget(target: { role: Role }): boolean {
+  return target.role !== Role.PLATFORM_ADMIN && target.role !== Role.EXTERNAL_USER;
+}
+
 function revalidateUsers() {
   revalidatePath("/users");
   revalidatePath("/platform/districts/[districtId]/users", "page");
@@ -115,6 +129,7 @@ export async function editUser(
   const parsed = editUserSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
+    email: formData.get("email"),
     role: formData.get("role"),
   });
   if (!parsed.success) {
@@ -126,22 +141,51 @@ export async function editUser(
 
   const target = await prisma.user.findUnique({
     where: { id: userId },
-    select: { districtId: true, role: true },
+    select: { districtId: true, role: true, email: true },
   });
   if (!target || target.districtId !== districtId) {
     return { error: "User not found in this district." };
   }
-  if (target.role === Role.PLATFORM_ADMIN) {
-    return { error: "Platform admins cannot be edited here." };
+  if (!isManageableTarget(target)) {
+    return { error: "This user cannot be edited here." };
   }
 
+  const email = parsed.data.email.toLowerCase();
+  const emailChanged = email !== target.email.toLowerCase();
+
+  // The email IS the login identity, so a change is a deliberate, confirmed act. The
+  // client makes the admin confirm; re-check here so the action can't be driven directly.
+  if (emailChanged && formData.get("confirmEmailChange") !== "true") {
+    return { error: "Confirm the email change before saving." };
+  }
+  if (emailChanged && (await prisma.user.findUnique({ where: { email } }))) {
+    return {
+      error: "A user with that email already exists.",
+      fieldErrors: { email: ["Already in use."] },
+    };
+  }
+
+  const name = fullName(parsed.data.firstName, parsed.data.lastName);
   await prisma.user.update({
     where: { id: userId },
     data: {
       firstName: parsed.data.firstName,
       lastName: parsed.data.lastName,
-      name: fullName(parsed.data.firstName, parsed.data.lastName),
+      name,
       role: parsed.data.role as Role,
+      ...(emailChanged
+        ? {
+            email,
+            // The address is the login identity, and the new one is unproven. Reset them
+            // to a pending invite: the old password dies with the old address, and they
+            // must set a new one via the link mailed to the new address before signing in.
+            emailVerifiedAt: null,
+            passwordHash: null,
+            status: UserStatus.INVITED,
+            failedLoginAttempts: 0,
+            lockedUntil: null,
+          }
+        : {}),
     },
   });
   await writeAudit({
@@ -152,8 +196,61 @@ export async function editUser(
     entityId: userId,
     metadata: { role: parsed.data.role },
   });
+
+  if (!emailChanged) {
+    revalidateUsers();
+    return { success: "User updated." };
+  }
+
+  // Signing in with the old address must stop working immediately.
+  await revokeUserSessions(userId);
+  const link = buildTokenLink(
+    await createVerificationToken(userId, TokenType.INVITE, INVITE_TTL_MS),
+  );
+  await sendInviteEmail(email, name, link);
+  await writeAudit({
+    action: "USER_EMAIL_CHANGED",
+    actorUserId: actor.id,
+    districtId,
+    entityType: "User",
+    entityId: userId,
+    metadata: { from: target.email, to: email },
+  });
   revalidateUsers();
-  return { success: "User updated." };
+
+  return {
+    success: isProduction
+      ? `Email changed to ${email}. An invite was sent there — they must set a new password before signing in.`
+      : `Email changed to ${email}. They must set a new password.\nDev link: ${link}`,
+  };
+}
+
+export async function deleteUser(formData: FormData): Promise<void> {
+  const districtId = String(formData.get("districtId") ?? "");
+  const userId = String(formData.get("userId") ?? "");
+  const actor = await requireAuth();
+  if (!canManageUsers(actor, districtId)) return;
+  if (userId === actor.id) return; // never delete yourself
+
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { districtId: true, role: true, email: true },
+  });
+  if (!target || target.districtId !== districtId) return;
+  if (!isManageableTarget(target)) return;
+
+  // Sessions and pending tokens cascade. The audit trail survives by design:
+  // AuditLog.actorUserId is deliberately not a foreign key.
+  await prisma.user.delete({ where: { id: userId } });
+  await writeAudit({
+    action: "USER_DELETED",
+    actorUserId: actor.id,
+    districtId,
+    entityType: "User",
+    entityId: userId,
+    metadata: { email: target.email },
+  });
+  revalidateUsers();
 }
 
 export async function setUserStatus(formData: FormData): Promise<void> {
@@ -170,7 +267,7 @@ export async function setUserStatus(formData: FormData): Promise<void> {
     select: { districtId: true, role: true },
   });
   if (!target || target.districtId !== districtId) return;
-  if (target.role === Role.PLATFORM_ADMIN) return;
+  if (!isManageableTarget(target)) return;
 
   await prisma.user.update({
     where: { id: userId },
@@ -195,10 +292,19 @@ export async function resendInvite(formData: FormData): Promise<void> {
 
   const target = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, districtId: true, status: true },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      districtId: true,
+      status: true,
+      emailVerifiedAt: true,
+    },
   });
   if (!target || target.districtId !== districtId) return;
-  if (target.status !== UserStatus.INVITED) return;
+  // Resendable while they're still pending, or while the address on file is unproven —
+  // which is the state an admin's email change leaves them in.
+  if (target.status !== UserStatus.INVITED && target.emailVerifiedAt) return;
 
   const link = buildTokenLink(
     await createVerificationToken(target.id, TokenType.INVITE, INVITE_TTL_MS),
@@ -225,7 +331,7 @@ export async function adminResetPassword(formData: FormData): Promise<void> {
     select: { id: true, name: true, email: true, districtId: true, role: true },
   });
   if (!target || target.districtId !== districtId) return;
-  if (target.role === Role.PLATFORM_ADMIN) return;
+  if (!isManageableTarget(target)) return;
 
   const link = buildTokenLink(
     await createVerificationToken(target.id, TokenType.PASSWORD_RESET, RESET_TTL_MS),

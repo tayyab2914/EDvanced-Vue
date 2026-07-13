@@ -6,4 +6,6 @@ export {
   UserStatus,
   DistrictStatus,
   TokenType,
+  ExternalAccessStatus,
+  ExternalAccessLevel,
 } from "@/lib/generated/prisma/enums";

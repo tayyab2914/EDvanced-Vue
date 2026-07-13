@@ -26,6 +26,7 @@ import {
   resendInvite,
   adminResetPassword,
   unlockUser,
+  deleteUser,
 } from "@/app/actions/users";
 
 export interface UserRow {
@@ -36,6 +37,7 @@ export interface UserRow {
   email: string;
   role: string;
   status: string;
+  emailVerifiedAt: Date | null;
   lastLoginAt: Date | null;
   lockedUntil: Date | null;
 }
@@ -73,6 +75,7 @@ export function UsersManager({
   const [statusFilter, setStatusFilter] = useState("");
   const [inviting, setInviting] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
+  const [deleting, setDeleting] = useState<UserRow | null>(null);
   const [, startTransition] = useTransition();
 
   const filtered = useMemo(() => {
@@ -252,7 +255,17 @@ export function UsersManager({
                   )}
                 </TD>
                 <TD>{u.lastName || "—"}</TD>
-                <TD>{u.email}</TD>
+                <TD>
+                  <span className="text-ink-soft">{u.email}</span>
+                  {!u.emailVerifiedAt && st.key !== "invited" && (
+                    <span
+                      title="This address hasn't been confirmed yet. Use “Resend invite” to send the verification email again."
+                      className="ml-1.5 whitespace-nowrap text-xs font-medium text-warn"
+                    >
+                      Unverified
+                    </span>
+                  )}
+                </TD>
                 <TD>{ROLE_LABELS[u.role as keyof typeof ROLE_LABELS] ?? u.role}</TD>
                 <TD>
                   <Badge tone={st.tone}>{st.label}</Badge>
@@ -285,7 +298,7 @@ export function UsersManager({
                           >
                             Edit
                           </MenuItem>
-                          {st.key === "invited" && (
+                          {(st.key === "invited" || !u.emailVerifiedAt) && (
                             <MenuItem
                               icon={<Icon name="mail" size={15} />}
                               onClick={() => {
@@ -332,6 +345,18 @@ export function UsersManager({
                               {u.status === "DISABLED" ? "Enable" : "Disable"}
                             </MenuItem>
                           )}
+                          {!isSelf && (
+                            <MenuItem
+                              icon={<Icon name="trash" size={15} />}
+                              danger
+                              onClick={() => {
+                                setDeleting(u);
+                                close();
+                              }}
+                            >
+                              Delete
+                            </MenuItem>
+                          )}
                         </div>
                       )}
                     </Menu>
@@ -362,10 +387,50 @@ export function UsersManager({
               id: editing.id,
               firstName: editing.firstName ?? "",
               lastName: editing.lastName ?? "",
+              email: editing.email,
               role: editing.role,
             }}
             onDone={() => setEditing(null)}
           />
+        </Modal>
+      )}
+
+      {deleting && (
+        <Modal open onClose={() => setDeleting(null)} title="Delete user?">
+          <div className="space-y-4">
+            <p className="text-[13px] leading-relaxed text-ink-soft">
+              This permanently deletes{" "}
+              <span className="font-medium text-ink">
+                {deleting.name || deleting.email}
+              </span>{" "}
+              <span className="text-muted-2">({deleting.email})</span>. Their sessions
+              and any pending invites are removed. Audit history is kept. This cannot be
+              undone.
+            </p>
+            <p className="text-[13px] leading-relaxed text-muted-2">
+              To keep their history and let them back in later, use{" "}
+              <span className="font-medium text-ink-soft">Disable</span> instead.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setDeleting(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  fire(deleteUser, deleting);
+                  setDeleting(null);
+                }}
+              >
+                Delete user
+              </Button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>
