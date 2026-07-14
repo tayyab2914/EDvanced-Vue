@@ -16,6 +16,8 @@ import { Input, Select } from "@/components/ui/input";
 import { Icon } from "@/components/icons";
 import { Modal } from "@/components/ui/modal";
 import { Menu, MenuItem } from "@/components/ui/menu";
+import { SortTH, useSort } from "@/components/ui/sortable";
+import { Pagination, usePagination } from "@/components/ui/pagination";
 import { InviteUserForm } from "@/components/users/invite-user-form";
 import { EditUserForm } from "@/components/users/edit-user-form";
 import { ROLE_LABELS } from "@/lib/auth/permissions";
@@ -94,6 +96,28 @@ export function UsersManager({
     });
   }, [users, query, roleFilter, statusFilter]);
 
+  // Sort by what the user sees: the role/status LABELS, not the raw enum values.
+  const { sorted, sort, toggle } = useSort<UserRow>(filtered, (u, key) => {
+    switch (key) {
+      case "firstName":
+        return u.firstName;
+      case "lastName":
+        return u.lastName;
+      case "email":
+        return u.email;
+      case "role":
+        return ROLE_LABELS[u.role as keyof typeof ROLE_LABELS] ?? u.role;
+      case "status":
+        return statusInfo(u).label;
+      case "lastLoginAt":
+        return u.lastLoginAt ? new Date(u.lastLoginAt) : null;
+      default:
+        return null;
+    }
+  });
+
+  const pg = usePagination(sorted);
+
   const activeFilters = (roleFilter ? 1 : 0) + (statusFilter ? 1 : 0);
 
   function fire(
@@ -120,7 +144,10 @@ export function UsersManager({
             </span>
             <Input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                pg.reset();
+              }}
               placeholder="Search name or email…"
               autoComplete="off"
               className="h-9 w-full pl-9"
@@ -166,7 +193,10 @@ export function UsersManager({
                   <span className="text-[12px] font-medium text-ink-soft">Role</span>
                   <Select
                     value={roleFilter}
-                    onChange={(e) => setRoleFilter(e.target.value)}
+                    onChange={(e) => {
+                      setRoleFilter(e.target.value);
+                      pg.reset();
+                    }}
                     className="h-9"
                   >
                     <option value="">All roles</option>
@@ -181,7 +211,10 @@ export function UsersManager({
                   <span className="text-[12px] font-medium text-ink-soft">Status</span>
                   <Select
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      pg.reset();
+                    }}
                     className="h-9"
                   >
                     <option value="">All statuses</option>
@@ -218,24 +251,36 @@ export function UsersManager({
       <Table>
         <THead>
           <TR>
-            <TH>First Name</TH>
-            <TH>Last Name</TH>
-            <TH>Email</TH>
-            <TH>Role</TH>
-            <TH>Status</TH>
-            <TH>Last login</TH>
+            <SortTH sortKey="firstName" sort={sort} onSort={toggle}>
+              First Name
+            </SortTH>
+            <SortTH sortKey="lastName" sort={sort} onSort={toggle}>
+              Last Name
+            </SortTH>
+            <SortTH sortKey="email" sort={sort} onSort={toggle}>
+              Email
+            </SortTH>
+            <SortTH sortKey="role" sort={sort} onSort={toggle}>
+              Role
+            </SortTH>
+            <SortTH sortKey="status" sort={sort} onSort={toggle}>
+              Status
+            </SortTH>
+            <SortTH sortKey="lastLoginAt" sort={sort} onSort={toggle}>
+              Last login
+            </SortTH>
             <TH className="text-right">Actions</TH>
           </TR>
         </THead>
         <TBody>
-          {filtered.length === 0 && (
+          {sorted.length === 0 && (
             <EmptyRow colSpan={7}>
               {users.length === 0
                 ? "No users yet. Invite your first with “Invite user”."
                 : "No matches for these filters."}
             </EmptyRow>
           )}
-          {filtered.map((u) => {
+          {pg.pageItems.map((u) => {
             const st = statusInfo(u);
             const isSelf = u.id === currentUserId;
             return (
@@ -367,6 +412,18 @@ export function UsersManager({
           })}
         </TBody>
       </Table>
+
+      <Pagination
+        page={pg.page}
+        pageCount={pg.pageCount}
+        pageSize={pg.pageSize}
+        onPageSize={pg.setPageSize}
+        total={pg.total}
+        from={pg.from}
+        to={pg.to}
+        onPage={pg.setPage}
+        noun="users"
+      />
 
       <Modal
         open={inviting}

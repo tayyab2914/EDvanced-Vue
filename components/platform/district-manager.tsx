@@ -17,6 +17,8 @@ import { Input, Select } from "@/components/ui/input";
 import { Icon } from "@/components/icons";
 import { Modal } from "@/components/ui/modal";
 import { Menu, MenuItem } from "@/components/ui/menu";
+import { SortTH, useSort } from "@/components/ui/sortable";
+import { Pagination, usePagination } from "@/components/ui/pagination";
 import { CreateDistrictForm } from "@/app/(platform)/platform/districts/create-district-form";
 import { setDistrictStatus } from "@/app/actions/districts";
 import { US_STATES } from "@/lib/us-states";
@@ -55,6 +57,23 @@ export function DistrictManager({ districts }: { districts: DistrictRow[] }) {
     });
   }, [districts, query, status, stateFilter]);
 
+  const { sorted, sort, toggle } = useSort<DistrictRow>(filtered, (d, key) => {
+    switch (key) {
+      case "name":
+        return d.name;
+      case "state":
+        return STATE_NAME.get(d.state) ?? d.state; // sort by the state's NAME, as shown
+      case "users":
+        return d.users;
+      case "status":
+        return d.status === "ACTIVE" ? "Active" : "Inactive";
+      default:
+        return null;
+    }
+  });
+
+  const pg = usePagination(sorted);
+
   const activeFilters = (status !== "all" ? 1 : 0) + (stateFilter ? 1 : 0);
 
   function toggleStatus(d: DistrictRow) {
@@ -76,7 +95,10 @@ export function DistrictManager({ districts }: { districts: DistrictRow[] }) {
             </span>
             <Input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                pg.reset();
+              }}
               placeholder="Search districts…"
               autoComplete="off"
               className="h-9 w-full pl-9"
@@ -122,7 +144,10 @@ export function DistrictManager({ districts }: { districts: DistrictRow[] }) {
                   <span className="text-[12px] font-medium text-ink-soft">Status</span>
                   <Select
                     value={status}
-                    onChange={(e) => setStatus(e.target.value as StatusFilter)}
+                    onChange={(e) => {
+                      setStatus(e.target.value as StatusFilter);
+                      pg.reset();
+                    }}
                     className="h-9"
                   >
                     <option value="all">All statuses</option>
@@ -134,7 +159,10 @@ export function DistrictManager({ districts }: { districts: DistrictRow[] }) {
                   <span className="text-[12px] font-medium text-ink-soft">State</span>
                   <Select
                     value={stateFilter}
-                    onChange={(e) => setStateFilter(e.target.value)}
+                    onChange={(e) => {
+                      setStateFilter(e.target.value);
+                      pg.reset();
+                    }}
                     className="h-9"
                   >
                     <option value="">All states</option>
@@ -171,22 +199,30 @@ export function DistrictManager({ districts }: { districts: DistrictRow[] }) {
       <Table>
         <THead>
           <TR>
-            <TH>District</TH>
-            <TH>State</TH>
-            <TH>Users</TH>
-            <TH>Status</TH>
+            <SortTH sortKey="name" sort={sort} onSort={toggle}>
+              District
+            </SortTH>
+            <SortTH sortKey="state" sort={sort} onSort={toggle}>
+              State
+            </SortTH>
+            <SortTH sortKey="users" sort={sort} onSort={toggle}>
+              Users
+            </SortTH>
+            <SortTH sortKey="status" sort={sort} onSort={toggle}>
+              Status
+            </SortTH>
             <TH className="text-right">Actions</TH>
           </TR>
         </THead>
         <TBody>
-          {filtered.length === 0 && (
+          {sorted.length === 0 && (
             <EmptyRow colSpan={5}>
               {districts.length === 0
                 ? "No districts yet. Create your first with “New district”."
                 : "No matches for these filters."}
             </EmptyRow>
           )}
-          {filtered.map((d) => (
+          {pg.pageItems.map((d) => (
             <TR key={d.id}>
               <TD className="font-medium">
                 <button
@@ -261,6 +297,18 @@ export function DistrictManager({ districts }: { districts: DistrictRow[] }) {
           ))}
         </TBody>
       </Table>
+
+      <Pagination
+        page={pg.page}
+        pageCount={pg.pageCount}
+        pageSize={pg.pageSize}
+        onPageSize={pg.setPageSize}
+        total={pg.total}
+        from={pg.from}
+        to={pg.to}
+        onPage={pg.setPage}
+        noun="districts"
+      />
 
       <Modal open={adding} onClose={() => setAdding(false)} title="New district">
         <CreateDistrictForm onCancel={() => setAdding(false)} />

@@ -1,12 +1,15 @@
+"use client";
+
 import {
   Table,
   THead,
   TBody,
   TR,
-  TH,
   TD,
   EmptyRow,
 } from "@/components/ui/table";
+import { SortTH, useSort } from "@/components/ui/sortable";
+import { Pagination, usePagination } from "@/components/ui/pagination";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/format";
 
@@ -43,22 +46,62 @@ export function AuditTable({
   showDistrict?: boolean;
 }) {
   const colSpan = showDistrict ? 5 : 4;
+
+  // Sort the humanized Action text, not the raw SCREAMING_SNAKE constant — the user is
+  // sorting the column they can see. Starts on newest-first, which is the order the server
+  // already returns, so the arrow tells the truth about the initial view.
+  const { sorted, sort, toggle } = useSort<AuditRow>(
+    rows,
+    (r, key) => {
+      switch (key) {
+        case "createdAt":
+          return r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
+        case "action":
+          return humanize(r.action);
+        case "districtLabel":
+          return r.districtLabel;
+        case "actorLabel":
+          return r.actorLabel;
+        case "entityType":
+          return r.entityType;
+        default:
+          return null;
+      }
+    },
+    { key: "createdAt", dir: "desc" },
+  );
+
+  const pg = usePagination(sorted);
+
   return (
+    <div className="space-y-4">
     <Table>
       <THead>
         <TR>
-          <TH>When</TH>
-          <TH>Action</TH>
-          {showDistrict && <TH>District</TH>}
-          <TH>Actor</TH>
-          <TH>Entity</TH>
+          <SortTH sortKey="createdAt" sort={sort} onSort={toggle}>
+            When
+          </SortTH>
+          <SortTH sortKey="action" sort={sort} onSort={toggle}>
+            Action
+          </SortTH>
+          {showDistrict && (
+            <SortTH sortKey="districtLabel" sort={sort} onSort={toggle}>
+              District
+            </SortTH>
+          )}
+          <SortTH sortKey="actorLabel" sort={sort} onSort={toggle}>
+            Actor
+          </SortTH>
+          <SortTH sortKey="entityType" sort={sort} onSort={toggle}>
+            Entity
+          </SortTH>
         </TR>
       </THead>
       <TBody>
-        {rows.length === 0 && (
+        {sorted.length === 0 && (
           <EmptyRow colSpan={colSpan}>No activity recorded yet.</EmptyRow>
         )}
-        {rows.map((r) => (
+        {pg.pageItems.map((r) => (
           <TR key={r.id}>
             <TD className="whitespace-nowrap text-muted">
               {formatDateTime(r.createdAt)}
@@ -73,5 +116,18 @@ export function AuditTable({
         ))}
       </TBody>
     </Table>
+
+      <Pagination
+        page={pg.page}
+        pageCount={pg.pageCount}
+        pageSize={pg.pageSize}
+        onPageSize={pg.setPageSize}
+        total={pg.total}
+        from={pg.from}
+        to={pg.to}
+        onPage={pg.setPage}
+        noun="entries"
+      />
+    </div>
   );
 }

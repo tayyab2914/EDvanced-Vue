@@ -31,19 +31,21 @@ export function TR({
   return <tr className={className}>{children}</tr>;
 }
 
+// Split so a sortable header (components/ui/sortable.tsx) can put the PADDING on its inner
+// button — making the whole cell the click target — while keeping the same type styles on the
+// cell itself. Merging a `p-0` override onto TH would not work: Tailwind emits the `padding`
+// shorthand before the axis utilities, so `px-5 py-3` would win over `p-0`.
+export const TH_TYPE =
+  "text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-muted";
+export const TH_PADDING = "px-5 py-3";
+
 export function TH({
   children,
   className,
   ...props
 }: ThHTMLAttributes<HTMLTableCellElement> & { children?: ReactNode }) {
   return (
-    <th
-      className={cn(
-        "px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.04em] text-muted",
-        className,
-      )}
-      {...props}
-    >
+    <th className={cn(TH_PADDING, TH_TYPE, className)} {...props}>
       {children}
     </th>
   );

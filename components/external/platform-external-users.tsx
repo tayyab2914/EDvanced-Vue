@@ -18,6 +18,8 @@ import { Alert } from "@/components/ui/alert";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Table, THead, TBody, TR, TH, TD, EmptyRow } from "@/components/ui/table";
+import { SortTH, useSort } from "@/components/ui/sortable";
+import { Pagination, usePagination } from "@/components/ui/pagination";
 import { EMPTY_FORM_STATE } from "@/lib/forms";
 import {
   ACCESS_LEVEL_LABELS,
@@ -46,6 +48,33 @@ export interface ExternalUserRow {
   locked: boolean;
   grants: GrantSummary[];
 }
+
+type StatusLabel =
+  | "Locked"
+  | "Disabled"
+  | "Invited"
+  | "Never signed in"
+  | "Active";
+
+/** One source of truth for the account's state, so the badge and the sort agree. */
+function statusLabel(u: ExternalUserRow): StatusLabel {
+  if (u.locked) return "Locked";
+  if (u.status === UserStatus.DISABLED) return "Disabled";
+  if (u.status === UserStatus.INVITED) return "Invited";
+  if (!u.lastLoginAt) return "Never signed in";
+  return "Active";
+}
+
+const STATUS_TONES: Record<
+  StatusLabel,
+  "gray" | "green" | "red" | "amber" | "blue"
+> = {
+  Locked: "red",
+  Disabled: "gray",
+  Invited: "amber",
+  "Never signed in": "blue",
+  Active: "green",
+};
 
 function AddForm({
   districts,
@@ -268,12 +297,31 @@ export function PlatformExternalUsers({
     void action(fd);
   }
 
+  // "Districts" holds a set of chips rather than one value, so it isn't sortable by content —
+  // we sort it by how many districts the user is involved with, which is the only ordering
+  // that means anything there.
+  const { sorted, sort, toggle } = useSort<ExternalUserRow>(users, (u, key) => {
+    switch (key) {
+      case "name":
+        return u.name;
+      case "email":
+        return u.email;
+      case "districts":
+        return u.grants.length;
+      case "status":
+        return statusLabel(u);
+      case "lastLoginAt":
+        return u.lastLoginAt ? new Date(u.lastLoginAt) : null;
+      default:
+        return null;
+    }
+  });
+
+  const pg = usePagination(sorted);
+
   function statusBadge(u: ExternalUserRow) {
-    if (u.locked) return <Badge tone="red">Locked</Badge>;
-    if (u.status === UserStatus.DISABLED) return <Badge tone="gray">Disabled</Badge>;
-    if (u.status === UserStatus.INVITED) return <Badge tone="amber">Invited</Badge>;
-    if (!u.lastLoginAt) return <Badge tone="blue">Never signed in</Badge>;
-    return <Badge tone="green">Active</Badge>;
+    const tone = STATUS_TONES[statusLabel(u)];
+    return <Badge tone={tone}>{statusLabel(u)}</Badge>;
   }
 
   return (
@@ -286,21 +334,31 @@ export function PlatformExternalUsers({
         <Table>
           <THead>
             <TR>
-              <TH>Name</TH>
-              <TH>Email</TH>
-              <TH>Districts</TH>
-              <TH>Status</TH>
-              <TH>Last login</TH>
+              <SortTH sortKey="name" sort={sort} onSort={toggle}>
+                Name
+              </SortTH>
+              <SortTH sortKey="email" sort={sort} onSort={toggle}>
+                Email
+              </SortTH>
+              <SortTH sortKey="districts" sort={sort} onSort={toggle}>
+                Districts
+              </SortTH>
+              <SortTH sortKey="status" sort={sort} onSort={toggle}>
+                Status
+              </SortTH>
+              <SortTH sortKey="lastLoginAt" sort={sort} onSort={toggle}>
+                Last login
+              </SortTH>
               <TH className="text-right">Actions</TH>
             </TR>
           </THead>
           <TBody>
-            {users.length === 0 ? (
+            {sorted.length === 0 ? (
               <EmptyRow colSpan={6}>
                 No external users yet. Add one above to get started.
               </EmptyRow>
             ) : (
-              users.map((u) => (
+              pg.pageItems.map((u) => (
                 <TR key={u.id}>
                   <TD>{u.name}</TD>
                   <TD>
@@ -392,6 +450,20 @@ export function PlatformExternalUsers({
             )}
           </TBody>
         </Table>
+
+        <div className="mt-4">
+          <Pagination
+            page={pg.page}
+            pageCount={pg.pageCount}
+            pageSize={pg.pageSize}
+            onPageSize={pg.setPageSize}
+            total={pg.total}
+            from={pg.from}
+            to={pg.to}
+            onPage={pg.setPage}
+            noun="external users"
+          />
+        </div>
       </Card>
 
       <Modal open={adding} onClose={() => setAdding(false)} title="Add external user">

@@ -14,6 +14,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Pagination, usePagination } from "@/components/ui/pagination";
+import { SortTH, useSort } from "@/components/ui/sortable";
+import { csvFilename, downloadCsv, toCsv } from "@/lib/csv-export";
+import {
+  masterExportHeaders,
+  masterExportRow,
+} from "@/lib/master-data/export";
 import { Icon } from "@/components/icons";
 import { Modal } from "@/components/ui/modal";
 import { Menu, MenuItem } from "@/components/ui/menu";
@@ -28,6 +34,10 @@ import { toggleMasterItem } from "@/app/actions/master-data";
 import type { ClientResourceDef, FieldDef } from "@/lib/master-data/registry";
 
 type StatusFilter = "all" | "active" | "inactive";
+
+// The Status column isn't a registry field, so it needs a sort key that can't collide with
+// one. (Field names come from the master-data registry.)
+const STATUS_KEY = "__status";
 
 export function MasterDataManager({
   def,
@@ -107,7 +117,28 @@ export function MasterDataManager({
     });
   }, [rows, query, status, selectFilters, selectFields, textFields]);
 
-  const pg = usePagination(filtered);
+  // Columns are driven by the registry, so the sort key IS the field name. Sort by the value
+  // shown in the cell (a type's label, not its id) — except numeric fields, which must sort
+  // as numbers, or "$1,000" would land before "$9".
+  const { sorted, sort, toggle } = useSort<MasterRow>(filtered, (r, key) => {
+    if (key === STATUS_KEY) return r.active ? "Active" : "Inactive";
+    const f = columnFields.find((c) => c.name === key);
+    if (!f) return null;
+    const raw = r[f.name];
+    if (raw == null || raw === "") return null;
+    if (f.numeric) {
+      const n = Number(raw);
+      return isNaN(n) ? String(raw) : n;
+    }
+    if (f.staticOptions) {
+      return f.staticOptions.find((o) => o.value === String(raw))?.label ?? String(raw);
+    }
+    if (relLabels[f.name]) return relLabels[f.name].get(String(raw)) ?? null;
+    return String(raw);
+  });
+
+  // Sort first, then paginate, so the order runs across the whole list — not just this page.
+  const pg = usePagination(sorted);
 
   const activeFilters =
     (status !== "all" ? 1 : 0) +
@@ -117,6 +148,17 @@ export function MasterDataManager({
     setSelectFilters({});
     pg.reset();
   };
+
+  /**
+   * Exports the CURRENT view — whatever the search, filters and sort have narrowed it to —
+   * because that's what the user is looking at and asked for. Every field goes out, not just
+   * the table columns, so the file is complete enough to edit and import back.
+   */
+  function exportCsv() {
+    const headers = masterExportHeaders(def);
+    const body = sorted.map((r) => masterExportRow(r, def, relLabels));
+    downloadCsv(csvFilename(def.title), toCsv(headers, body));
+  }
 
   function toggleRow(r: MasterRow) {
     const fd = new FormData();
@@ -230,8 +272,38 @@ export function MasterDataManager({
           </Menu>
         </div>
 
-        {canManage && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          {/* Export is a READ capability (everyone who can see the list can take it away
+              with them), so it sits outside the canManage gate that hides Import / New. */}
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={exportCsv}
+            disabled={sorted.length === 0}
+            title={
+              sorted.length === 0
+                ? "Nothing to export"
+                : `Export ${sorted.length} row${sorted.length === 1 ? "" : "s"} as CSV`
+            }
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 3v12" />
+              <path d="m7 10 5 5 5-5" />
+              <path d="M5 21h14" />
+            </svg>
+            Export
+          </Button>
+
+          {canManage && (
             <Button
               type="button"
               variant="secondary"
@@ -253,6 +325,9 @@ export function MasterDataManager({
               </svg>
               Import
             </Button>
+          )}
+
+          {canManage && (
             <Button type="button" onClick={() => setAdding(true)}>
               <svg
                 width="15"
@@ -269,22 +344,26 @@ export function MasterDataManager({
               </svg>
               New {def.singular}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <Table>
         <THead>
           <TR>
             {columnFields.map((f) => (
-              <TH key={f.name}>{f.label}</TH>
+              <SortTH key={f.name} sortKey={f.name} sort={sort} onSort={toggle}>
+                {f.label}
+              </SortTH>
             ))}
-            <TH>Status</TH>
+            <SortTH sortKey={STATUS_KEY} sort={sort} onSort={toggle}>
+              Status
+            </SortTH>
             {canManage && <TH className="text-right">Actions</TH>}
           </TR>
         </THead>
         <TBody>
-          {filtered.length === 0 && (
+          {sorted.length === 0 && (
             <EmptyRow colSpan={colCount}>
               {rows.length === 0
                 ? `No ${def.title.toLowerCase()} yet${canManage ? ". Add one above." : "."}`
@@ -383,6 +462,8 @@ export function MasterDataManager({
       <Pagination
         page={pg.page}
         pageCount={pg.pageCount}
+        pageSize={pg.pageSize}
+        onPageSize={pg.setPageSize}
         total={pg.total}
         from={pg.from}
         to={pg.to}

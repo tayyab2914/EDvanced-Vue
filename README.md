@@ -60,6 +60,8 @@ To wipe everything and start clean: `npm run db:reset && npm run db:seed`.
 | `npm run db:seed` / `seed:demo` | Seed Platform Admin / sample district |
 | `npm run verify:m1` | Integration checks: tenant isolation, RBAC matrix, argon2 |
 | `npm run verify:external` | External-user checks: approval required, derived expiry, district-local revoke |
+| `npm run verify:sort` | Table-sorting rules: natural order, blanks last, stable ties |
+| `npm run verify:export` | CSV export ↔ import round-trip (columns, plain numbers, no BOM) |
 
 ## How email works (dev)
 
@@ -119,6 +121,8 @@ scripts/           verify-m1.mts · seed-demo.mts · dev-login.mts
 - **Add a user**: District console (or Platform → district → Users) → Add user → they receive an invite link to set a password.
 - **Manage global lookups**: Platform console → Configuration → Fund/Revenue/Object/Function Types, Statuses. These are shared across all districts (Tier 1).
 - **Add master data**: District console → Master data → pick a resource → Add. Districts add their own rows; they reference the platform-managed types above.
+- **Export to CSV**: both Master data and Configuration have an **Export** button. It writes the rows you are currently looking at — search, filters and sort applied — and is a **read** capability, so a Viewer (or a View-Only external user) can export even though they can't Import.
+  The file is written in the shape the **Import** on the same screen reads back, so export → edit in Excel → import is a supported loop: columns are keyed by their label, types/statuses are written as the name the importer resolves by (not their id), numbers are plain (`1000`, not `$1,000`), and there is deliberately **no UTF-8 BOM** — Excel would like one, but it would corrupt the first column header on re-import. The trailing `Status` column is informational; the importer ignores it. Guarded by `npm run verify:export`.
 - **Add a validation rule / dataset / dashboard**: layered on this foundation in Milestones 2–3.
 
 ## Milestone 1 scope

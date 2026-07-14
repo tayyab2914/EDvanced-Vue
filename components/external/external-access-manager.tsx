@@ -18,6 +18,8 @@ import { Alert } from "@/components/ui/alert";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
 import { Table, THead, TBody, TR, TH, TD, EmptyRow } from "@/components/ui/table";
+import { SortTH, useSort } from "@/components/ui/sortable";
+import { Pagination, usePagination } from "@/components/ui/pagination";
 import { EMPTY_FORM_STATE } from "@/lib/forms";
 import {
   ACCESS_LEVELS,
@@ -273,6 +275,30 @@ export function ExternalAccessManager({
   // Everything already decided — active, expired, denied or revoked.
   const decided = grants.filter((g) => g.status !== "PENDING");
 
+  const { sorted, sort, toggle } = useSort<GrantRow>(decided, (g, key) => {
+    switch (key) {
+      case "name":
+        return g.user.name;
+      case "email":
+        return g.user.email;
+      case "level":
+        return g.level ? ACCESS_LEVEL_LABELS[g.level] : null;
+      case "status":
+        // Sort the DERIVED state, so expired rows group with expired — not with active.
+        return GRANT_STATE_LABELS[
+          deriveGrantState({ status: g.status, expiresAt: g.expiresAt }, now)
+        ];
+      case "expiresAt":
+        return g.expiresAt ? new Date(g.expiresAt) : null;
+      default:
+        return null;
+    }
+  });
+
+  // Only the decided list pages — pending requests are a short, act-on-me queue, and hiding
+  // one behind a pager is exactly how it would get missed.
+  const pg = usePagination(sorted);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
@@ -330,21 +356,31 @@ export function ExternalAccessManager({
         <Table>
           <THead>
             <TR>
-              <TH>Name</TH>
-              <TH>Email</TH>
-              <TH>Permission</TH>
-              <TH>Status</TH>
-              <TH>Expires</TH>
+              <SortTH sortKey="name" sort={sort} onSort={toggle}>
+                Name
+              </SortTH>
+              <SortTH sortKey="email" sort={sort} onSort={toggle}>
+                Email
+              </SortTH>
+              <SortTH sortKey="level" sort={sort} onSort={toggle}>
+                Permission
+              </SortTH>
+              <SortTH sortKey="status" sort={sort} onSort={toggle}>
+                Status
+              </SortTH>
+              <SortTH sortKey="expiresAt" sort={sort} onSort={toggle}>
+                Expires
+              </SortTH>
               <TH className="text-right">Actions</TH>
             </TR>
           </THead>
           <TBody>
-            {decided.length === 0 ? (
+            {sorted.length === 0 ? (
               <EmptyRow colSpan={6}>
                 No external users yet. Invite one, or approve a pending request.
               </EmptyRow>
             ) : (
-              decided.map((g) => {
+              pg.pageItems.map((g) => {
                 // An ACTIVE row past its expiry reads as EXPIRED — never trust status alone.
                 const state = deriveGrantState(
                   { status: g.status, expiresAt: g.expiresAt },
@@ -438,6 +474,20 @@ export function ExternalAccessManager({
             )}
           </TBody>
         </Table>
+
+        <div className="mt-4">
+          <Pagination
+            page={pg.page}
+            pageCount={pg.pageCount}
+            pageSize={pg.pageSize}
+            onPageSize={pg.setPageSize}
+            total={pg.total}
+            from={pg.from}
+            to={pg.to}
+            onPage={pg.setPage}
+            noun="external users"
+          />
+        </div>
       </Card>
 
       {/* ---- Modals ---------------------------------------------------------- */}
