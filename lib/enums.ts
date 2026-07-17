@@ -8,4 +8,14 @@ export {
   TokenType,
   ExternalAccessStatus,
   ExternalAccessLevel,
+  // M2 — the data pipeline
+  PeriodType,
+  BudgetType,
+  BudgetKind,
+  DatasetKind,
+  ImportStatus,
+  ImportAction,
+  Severity,
+  FundBalanceField,
+  ActivityClass,
 } from "@/lib/generated/prisma/enums";

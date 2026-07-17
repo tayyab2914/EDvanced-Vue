@@ -4,7 +4,13 @@
 // Platform-managed global lookups (FundType, RevenueType, ObjectType, FunctionType,
 // Status) are intentionally NOT here — they are shared across districts and must not
 // be district-scoped. Only district-owned data is tenant-scoped.
+//
+// ⚠️ This set is an ALLOWLIST, and it fails OPEN: a tenant-owned model missing from it
+// is silently not scoped at all — no error, no warning, every district's rows visible
+// to every other. Adding a district-owned model to schema.prisma means adding it here,
+// in the same commit. `npm run verify:m1` and `verify:import` both check this.
 const TENANT_MODELS = new Set([
+  // M1 — master data
   "School",
   "Grant",
   "CapitalProject",
@@ -12,6 +18,18 @@ const TENANT_MODELS = new Set([
   "RevenueSource",
   "AccountFunction",
   "AccountObject",
+  // M2 — import lifecycle
+  "ImportBatch",
+  "ImportStagingRow",
+  "ValidationFinding",
+  "DatasetVersion",
+  // M2 — periodic snapshot data
+  "BudgetLine",
+  "RevenueActual",
+  "ExpenditureActual",
+  "CashPosition",
+  "OpeningFundBalance",
+  "FundBalanceOverride",
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

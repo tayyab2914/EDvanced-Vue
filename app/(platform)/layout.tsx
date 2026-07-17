@@ -36,6 +36,14 @@ export default async function PlatformLayout({
           href: "/platform/config",
           icon: "settings",
         },
+        // Its own item rather than a seventh tab in Configuration: the other six lists are
+        // code/name lookups, and this one classifies codes into ranges. Forcing it into
+        // that console's shape would have meant bending both.
+        {
+          label: "Activity codes",
+          href: "/platform/activity-codes",
+          icon: "chart",
+        },
         { label: "Audit log", href: "/platform/audit", icon: "activity" },
       ],
     },

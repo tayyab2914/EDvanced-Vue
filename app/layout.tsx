@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import { ToastProvider } from "@/components/ui/toast";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -32,7 +33,11 @@ export default function RootLayout({
       lang="en"
       className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full">{children}</body>
+      {/* The provider is a client boundary, but it renders {children} through — so the
+          pages inside stay Server Components. */}
+      <body className="min-h-full">
+        <ToastProvider>{children}</ToastProvider>
+      </body>
     </html>
   );
 }

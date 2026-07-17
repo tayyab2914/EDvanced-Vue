@@ -350,17 +350,41 @@ export async function importMasterData(
   return { ok: true, imported, failed: errors.length, errors };
 }
 
-export async function deleteMasterItem(formData: FormData): Promise<void> {
-  const { districtId, def } = parseContext(formData);
-  if (!def || !districtId) return;
+/**
+ * Returns a FormState rather than void, because from Milestone 2 this can legitimately
+ * fail: periodic data references master data with onDelete: Restrict, so a fund that has
+ * financial history CANNOT be deleted. That is correct — deleting it would orphan a
+ * district's revenue and expenditure rows — but the district needs a sentence, not a
+ * Postgres error on a Next.js error page.
+ */
+export async function deleteMasterItem(
+  _prev: FormState,
+  formData: FormData,
+): Promise<FormState> {
+  const { kind, districtId, def } = parseContext(formData);
+  if (!def || !districtId) return { error: "Unknown resource." };
   const id = String(formData.get("id") ?? "");
 
   const user = await requireAuth();
-  if (!canManage(user, districtId)) return;
+  if (!canManage(user, districtId)) {
+    return { error: "You are not authorized to change this data." };
+  }
 
-  await (tenantDb(districtId) as unknown as Record<string, AnyDelegate>)[
-    def.model
-  ].deleteMany({ where: { id } });
+  try {
+    await (tenantDb(districtId) as unknown as Record<string, AnyDelegate>)[
+      def.model
+    ].deleteMany({ where: { id } });
+  } catch {
+    // Prisma's foreign-key error is caught bare, matching how the create/update actions
+    // here translate a unique violation. The only way a delete fails on a tenant model is
+    // a Restrict from periodic data, so the cause is known even without inspecting a code.
+    return {
+      error:
+        `This ${def.singular.toLowerCase()} has financial data reported against it, so it can't be deleted — ` +
+        `removing it would orphan those rows. Deactivate it instead: it will stop being offered on new imports ` +
+        `while the history that references it stays intact.`,
+    };
+  }
 
   await writeAudit({
     action: "MASTER_DATA_DELETED",
@@ -368,6 +392,8 @@ export async function deleteMasterItem(formData: FormData): Promise<void> {
     districtId,
     entityType: def.singular,
     entityId: id,
+    metadata: { kind },
   });
   revalidatePath("/master-data");
+  return { success: `${def.singular} deleted.` };
 }

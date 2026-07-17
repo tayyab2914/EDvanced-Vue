@@ -1,14 +1,19 @@
-// K-12 School Finance Platform — data model (Milestone 1: Platform Foundation)
-// Two data groups: (1) reference/master data (stable, per-district) and
-// (2) periodic snapshot data (uploaded each reporting period).
-// M1 builds ONLY the tenancy + auth + audit + master/reference tables below.
+// K-12 School Finance Platform — data model
 //
-// DESIGN-FOR-FUTURE (M2/M3 — do not build yet): periodic tables
-// (RevenueActual, ExpenditureActual, FundBalance, CashFlow, GrantsActivity,
-// CapitalProjectsActivity, Enrollment) plus a DatasetVersion snapshot table
-// will each carry districtId + fiscalYear + period/survey + version and FK
-// into the master rows below by their stable `id` PKs — inheriting the same
-// per-district scoped-client enforcement with no rework.
+// Three data groups:
+//   1. Tenancy / auth / audit          (M1)
+//   2. Reference + master data          (M1) — what validation checks uploads against
+//   3. Periodic snapshot data           (M2) — uploaded each reporting period
+//
+// Every tenant-owned model MUST be listed in TENANT_MODELS (lib/tenant-scope.ts).
+// That set is an ALLOWLIST: a model missing from it is silently NOT district-scoped,
+// with no error and no warning. Adding a model here means adding it there.
+//
+// DEFERRED TO PHASE 2 (specified, not built): GrantActivity, CapitalProjectActivity
+// and Enrollment periodic tables, alongside their dashboards. Grant and project spend
+// still arrives today — Project/Grant is a required column on both detail imports, so
+// it lands tagged on every RevenueActual / ExpenditureActual row. Only Enrollment has
+// no other source. Drafted field tables: docs/milestone-2/module-breakdown.md §6.
 
 generator client {
   provider = "prisma-client"
@@ -87,6 +92,92 @@ enum ProjectType {
   OTHER
 }
 
+// ---- M2: the data pipeline ----
+
+/// How a dataset is keyed in time. ANNUAL rows carry no period at all; MONTHLY rows
+/// carry 1..12 counted from the district's own fiscalYearStartMonth (never assumed
+/// to be July). SURVEY is reserved for the Phase 2 Enrollment import, which is keyed
+/// by Survey 1 / Survey 2 rather than by month (Spec §5.7) — declared now so the
+/// period axis doesn't need a migration when it lands.
+enum PeriodType {
+  ANNUAL
+  MONTHLY
+  SURVEY
+}
+
+/// ADOPTED arrives once a year in its own file. CURRENT/revised arrives as the Budget
+/// column on the monthly detail files and is tagged on ingest, so both are reportable
+/// side by side. An enum rather than a boolean so a future "Revised Budget" annual
+/// file drops in without a migration.
+enum BudgetType {
+  ADOPTED
+  CURRENT
+}
+
+enum BudgetKind {
+  REVENUE
+  EXPENDITURE
+}
+
+/// One import type per file — uploads are per-dataset, never a combined workbook.
+enum DatasetKind {
+  REVENUE_BUDGET
+  EXPENDITURE_BUDGET
+  OPENING_FUND_BALANCE
+  REVENUE_DETAIL
+  EXPENDITURE_DETAIL
+  CASH_POSITION
+  // GRANTS_ACTIVITY, CAPITAL_PROJECTS_ACTIVITY, ENROLLMENT — Phase 2
+}
+
+/// Where an upload is in the lifecycle (Spec §7). AWAITING_CHOICE is the duplicate
+/// prompt: the period already has data and the user has not yet picked replace,
+/// cancel, or keep-as-new-version.
+enum ImportStatus {
+  PARSING
+  VALIDATED
+  AWAITING_CHOICE
+  COMMITTED
+  CANCELLED
+  FAILED
+}
+
+enum ImportAction {
+  INITIAL
+  REPLACED
+  NEW_VERSION
+}
+
+/// ERROR blocks the import until the file is fixed; WARNING can be acknowledged and
+/// passed. The split matters because some real-world states — a grant over-collected,
+/// say — are legitimate and should be surfaced rather than blocked (Spec §5.6).
+enum Severity {
+  ERROR
+  WARNING
+}
+
+/// Which derived figure a District Admin corrected. An enum rather than a free string
+/// so a typo cannot silently create a second override that never displays.
+enum FundBalanceField {
+  TOTAL
+  UNASSIGNED
+  NONSPENDABLE
+  RESTRICTED
+  COMMITTED
+  ASSIGNED
+}
+
+/// Money that moves without being earned or spent.
+///
+/// Transfers In and Other Financing Sources arrive as REVENUE object codes; Transfers Out
+/// as an EXPENSE object code. They are not new columns on any import — they are already in
+/// the Revenue and Expenditure files, and are told apart by their object code alone.
+enum ActivityClass {
+  TRANSFERS_IN
+  TRANSFERS_OUT
+  OTHER_FINANCING_SOURCES
+}
+
 // ===================== Tenancy / Auth / Audit =====================
 
 /// The tenant root. Every tenant-owned row carries `districtId`.
@@ -111,6 +202,21 @@ model District {
   objects         AccountObject[]
   auditLogs       AuditLog[]
   externalAccess  ExternalAccess[]
+
+  // M2 — periodic data
+  importBatches          ImportBatch[]
+  importStagingRows      ImportStagingRow[]
+  validationFindings     ValidationFinding[]
+  datasetVersions        DatasetVersion[]
+  budgetLines            BudgetLine[]
+  revenueActuals         RevenueActual[]
+  expenditureActuals     ExpenditureActual[]
+  cashPositions          CashPosition[]
+  openingFundBalances    OpeningFundBalance[]
+  fundBalanceOverrides   FundBalanceOverride[]
+  policy                 DistrictPolicy?
+  forecastAssumptions    ForecastAssumption[]
+  fundBalanceProjections FundBalanceProjection[]
 }
 
 /// districtId is NULL for Platform Admins (cross-district) and for External Users (whose
@@ -170,12 +276,12 @@ model ExternalAccess {
 
 /// DB-backed sessions enable revocation and lockout-logout. The cookie carries a signed { sessionId, ... }.
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  ipAddress String?
-  userAgent String?
+  id               String   @id @default(cuid())
+  userId           String
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+  ipAddress        String?
+  userAgent        String?
   /// Which district an External User is currently working in. Untrusted UI state — it is
   /// re-validated against ExternalAccess on every request, so a stale/dangling id is
   /// harmless (hence no foreign key). NULL for every other role.
@@ -234,8 +340,12 @@ model School {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  district District         @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  type     CostCenterType?  @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  district District        @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  type     CostCenterType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+
+  budgetLines        BudgetLine[]
+  revenueActuals     RevenueActual[]
+  expenditureActuals ExpenditureActual[]
 
   @@unique([districtId, schoolNumber])
   @@index([districtId])
@@ -261,6 +371,10 @@ model Grant {
   district    District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
   revenueType RevenueType? @relation(fields: [revenueTypeId], references: [id], onDelete: SetNull)
 
+  budgetLines        BudgetLine[]
+  revenueActuals     RevenueActual[]
+  expenditureActuals ExpenditureActual[]
+
   @@unique([districtId, grantId])
   @@index([districtId])
   @@index([revenueTypeId])
@@ -279,6 +393,10 @@ model CapitalProject {
   updatedAt   DateTime      @updatedAt
 
   district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  budgetLines        BudgetLine[]
+  revenueActuals     RevenueActual[]
+  expenditureActuals ExpenditureActual[]
 
   @@unique([districtId, projectId])
   @@index([districtId])
@@ -300,6 +418,15 @@ model Fund {
   district District  @relation(fields: [districtId], references: [id], onDelete: Cascade)
   fundType FundType? @relation(fields: [fundTypeId], references: [id], onDelete: SetNull)
 
+  // Referenced by every periodic dataset — see the Restrict note on those relations.
+  budgetLines            BudgetLine[]
+  revenueActuals         RevenueActual[]
+  expenditureActuals     ExpenditureActual[]
+  cashPositions          CashPosition[]
+  openingFundBalances    OpeningFundBalance[]
+  fundBalanceOverrides   FundBalanceOverride[]
+  fundBalanceProjections FundBalanceProjection[]
+
   @@unique([districtId, code])
   @@index([districtId])
   @@index([fundTypeId])
@@ -317,6 +444,9 @@ model RevenueSource {
 
   district    District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
   revenueType RevenueType? @relation(fields: [revenueTypeId], references: [id], onDelete: SetNull)
+
+  budgetLines    BudgetLine[]
+  revenueActuals RevenueActual[]
 
   @@unique([districtId, code])
   @@index([districtId])
@@ -337,6 +467,9 @@ model AccountFunction {
   district     District      @relation(fields: [districtId], references: [id], onDelete: Cascade)
   functionType FunctionType? @relation(fields: [functionTypeId], references: [id], onDelete: SetNull)
 
+  budgetLines        BudgetLine[]
+  expenditureActuals ExpenditureActual[]
+
   @@unique([districtId, code])
   @@index([districtId])
   @@index([functionTypeId])
@@ -356,6 +489,9 @@ model AccountObject {
 
   district   District    @relation(fields: [districtId], references: [id], onDelete: Cascade)
   objectType ObjectType? @relation(fields: [objectTypeId], references: [id], onDelete: SetNull)
+
+  budgetLines        BudgetLine[]
+  expenditureActuals ExpenditureActual[]
 
   @@unique([districtId, code])
   @@index([districtId])
@@ -388,8 +524,9 @@ model RevenueType {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  revenueSources RevenueSource[]
-  grants         Grant[]
+  revenueSources      RevenueSource[]
+  grants              Grant[]
+  forecastAssumptions ForecastAssumption[]
 }
 
 model ObjectType {
@@ -401,7 +538,8 @@ model ObjectType {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  objects AccountObject[]
+  objects             AccountObject[]
+  forecastAssumptions ForecastAssumption[]
 }
 
 model FunctionType {
@@ -424,6 +562,122 @@ model Status {
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  openingFundBalances OpeningFundBalance[]
+}
+
+/// Which object codes mean "this money is a transfer, not revenue or spending".
+///
+/// Platform-managed, like every other global lookup: the Florida Red Book is the
+/// standardised core, so which codes are transfers is a fact about the chart of accounts
+/// rather than a district's preference. Districts cannot edit it, and every district
+/// shares it.
+///
+/// Not tenant-scoped — deliberately absent from TENANT_MODELS, like FundType and its
+/// siblings.
+model FinancialActivityCode {
+  id            String        @id @default(cuid())
+  activityClass ActivityClass
+  /// A single object code, or the low end of an inclusive range.
+  codeFrom      String
+  /// The high end of an inclusive range. NULL when this row is one code.
+  ///
+  /// Ranges exist because a chart of accounts groups by prefix: "9700-9799 are all
+  /// transfers out" is how the Red Book actually reads, and enumerating a hundred codes
+  /// to say it would guarantee one gets missed.
+  codeTo        String?
+  note          String?
+  active        Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([activityClass, codeFrom, codeTo])
+  @@index([activityClass])
+}
+
+/// A district's own rules for when a number is worth worrying about.
+///
+/// One row per district, with the four groups the workbook defines held as Json rather
+/// than as ~22 columns. A threshold is a value a district tunes, not a schema change:
+/// columns would mean a migration every time the client adds one, and the alert catalog
+/// reads them by name anyway. lib/policies/registry.ts declares each setting, its type,
+/// its bounds and its default, and is the only thing that validates them.
+///
+/// Absent groups are not a problem — every setting falls back to the workbook's default,
+/// so a district that has never opened this screen still alerts sensibly.
+model DistrictPolicy {
+  id              String   @id @default(cuid())
+  districtId      String   @unique
+  revenue         Json     @default("{}")
+  expenditure     Json     @default("{}")
+  cash            Json     @default("{}")
+  fundBalance     Json     @default("{}")
+  /// Not an FK — same reasoning as AuditLog.actorUserId.
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+}
+
+/// What a district assumes about the rest of the year, per revenue or spending category.
+///
+/// The categories are the platform's own global lookups — RevenueType for revenue
+/// ("State Revenue", "Local Revenue"...), ObjectType for expenditure ("Salaries &
+/// Benefits", "Purchased Services"...). That is not a convenience: it means an assumption
+/// is attached to the same category the actuals roll up by, so a forecast and an actual
+/// can be compared without a mapping table in between.
+model ForecastAssumption {
+  id               String     @id @default(cuid())
+  districtId       String
+  fiscalYear       String
+  kind             BudgetKind
+  /// Set for REVENUE rows.
+  revenueTypeId    String?
+  /// Set for EXPENDITURE rows.
+  objectTypeId     String?
+  /// Revenue: assumed year-end growth, e.g. 2.000 for the workbook's State Revenue.
+  growthPercent    Decimal?   @db.Decimal(7, 3)
+  /// Expenditure: the district's own projected year-end figure, typed in rather than derived.
+  projectedYearEnd Decimal?   @db.Decimal(18, 2)
+  /// Districts can watch some categories and ignore others.
+  monitored        Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  district    District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  revenueType RevenueType? @relation(fields: [revenueTypeId], references: [id], onDelete: Cascade)
+  objectType  ObjectType?  @relation(fields: [objectTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([districtId, fiscalYear, kind, revenueTypeId, objectTypeId])
+  @@index([districtId, fiscalYear])
+}
+
+/// A district's projected fund balance for a future year — the workbook's multi-year
+/// table, one row per fiscal year.
+///
+/// Only the General Fund, per the workbook's own note: "Multi-year forecasting and the
+/// projected unassigned reserve apply only to the General Fund. When All Funds is
+/// selected, the dashboard shows current and projected balances by fund but does not
+/// calculate a single combined reserve percentage."
+model FundBalanceProjection {
+  id           String   @id @default(cuid())
+  districtId   String
+  /// The year being projected, e.g. "2027-28".
+  fiscalYear   String
+  fundId       String
+  nonspendable Decimal? @db.Decimal(18, 2)
+  restricted   Decimal? @db.Decimal(18, 2)
+  committed    Decimal? @db.Decimal(18, 2)
+  assigned     Decimal? @db.Decimal(18, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  fund     Fund     @relation(fields: [fundId], references: [id], onDelete: Restrict)
+
+  @@unique([districtId, fiscalYear, fundId])
+  @@index([districtId])
 }
 
 /// Unlike the other lookups, a Cost Center Type belongs to one Cost Center Category,
@@ -441,4 +695,378 @@ model CostCenterType {
   costCenters School[]
 
   @@index([category])
+}
+
+// ===================== M2: Import lifecycle =====================
+// Upload -> validate -> resolve errors -> acknowledge warnings -> duplicate check ->
+// commit & version -> refresh -> log (Spec §7). The lifecycle spans several requests,
+// so parsed rows must outlive the one that produced them: hence ImportStagingRow.
+
+/// One upload attempt. Holds the file's METADATA — never the file itself. The workbook
+/// is parsed and discarded; the platform stores the validated data drawn from it, not
+/// the document (Spec §5.9, §8). There is no file store to secure, by design.
+model ImportBatch {
+  id               String       @id @default(cuid())
+  districtId       String
+  dataset          DatasetKind
+  fiscalYear       String // "2026-27"
+  periodType       PeriodType
+  period           Int? // 1..12 monthly · null for annual
+  budgetType       BudgetType? // budget datasets only
+  status           ImportStatus @default(PARSING)
+  fileName         String
+  fileSize         Int
+  rowsParsed       Int          @default(0)
+  errorCount       Int          @default(0)
+  warningCount     Int          @default(0)
+  /// Set when the user accepts the warnings and proceeds. Errors can never be
+  /// acknowledged away — they block until the file is fixed.
+  warningsAckedAt  DateTime?
+  /// Deliberately NOT a foreign key, same reasoning as AuditLog.actorUserId: deleting
+  /// the person who uploaded a file must not cascade away the record that they did.
+  uploadedByUserId String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  district    District            @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  stagingRows ImportStagingRow[]
+  findings    ValidationFinding[]
+  version     DatasetVersion?
+
+  @@index([districtId, dataset, fiscalYear, period])
+  @@index([districtId, status])
+}
+
+/// Parsed rows waiting to be validated and committed. Cleared when the batch commits
+/// or is cancelled.
+///
+/// `raw` is the row exactly as the file had it, keyed by column label; `resolved` is
+/// the same row after code -> id resolution. Both are kept so the validation report can
+/// quote the user's own value back at them ("Unknown fund '0101'") rather than an id
+/// they have never seen.
+///
+/// districtId is denormalised on purpose: every tenant-owned row carries one, or the
+/// scoping extension has nothing to bite on.
+model ImportStagingRow {
+  id         String @id @default(cuid())
+  districtId String
+  batchId    String
+  /// 1-based source row, header excluded — the number the report shows the user.
+  rowNumber  Int
+  raw        Json
+  resolved   Json?
+
+  district District    @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  batch    ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, rowNumber])
+  @@index([districtId])
+}
+
+/// One finding from one validation layer. Persisted rather than held in memory because
+/// the report outlives the request that produced it.
+model ValidationFinding {
+  id         String   @id @default(cuid())
+  districtId String
+  batchId    String
+  severity   Severity
+  /// Which layer raised it: structure · types · vocabulary · referential ·
+  /// calculation · business-rules · duplicates.
+  layer      String
+  /// Stable rule id (e.g. "VOCAB_UNKNOWN_FUND") so findings can be counted, filtered
+  /// and asserted on in tests without matching against prose.
+  rule       String
+  /// Null for file-level findings — a missing column has no row.
+  rowNumber  Int?
+  column     String?
+  value      String?
+  /// Plain English, already resolved. Spec §5.6: every finding names the row, the
+  /// column, the offending value and what is wrong with it.
+  message    String
+
+  district District    @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  batch    ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, severity])
+  @@index([districtId])
+}
+
+/// A committed snapshot of one dataset for one period. Versions are immutable: a
+/// restore writes a NEW version copying the old rows, it never mutates history.
+///
+/// Exactly one version per (district, dataset, fiscalYear, period) may be current.
+/// Prisma's @@unique has no `where`, so that invariant CANNOT be expressed here — it
+/// lives as a partial unique index in the migration. See the migration SQL.
+model DatasetVersion {
+  id                    String       @id @default(cuid())
+  districtId            String
+  dataset               DatasetKind
+  fiscalYear            String
+  periodType            PeriodType
+  period                Int?
+  budgetType            BudgetType?
+  version               Int // 1, 2, 3... per district+dataset+fiscalYear+period
+  isCurrent             Boolean      @default(true)
+  action                ImportAction
+  /// The upload this version came from.
+  ///
+  /// NULL for a restore, which has no upload of its own — it copies an earlier version's
+  /// rows rather than importing a file. Still @unique: Postgres treats NULLs as distinct,
+  /// so many restores coexist while one batch still yields at most one version.
+  batchId               String?      @unique
+  /// Set when this version was created by restoring an earlier one. Not a foreign key,
+  /// and not a self-relation: versions are immutable and never deleted, so there is
+  /// nothing to cascade, and a back-reference would only add noise.
+  restoredFromVersionId String?
+  rowCount              Int
+  errorCount            Int
+  warningCount          Int
+  fileName              String
+  /// Not an FK — same reasoning as ImportBatch.uploadedByUserId.
+  committedByUserId     String
+  committedAt           DateTime     @default(now())
+
+  district District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  batch    ImportBatch? @relation(fields: [batchId], references: [id])
+
+  budgetLines          BudgetLine[]
+  revenueActuals       RevenueActual[]
+  expenditureActuals   ExpenditureActual[]
+  cashPositions        CashPosition[]
+  openingFundBalances  OpeningFundBalance[]
+  fundBalanceOverrides FundBalanceOverride[]
+
+  /// NOTE: the two uniqueness rules for this table are BOTH hand-written in the
+  /// migration, not declared here, because Prisma cannot express either:
+  ///
+  ///   1. one version number per period — @@unique would put `period` in the key, and
+  ///      `period` is NULL for the three annual datasets. Postgres treats every NULL as
+  ///      distinct, so two v1 rows for the same annual period would both be accepted.
+  ///   2. exactly one current version per period — @@unique has no WHERE clause.
+  ///
+  /// Both are solved with COALESCE("period", -1) partial unique indexes. See
+  /// migrations/*_m2_periodic/migration.sql. Do not re-add @@unique here: it would
+  /// silently reintroduce (1).
+  @@index([districtId, dataset, fiscalYear, period])
+  @@index([districtId, dataset, fiscalYear, period, isCurrent])
+}
+
+// ===================== M2: Periodic snapshot data =====================
+// Every row carries districtId + fiscalYear + period + versionId. That is what
+// preserves history, isolates districts, and powers versioning and trend analysis.
+//
+// Master-data relations are onDelete: Restrict — a fund with financial history must
+// not be deletable. Deactivating it is the supported move. (See docs/milestone-2 —
+// deleteMasterItem needs to report this conflict before M2.6 ships real data.)
+//
+// Money is Decimal(18,2) everywhere. Never Float: 0.1 + 0.2 in a reserve calculation
+// is how a district stops trusting the platform.
+
+/// The ADOPTED budget, from the two annual files.
+///
+/// CURRENT/revised budget is deliberately NOT here — it arrives as the Budget column
+/// on the monthly detail rows and stays there, because that is the grain Available
+/// Budget is computed at and the grain the browse table displays. Re-uniting them
+/// would cost a join per row across tens of thousands of rows and buy nothing.
+model BudgetLine {
+  id               String     @id @default(cuid())
+  districtId       String
+  versionId        String
+  fiscalYear       String
+  budgetType       BudgetType @default(ADOPTED)
+  kind             BudgetKind
+  fundId           String
+  revenueSourceId  String? // REVENUE lines
+  functionId       String? // EXPENDITURE lines
+  objectId         String? // EXPENDITURE lines
+  costCenterId     String?
+  capitalProjectId String?
+  grantId          String?
+  amount           Decimal    @db.Decimal(18, 2)
+
+  district       District         @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  version        DatasetVersion   @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fund           Fund             @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  revenueSource  RevenueSource?   @relation(fields: [revenueSourceId], references: [id], onDelete: Restrict)
+  function       AccountFunction? @relation(fields: [functionId], references: [id], onDelete: Restrict)
+  object         AccountObject?   @relation(fields: [objectId], references: [id], onDelete: Restrict)
+  costCenter     School?          @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  capitalProject CapitalProject?  @relation(fields: [capitalProjectId], references: [id], onDelete: Restrict)
+  grant          Grant?           @relation(fields: [grantId], references: [id], onDelete: Restrict)
+
+  @@index([districtId, fiscalYear, kind, budgetType])
+  @@index([versionId])
+  @@index([fundId])
+}
+
+/// Revenue actuals, monthly. Grain: fund × revenue source × project/grant.
+model RevenueActual {
+  id               String  @id @default(cuid())
+  districtId       String
+  versionId        String
+  fiscalYear       String
+  period           Int
+  fundId           String
+  revenueSourceId  String
+  /// Project/Grant is a Required column on this import; whichever it names resolves
+  /// into one of these two. This is why deferring the Grants Activity importer to
+  /// Phase 2 loses so little: grant revenue still arrives, tagged, right here.
+  grantId          String?
+  capitalProjectId String?
+  costCenterId     String?
+  /// The file's Budget column == the CURRENT/revised budget for this line.
+  budget           Decimal @db.Decimal(18, 2)
+  actualMtd        Decimal @db.Decimal(18, 2)
+  actualYtd        Decimal @db.Decimal(18, 2)
+
+  district       District        @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  version        DatasetVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fund           Fund            @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  revenueSource  RevenueSource   @relation(fields: [revenueSourceId], references: [id], onDelete: Restrict)
+  grant          Grant?          @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  capitalProject CapitalProject? @relation(fields: [capitalProjectId], references: [id], onDelete: Restrict)
+  costCenter     School?         @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+
+  @@index([districtId, fiscalYear, period])
+  @@index([versionId])
+  @@index([districtId, fiscalYear, period, fundId])
+  @@index([districtId, fiscalYear, period, revenueSourceId])
+}
+
+/// Expenditure actuals, monthly. Grain: fund × function × object × cost centre ×
+/// project/grant — the largest table in the platform by a wide margin.
+model ExpenditureActual {
+  id               String  @id @default(cuid())
+  districtId       String
+  versionId        String
+  fiscalYear       String
+  period           Int
+  fundId           String
+  functionId       String
+  objectId         String
+  costCenterId     String?
+  grantId          String?
+  capitalProjectId String?
+  budget           Decimal @db.Decimal(18, 2) // CURRENT/revised, as above
+  actualMtd        Decimal @db.Decimal(18, 2)
+  actualYtd        Decimal @db.Decimal(18, 2)
+  /// Committed but not yet paid. Districts run on this number.
+  encumbrances     Decimal @db.Decimal(18, 2)
+  /// Budget − Actual YTD − Encumbrances. Computed at import and stored: the file may
+  /// also carry it, in which case we recompute and compare rather than trust it.
+  availableBudget  Decimal @db.Decimal(18, 2)
+
+  district       District        @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  version        DatasetVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fund           Fund            @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  function       AccountFunction @relation(fields: [functionId], references: [id], onDelete: Restrict)
+  object         AccountObject   @relation(fields: [objectId], references: [id], onDelete: Restrict)
+  costCenter     School?         @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  grant          Grant?          @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  capitalProject CapitalProject? @relation(fields: [capitalProjectId], references: [id], onDelete: Restrict)
+
+  @@index([districtId, fiscalYear, period])
+  @@index([versionId])
+  @@index([districtId, fiscalYear, period, fundId])
+  @@index([districtId, fiscalYear, period, functionId])
+  /// Transfers Out are isolated by object code from this table — the fund-balance
+  /// engine leans on this index every time it runs.
+  @@index([districtId, fiscalYear, period, objectId])
+}
+
+/// Cash position, monthly. One row per fund.
+model CashPosition {
+  id                String   @id @default(cuid())
+  districtId        String
+  versionId         String
+  fiscalYear        String
+  period            Int
+  fundId            String
+  beginningCash     Decimal  @db.Decimal(18, 2)
+  receiptsMtd       Decimal  @db.Decimal(18, 2)
+  disbursementsMtd  Decimal  @db.Decimal(18, 2)
+  /// Beginning + Receipts − Disbursements. Computed and stored; compared against the
+  /// file's own value when it supplies one.
+  endingCash        Decimal  @db.Decimal(18, 2)
+  investmentBalance Decimal? @db.Decimal(18, 2) // LGIP, CDs and similar
+  restrictedCash    Decimal? @db.Decimal(18, 2)
+  unrestrictedCash  Decimal? @db.Decimal(18, 2)
+
+  district District       @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  version  DatasetVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fund     Fund           @relation(fields: [fundId], references: [id], onDelete: Restrict)
+
+  @@index([districtId, fiscalYear, period])
+  @@index([versionId])
+  @@index([districtId, fiscalYear, period, fundId])
+}
+
+/// Opening fund balance, annual. Anchors every fund-balance calculation for the year,
+/// which is why it has no period: it is true from `effectiveDate` onward.
+model OpeningFundBalance {
+  id              String   @id @default(cuid())
+  districtId      String
+  versionId       String
+  fiscalYear      String
+  fundId          String
+  /// Prior-year components, used to reconcile against last year's close.
+  pyNonspendable  Decimal  @db.Decimal(18, 2)
+  pyRestricted    Decimal  @db.Decimal(18, 2)
+  pyCommitted     Decimal  @db.Decimal(18, 2)
+  pyAssigned      Decimal  @db.Decimal(18, 2)
+  pyUnassigned    Decimal  @db.Decimal(18, 2)
+  pyTotal         Decimal  @db.Decimal(18, 2) // sum of the five above; computed
+  begNonspendable Decimal? @db.Decimal(18, 2)
+  begRestricted   Decimal? @db.Decimal(18, 2)
+  begCommitted    Decimal? @db.Decimal(18, 2)
+  begAssigned     Decimal? @db.Decimal(18, 2)
+  /// Required even though its siblings are optional: this is the primary reserve KPI
+  /// for the General Fund.
+  begUnassigned   Decimal  @db.Decimal(18, 2)
+  begTotal        Decimal  @db.Decimal(18, 2) // sum of the beginning components; computed
+  effectiveDate   DateTime
+  statusId        String? // Preliminary · Unaudited · Final
+  notes           String? // audit adjustments and the like
+
+  district District       @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  version  DatasetVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fund     Fund           @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  status   Status?        @relation(fields: [statusId], references: [id], onDelete: SetNull)
+
+  @@index([districtId, fiscalYear])
+  @@index([versionId])
+  @@index([fundId])
+}
+
+/// A District Admin's correction to a figure the platform DERIVED.
+///
+/// Sparse by design: the computed fund balance itself is not materialised. It is
+/// derived at read from a sum over indexed rows — a few hundred rows per district-year
+/// at the fund grain, which is milliseconds. Only the corrections are stored.
+///
+/// Versioned with the period it corrects, so restoring an earlier version restores the
+/// corrections that were true then. A Replace clears it: the numbers underneath have
+/// changed, so the correction may no longer apply, and the prompt says so.
+model FundBalanceOverride {
+  id                 String           @id @default(cuid())
+  districtId         String
+  versionId          String
+  fiscalYear         String
+  period             Int
+  fundId             String
+  field              FundBalanceField
+  value              Decimal          @db.Decimal(18, 2)
+  /// Required, not optional. An override on a derived financial figure is the first
+  /// thing an auditor asks about, and "why" is the question.
+  reason             String
+  /// Not an FK — same reasoning as ImportBatch.uploadedByUserId.
+  overriddenByUserId String
+  createdAt          DateTime         @default(now())
+
+  district District       @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  version  DatasetVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fund     Fund           @relation(fields: [fundId], references: [id], onDelete: Restrict)
+
+  @@unique([districtId, fiscalYear, period, fundId, field])
+  @@index([versionId])
 }

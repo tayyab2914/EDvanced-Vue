@@ -33,6 +33,14 @@ export default async function DistrictLayout({
     { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
     { label: "Master data", href: "/master-data", icon: "database" },
   ];
+  // Reading the data is a view permission; uploading is not. A Viewer (or a View Only
+  // external user) sees the history and the numbers, and no Upload button.
+  if (userCan(user, "view_dashboards")) {
+    overview.push({ label: "Data", href: "/data/versions", icon: "reports" });
+    // Readable by anyone who can see the dashboards — a Viewer should be able to see the
+    // rules they are being measured against, even though only an admin can change them.
+    overview.push({ label: "Policies", href: "/policies", icon: "shield" });
+  }
   const admin: NavItem[] = [];
   if (userCan(user, "manage_users_own"))
     admin.push({ label: "Users", href: "/users", icon: "users" });

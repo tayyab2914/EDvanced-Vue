@@ -124,17 +124,24 @@ export function AppShell({
 
           <div className="border-t border-white/[0.07] p-3">
             <div className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-2">
-              <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#3a5680] text-[12.5px] font-semibold text-white">
-                {initials(user.name)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[12.5px] font-semibold text-[#e7edf6]">
-                  {user.name}
+              {/* The user's own card is where people look for "my account" — a nav item
+                  would put it beside the district's data, which is not what it is. */}
+              <Link
+                href="/account"
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[7px] transition-opacity hover:opacity-80"
+              >
+                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#3a5680] text-[12.5px] font-semibold text-white">
+                  {initials(user.name)}
                 </div>
-                <div className="truncate text-[11px] text-[#6f8099]">
-                  {user.roleLabel}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12.5px] font-semibold text-[#e7edf6]">
+                    {user.name}
+                  </div>
+                  <div className="truncate text-[11px] text-[#6f8099]">
+                    {user.roleLabel}
+                  </div>
                 </div>
-              </div>
+              </Link>
               <LogoutButton />
             </div>
           </div>
