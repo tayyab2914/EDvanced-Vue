@@ -304,7 +304,7 @@ async function seedMasterData(db: TenantDb) {
       { code: "FIN-O-TOUT", name: "Transfer Out" },
     ]),
   });
-  await db.capitalProject.createMany({ data: scoped([{ projectId: "FIN-P1", name: "Project" }]) });
+  await db.project.createMany({ data: scoped([{ projectNumber: "FIN-P1", name: "Project" }]) });
   await prisma.status.upsert({
     where: { name: "Final" },
     create: { name: "Final" },
@@ -328,7 +328,7 @@ async function seedMasterData(db: TenantDb) {
 /** Everything this script seeds is prefixed FIN-, so cleanup can find it by prefix. */
 async function teardownMasterData() {
   await prisma.financialActivityCode.deleteMany({ where: { codeFrom: { startsWith: "FIN-" } } });
-  await prisma.capitalProject.deleteMany({ where: { projectId: { startsWith: "FIN-" } } });
+  await prisma.project.deleteMany({ where: { projectNumber: { startsWith: "FIN-" } } });
   await prisma.accountObject.deleteMany({ where: { code: { startsWith: "FIN-" } } });
   await prisma.accountFunction.deleteMany({ where: { code: { startsWith: "FIN-" } } });
   await prisma.revenueSource.deleteMany({ where: { code: { startsWith: "FIN-" } } });

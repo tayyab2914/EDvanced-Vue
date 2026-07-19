@@ -10,7 +10,12 @@ import { validateBatch } from "@/lib/validation/import/engine";
 import { RULE } from "@/lib/validation/import/findings";
 import { structureFindings } from "@/lib/validation/import/layers/structure";
 import { matchHeaders } from "@/lib/import/parse/headers";
-import { evaluate, TOLERANCE } from "@/lib/validation/import/layers/calculation";
+import {
+  evaluate,
+  TOLERANCE,
+  calculationFindings,
+  computedValues,
+} from "@/lib/validation/import/layers/calculation";
 import { Prisma } from "@/lib/generated/prisma/client";
 
 /**
@@ -153,10 +158,10 @@ async function main() {
           })),
         ),
       });
-      await t.capitalProject.createMany({
+      await t.project.createMany({
         data: scoped([
-          { projectId: "PROJ-A", name: "Roof" },
-          { projectId: "PROJ-B", name: "HVAC" },
+          { projectNumber: "PROJ-A", name: "Roof" },
+          { projectNumber: "PROJ-B", name: "HVAC" },
         ]),
       });
 
@@ -261,7 +266,7 @@ async function main() {
       );
       assert(resolved?.availableBudget === "500.00", "calculated fields are computed and stored");
       assert(
-        typeof resolved?.capitalProjectId === "string",
+        typeof resolved?.projectId === "string",
         "the single Project / Grant column resolved into a project id",
       );
 
@@ -321,6 +326,42 @@ async function main() {
   assert(
     evaluate({ plus: ["a"], minus: ["b"] }, { a: "100", b: undefined }).toFixed(2) === "100.00",
     "an absent operand counts as zero",
+  );
+
+  // ---- compute-only totals are never held against the file ----
+  console.log("\nCompute-only totals are the platform's, not the file's");
+  const ofbDef = DATASET_DEFS["opening-fund-balance"];
+  // The client's own row: five components present, plus a Beginning Total that does NOT add
+  // up — their ERP put 850,000 in Beginning Unassigned by mistake, so the parts sum to
+  // 1,700,000 while the total column says 850,000. This used to block the import; now the
+  // total is computed by the platform and the mismatch is not an error.
+  const clientRow = {
+    rowNumber: 2,
+    ids: {},
+    value: {
+      pyNonspendable: "0", pyRestricted: "850000", pyCommitted: "0", pyAssigned: "0",
+      pyUnassigned: "0", pyTotal: "850000",
+      begNonspendable: "0", begRestricted: "850000", begCommitted: "0", begAssigned: "0",
+      begUnassigned: "850000", begTotal: "850000",
+    },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any;
+  assert(
+    calculationFindings(ofbDef, [clientRow]).length === 0,
+    "a supplied-but-wrong Opening Fund Balance total is NOT an error — the platform owns it",
+  );
+  assert(
+    computedValues(ofbDef, clientRow.value).begTotal === "1700000.00",
+    "and the platform still computes the total from the five components (1,700,000)",
+  );
+  // The Available Budget checksum is untouched — a wrong one still blocks.
+  const badAvail = [
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { rowNumber: 2, ids: {}, value: { budget: "1000", actualYtd: "0", encumbrances: "0", availableBudget: "1" } } as any,
+  ];
+  assert(
+    calculationFindings(DATASET_DEFS["expenditure-detail"], badAvail).some((f) => f.rule === RULE.CALC_MISMATCH),
+    "a wrong Available Budget still blocks — checksum fields are unchanged",
   );
 
   console.log("\nRollback");

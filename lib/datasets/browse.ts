@@ -1,7 +1,7 @@
 import type { TenantDb } from "@/lib/tenant-db";
 import type { DatasetSlug } from "@/lib/datasets/kinds";
 import { datasetDef } from "@/lib/datasets/registry";
-import type { DatasetField, ResolveTarget } from "@/lib/datasets/fields";
+import type { ResolveTarget } from "@/lib/datasets/fields";
 
 /**
  * Reading committed periodic data back out.
@@ -23,10 +23,10 @@ import type { DatasetField, ResolveTarget } from "@/lib/datasets/fields";
  *
  * Derived from the registry's `resolvesTo` rather than listed per dataset, so a new field
  * gets its column for free. The code column differs per model because M1 named them
- * before there was a convention — School has schoolNumber, Grant has grantId.
+ * before there was a convention — School has schoolNumber, Project has projectNumber.
  */
 const RELATION: Record<
-  Exclude<ResolveTarget, "grantOrProject">,
+  ResolveTarget,
   { rel: string; codeField: string; nameField: string }
 > = {
   fund: { rel: "fund", codeField: "code", nameField: "name" },
@@ -34,6 +34,7 @@ const RELATION: Record<
   function: { rel: "function", codeField: "code", nameField: "name" },
   object: { rel: "object", codeField: "code", nameField: "name" },
   costCenter: { rel: "costCenter", codeField: "schoolNumber", nameField: "name" },
+  project: { rel: "project", codeField: "projectNumber", nameField: "name" },
   status: { rel: "status", codeField: "name", nameField: "name" },
 };
 
@@ -51,11 +52,6 @@ export function browseColumns(slug: DatasetSlug): BrowseColumn[] {
   const def = datasetDef(slug);
   return def.fields.map((f): BrowseColumn => {
     if (f.type !== "code") return { key: f.name, label: f.label, type: f.type };
-    if (f.resolvesTo === "grantOrProject") {
-      // The single Project / Grant column fanned out into two ids on the way in; it comes
-      // back as one column, because that is how the district wrote it.
-      return { key: f.name, label: f.label, type: "code" };
-    }
     return {
       key: f.name,
       label: f.label,
@@ -72,11 +68,6 @@ export function browseInclude(slug: DatasetSlug): Record<string, unknown> {
 
   for (const f of def.fields) {
     if (f.type !== "code") continue;
-    if (f.resolvesTo === "grantOrProject") {
-      include.grant = { select: { grantId: true, name: true } };
-      include.capitalProject = { select: { projectId: true, name: true } };
-      continue;
-    }
     const r = RELATION[f.resolvesTo!];
     include[r.rel] = { select: { [r.codeField]: true, [r.nameField]: true } };
   }
@@ -88,16 +79,10 @@ export function cellOf(slug: DatasetSlug, row: Record<string, unknown>, col: Bro
   const def = datasetDef(slug);
   const field = def.fields.find((f) => f.name === col.key);
 
-  if (field?.resolvesTo === "grantOrProject") {
-    const grant = row.grant as { grantId?: string } | null;
-    const project = row.capitalProject as { projectId?: string } | null;
-    return grant?.grantId ?? project?.projectId ?? "";
-  }
-
   if (col.relation) {
     const rel = row[col.relation] as Record<string, unknown> | null;
     if (!rel) return "";
-    const target = RELATION[field!.resolvesTo as Exclude<ResolveTarget, "grantOrProject">];
+    const target = RELATION[field!.resolvesTo!];
     return String(rel[target.codeField] ?? "");
   }
 
@@ -122,13 +107,6 @@ export function cellOf(slug: DatasetSlug, row: Record<string, unknown>, col: Bro
 
 /** The name beside a code, for the row's title attribute — context without a wider table. */
 export function nameOf(slug: DatasetSlug, row: Record<string, unknown>, col: BrowseColumn): string | null {
-  const def = datasetDef(slug);
-  const field = def.fields.find((f) => f.name === col.key);
-  if (field?.resolvesTo === "grantOrProject") {
-    const grant = row.grant as { name?: string } | null;
-    const project = row.capitalProject as { name?: string } | null;
-    return grant?.name ?? project?.name ?? null;
-  }
   if (!col.relation) return null;
   const rel = row[col.relation] as Record<string, unknown> | null;
   return rel ? String(rel.name ?? "") || null : null;
@@ -165,15 +143,8 @@ export const EXPORT_LIMIT = 50_000;
 function orderByColumn(slug: DatasetSlug, key: string, dir: "asc" | "desc") {
   const field = datasetDef(slug).fields.find((f) => f.name === key);
 
-  // A grantOrProject column has no column of its own — it became grantId or
-  // capitalProjectId. Order by the grant, which is the more common of the two; the
-  // alternative is a union, and nobody sorts a ledger by "project or grant".
-  if (field?.resolvesTo === "grantOrProject") {
-    return { grant: { grantId: dir } };
-  }
-
   if (field?.type === "code" && field.resolvesTo) {
-    const target = RELATION[field.resolvesTo as Exclude<ResolveTarget, "grantOrProject">];
+    const target = RELATION[field.resolvesTo];
     // NOT `code`: M1 named these before there was a convention, so School has
     // schoolNumber and Grant has grantId. Reading the code field from RELATION rather
     // than assuming it is what keeps this honest.
@@ -221,12 +192,7 @@ function whereOf(slug: DatasetSlug, versionId: string, q: string | undefined) {
 
   for (const c of cols) {
     const field = datasetDef(slug).fields.find((f) => f.name === c.key)!;
-    if (field.resolvesTo === "grantOrProject") {
-      or.push({ grant: { grantId: { contains: term, mode: "insensitive" } } });
-      or.push({ capitalProject: { projectId: { contains: term, mode: "insensitive" } } });
-      continue;
-    }
-    const target = RELATION[field.resolvesTo as Exclude<ResolveTarget, "grantOrProject">];
+    const target = RELATION[field.resolvesTo!];
     or.push({ [c.relation!]: { [target.codeField]: { contains: term, mode: "insensitive" } } });
     or.push({ [c.relation!]: { [target.nameField]: { contains: term, mode: "insensitive" } } });
   }

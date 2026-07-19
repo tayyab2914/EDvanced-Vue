@@ -54,7 +54,9 @@ export async function evaluateAlerts(
   codes: ActivityCodes,
 ): Promise<AlertReport> {
   const policy = await loadPolicy(db, scope.districtId);
-  const facts = await gatherFacts(db, scope, codes);
+  const facts = await gatherFacts(db, scope, codes, {
+    ignoreSalaryObjectsMom: policy.expenditure.ignoreSalaryObjectsMom === true,
+  });
 
   const alerts: Alert[] = [];
   for (const def of ALERTS) {
@@ -92,6 +94,7 @@ export async function gatherFacts(
   db: TenantDb,
   scope: { fiscalYear: string; period: number; fundId?: string },
   codes: ActivityCodes,
+  opts: { ignoreSalaryObjectsMom?: boolean } = {},
 ): Promise<AlertFacts> {
   const [totals, cash, fb, reserve, budgets, previous] = await Promise.all([
     activityTotals(db, scope, codes),
@@ -158,6 +161,22 @@ export async function gatherFacts(
   const prevRevenue = previous ? previous.totalRevenueMtd : null;
   const prevExpenditure = previous ? previous.totalExpenditureMtd : null;
 
+  // A district can ask that salary swings not count as a spending trend: payroll runs and
+  // step increases move month to month for reasons that are not a budget concern. When the
+  // policy is set, this month's and last month's salary spend come out of both sides of the
+  // expenditure month-over-month comparison before the percentage is worked out.
+  const [salaryNow, salaryPrev] = opts.ignoreSalaryObjectsMom
+    ? await Promise.all([
+        salaryExpenditureMtd(db, scope),
+        scope.period > 1
+          ? salaryExpenditureMtd(db, { ...scope, period: scope.period - 1 })
+          : Promise.resolve(ZERO),
+      ])
+    : [ZERO, ZERO];
+  const expenditureMtdForMom = totals.totalExpenditureMtd.minus(salaryNow);
+  const prevExpenditureForMom =
+    prevExpenditure === null ? null : prevExpenditure.minus(salaryPrev);
+
   const cashDecreasePercent = await monthOverMonthCashDrop(db, scope);
 
   return {
@@ -174,13 +193,9 @@ export async function gatherFacts(
     availableBudget: budgets.expenditure.minus(expenditureYtd).minus(budgets.encumbrances),
     expenditureForecast: budgets.expenditure.isZero() ? null : expenditureForecast.projected,
     expenditureForecastVariancePercent: expenditureForecast.variancePercent,
-    expenditureMomIncreasePercent: momChange(totals.totalExpenditureMtd, prevExpenditure),
+    expenditureMomIncreasePercent: momChange(expenditureMtdForMom, prevExpenditureForMom),
 
-    endingCash: cash.total,
     daysCashOnHand: await daysCash(db, scope, cash.total),
-    // Cash forecasting needs a trend the platform does not have from one period; the
-    // workbook's forecast-cash alert lands when the dashboards do.
-    forecastCash: null,
     cashDecreasePercent,
 
     reservePercent: reserve.percent,
@@ -263,6 +278,42 @@ async function daysCash(
 
   const perDay = annual.dividedBy(365);
   return cash.dividedBy(perDay);
+}
+
+/**
+ * This month's expenditure on salary objects — the figure taken out of both sides of the
+ * month-over-month comparison when the district opts to ignore salary swings.
+ *
+ * "Salaries" is the single object type the exclusion targets, identified by its seeded name
+ * (the same name the forecast categories group by), then joined through each expenditure
+ * line's object.
+ */
+async function salaryExpenditureMtd(
+  db: TenantDb,
+  scope: { fiscalYear: string; period: number; fundId?: string },
+): Promise<Prisma.Decimal> {
+  const salaryType = await db.objectType.findFirst({
+    where: { name: "Salaries" },
+    select: { id: true },
+  });
+  if (!salaryType) return ZERO;
+
+  const versions = await currentVersionIds(db, {
+    fiscalYear: scope.fiscalYear,
+    period: scope.period,
+  });
+  const versionId = versions.get("EXPENDITURE_DETAIL");
+  if (!versionId) return ZERO;
+
+  const r = await db.expenditureActual.aggregate({
+    where: {
+      versionId,
+      ...(scope.fundId ? { fundId: scope.fundId } : {}),
+      object: { objectTypeId: salaryType.id },
+    },
+    _sum: { actualMtd: true },
+  });
+  return r._sum.actualMtd ?? ZERO;
 }
 
 /** How far cash fell against last month, as a positive percentage. Null if it rose. */

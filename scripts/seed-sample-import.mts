@@ -189,43 +189,12 @@ async function loadMasterData(db: TenantDb): Promise<void> {
   }
   await upsert("cost centers", ccs.length);
 
-  const grants = read("06-grants.csv");
-  for (const [gid, name, revType, award, status, period, manager, desc, cfda] of grants) {
-    await db.grant.deleteMany({ where: { grantId: gid } });
-    await db.grant.createMany({
-      data: scoped([
-        {
-          grantId: gid,
-          name,
-          revenueTypeId: byName(revTypes, revType),
-          awardAmount: award,
-          status: status.trim().toUpperCase().replace(/ /g, "_"),
-          grantPeriod: period,
-          grantManager: manager,
-          description: desc,
-          cfdaNumber: cfda,
-        },
-      ]),
-    });
+  const projects = read("06-projects.csv");
+  for (const [projectNumber, name] of projects) {
+    await db.project.deleteMany({ where: { projectNumber } });
+    await db.project.createMany({ data: scoped([{ projectNumber, name }]) });
   }
-  await upsert("grants", grants.length);
-
-  const projects = read("07-capital-projects.csv");
-  for (const [pid, name, desc, status, type] of projects) {
-    await db.capitalProject.deleteMany({ where: { projectId: pid } });
-    await db.capitalProject.createMany({
-      data: scoped([
-        {
-          projectId: pid,
-          name,
-          description: desc,
-          status: status.trim().toUpperCase().replace(/ /g, "_"),
-          projectType: type.trim().toUpperCase().replace(/ /g, "_"),
-        },
-      ]),
-    });
-  }
-  await upsert("capital projects", projects.length);
+  await upsert("projects", projects.length);
 
   void statuses;
   void csvEscape;

@@ -16,7 +16,7 @@
 
 import type { DatasetDef } from "@/lib/datasets/registry";
 import type { ResolveMaps } from "@/lib/import/resolve";
-import { indexSize, resolveCode, resolveProjectOrGrant } from "@/lib/import/resolve";
+import { indexSize, resolveCode } from "@/lib/import/resolve";
 import { RULE, error, warning, type Finding } from "@/lib/validation/import/findings";
 import type { TypedRow } from "@/lib/validation/import/layers/types";
 
@@ -24,7 +24,7 @@ import type { TypedRow } from "@/lib/validation/import/layers/types";
 export interface ResolvedRow {
   rowNumber: number;
   value: Record<string, string | undefined>;
-  /** Field name -> resolved id. `projectOrGrant` fans out into two entries. */
+  /** Field name -> resolved id. */
   ids: Record<string, string>;
 }
 
@@ -34,8 +34,7 @@ const HUMAN: Record<string, string> = {
   function: "function",
   object: "object",
   costCenter: "cost center",
-  grant: "grant",
-  capitalProject: "capital project",
+  project: "project",
   status: "status",
 };
 
@@ -52,7 +51,10 @@ export function referentialFindings(
   // "Unknown fund 0101" is a useless thing to say to a district that has not imported
   // any funds yet. Said once, for the file, it is the most useful sentence in the report.
   for (const field of codeFields) {
-    if (!field.resolvesTo || field.resolvesTo === "grantOrProject") continue;
+    // Project is skipped: it is optional on the annual budgets, so a district with no
+    // projects yet must not have a project-less budget file rejected wholesale. A missing
+    // project on a row that DOES name one still surfaces per-row below.
+    if (!field.resolvesTo || field.resolvesTo === "project") continue;
     if (indexSize(maps, field.resolvesTo) === 0) {
       findings.push(
         error({
@@ -76,31 +78,6 @@ export function referentialFindings(
 
       if (!code) {
         // Absent and allowed — the schema already refused it if it was required.
-        continue;
-      }
-
-      if (field.resolvesTo === "grantOrProject") {
-        const hit = resolveProjectOrGrant(maps, code);
-        if (!hit.ok) {
-          rowOk = false;
-          findings.push(
-            error({
-              layer: "referential",
-              rule: hit.reason === "ambiguous" ? RULE.AMBIGUOUS_CODE : RULE.UNKNOWN_CODE,
-              rowNumber: row.rowNumber,
-              column: field.label,
-              value: code,
-              message:
-                hit.reason === "ambiguous"
-                  ? `"${code}" is both a grant and a capital project in your master data. We won't guess which one this row belongs to — rename one of them.`
-                  : `"${code}" isn't a grant or a capital project in your master data.`,
-            }),
-          );
-          continue;
-        }
-        if (hit.grantId) ids.grantId = hit.grantId;
-        if (hit.capitalProjectId) ids.capitalProjectId = hit.capitalProjectId;
-        if (hit.recovered) findings.push(recoveredZero(row.rowNumber, field.label, code, hit.recovered));
         continue;
       }
 

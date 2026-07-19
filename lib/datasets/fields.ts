@@ -13,8 +13,10 @@ import * as z from "zod";
  *   required    — must be present and non-empty; absence is an Error
  *   recommended — may be absent, but its absence is a Warning worth surfacing
  *   optional    — may be absent, silently
- *   calculated  — the platform computes it. If the file supplies it anyway we recompute
- *                 and compare rather than trust it, and a mismatch is an Error.
+ *   calculated  — the platform computes it. By default it is a checksum: it appears on the
+ *                 blank template, and if the file supplies it we recompute and compare
+ *                 rather than trust it, and a mismatch is an Error. A calculated field
+ *                 marked `computeOnly` is instead owned outright — see that flag below.
  *
  * The workbook also has "conditional" (only in certain modes), which today would have no
  * user: its only case was the Monthly Fund Balance Snapshot, deferred with Import Monthly
@@ -35,11 +37,9 @@ export type FieldType = "code" | "text" | "amount" | "date";
  * separate async pass over the database, exactly like master-data's `validateSelects` —
  * it cannot live inside a synchronous Zod schema.
  *
- * `grantOrProject` is the odd one: the detail imports carry a single "Project / Grant"
- * column that may name either, so it resolves against both tables and writes whichever
- * matched to `grantId` or `capitalProjectId`. A value matching neither is an Error; a
- * value matching both is ambiguous and also an Error — silently picking one would put a
- * district's money against the wrong thing.
+ * `project` resolves against the district's unified Project master (Project Number). The
+ * detail imports carry a single "Project / Grant" column; whatever it names resolves to
+ * one Project and writes `projectId`. A value matching nothing is an Error.
  */
 export type ResolveTarget =
   | "fund"
@@ -47,7 +47,7 @@ export type ResolveTarget =
   | "function"
   | "object"
   | "costCenter"
-  | "grantOrProject"
+  | "project"
   | "status";
 
 /**
@@ -81,6 +81,19 @@ export interface DatasetField {
   resolvesTo?: ResolveTarget;
   /** For `calculated` fields. Every name in it must be another field on the same dataset. */
   formula?: Formula;
+  /**
+   * A `calculated` field the platform owns outright: still computed and stored, but kept
+   * off the import surface entirely. It is left out of the blank template, and a value the
+   * file supplies for it is never validated — we quietly ignore it and store our own
+   * figure (storage already recomputes it; see engine.ts). Districts should never have to
+   * enter or reconcile it, which is the whole reason a fund-balance total that they got
+   * wrong should not have blocked their import.
+   *
+   * Contrast the default calculated field, which is a checksum: on the template, and a
+   * supplied value is compared. Available Budget and Ending Cash stay that way; the
+   * Opening Fund Balance totals are `computeOnly`.
+   */
+  computeOnly?: boolean;
   /**
    * Extra headers accepted for this column.
    *
@@ -225,12 +238,13 @@ export const calculated = (
   name: string,
   label: string,
   formula: Formula,
-  aliases?: string[],
+  opts: { computeOnly?: boolean; aliases?: string[] } = {},
 ): DatasetField => ({
   name,
   label,
   requiredness: "calculated",
   type: "amount",
   formula,
-  aliases,
+  aliases: opts.aliases,
+  computeOnly: opts.computeOnly,
 });

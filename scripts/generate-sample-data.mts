@@ -26,7 +26,6 @@ import type { DatasetSlug } from "@/lib/datasets/kinds";
  */
 
 const OUT = join(process.cwd(), "public", "sample-data");
-const FY = "2026-27";
 
 // ===================== master data =====================
 // Uploaded first, under Master data. Nothing else resolves without it: every code in
@@ -87,22 +86,19 @@ const COST_CENTERS = [
   ["9002", "Transportation", "Operations", "Transportation"],
 ];
 
-const GRANTS = [
-  ["TITLE-I-2627", "Title I Part A", "Federal Through State and Local", "2400000", "Active", FY, "A. Reyes", "Improving basic programs", "84.010"],
-  ["IDEA-B-2627", "IDEA Part B", "Federal Through State and Local", "1800000", "Active", FY, "A. Reyes", "Special education", "84.027"],
-];
-
+// The unified Projects master (MVP): just Project Number and Project Name. What used to
+// be split across Grants and Capital Projects now lives in one list — the first two rows
+// were grants, the next two capital projects — because a detail row tags one Project
+// regardless of which V2 module will later claim it.
 const PROJECTS = [
-  ["PECO-2627", "PECO Maintenance", "Statewide maintenance allocation", "In Progress", "Maintenance"],
-  ["ROOF-0021", "Demo Elementary roof replacement", "Full tear-off and replace", "In Progress", "Renovation"],
-  // A placeholder, and a question for the client.
-  //
-  // The workbook marks Project / Grant as REQUIRED on both detail imports. But most of a
-  // district's money — FEFP, ad valorem, salaries — belongs to no project at all, so a
-  // required column forces a placeholder like this one on every general row. Either the
-  // column should be Optional, or districts genuinely do carry a code for "no project".
-  // Worth asking; until then this keeps the sample importable and honest about the gap.
-  ["GENERAL", "General operations (no project)", "Placeholder for money that belongs to no project or grant", "In Progress", "Other"],
+  ["TITLE-I-2627", "Title I Part A"],
+  ["IDEA-B-2627", "IDEA Part B"],
+  ["PECO-2627", "PECO Maintenance"],
+  ["ROOF-0021", "Demo Elementary roof replacement"],
+  // The workbook marks Project / Grant as REQUIRED on both detail imports, but most of a
+  // district's money — FEFP, ad valorem, salaries — belongs to no project. This shared
+  // "no project" row is what keeps the sample importable while that column stays required.
+  ["GENERAL", "General operations (no project)"],
 ];
 
 // ===================== the annual budget =====================
@@ -154,11 +150,13 @@ const EXPENDITURE_BUDGET: Row[] = [
 //
 // 9,500,000 / 198,100,000 budgeted general-fund expenditure ≈ 4.8%.
 
+// The two totals (Prior Year Total, Beginning Total) are computed by the platform and are
+// no longer columns on the file — the district supplies the components and nothing else.
 const OPENING_FUND_BALANCE: Row[] = [
-  // fund, py x5, pyTotal, beg x4, begUnassigned, begTotal, effective, status, notes
-  ["1000", 500_000, 2_000_000, 3_000_000, 4_000_000, 9_500_000, 19_000_000, 500_000, 2_000_000, 3_000_000, 4_000_000, 9_500_000, 19_000_000, "2026-07-01", "Final", "Audited close of FY2025-26"],
-  ["4100", 0, 850_000, 0, 0, 1_200_000, 2_050_000, 0, 850_000, 0, 0, 1_200_000, 2_050_000, "2026-07-01", "Final", ""],
-  ["3200", 0, 6_400_000, 0, 0, 900_000, 7_300_000, 0, 6_400_000, 0, 0, 900_000, 7_300_000, "2026-07-01", "Final", ""],
+  // fund, py x5, beg x4, begUnassigned, effective, status, notes
+  ["1000", 500_000, 2_000_000, 3_000_000, 4_000_000, 9_500_000, 500_000, 2_000_000, 3_000_000, 4_000_000, 9_500_000, "2026-07-01", "Final", "Audited close of FY2025-26"],
+  ["4100", 0, 850_000, 0, 0, 1_200_000, 0, 850_000, 0, 0, 1_200_000, "2026-07-01", "Final", ""],
+  ["3200", 0, 6_400_000, 0, 0, 900_000, 0, 6_400_000, 0, 0, 900_000, "2026-07-01", "Final", ""],
 ];
 
 // ===================== monthly detail =====================
@@ -325,12 +323,7 @@ async function main() {
     ["03-functions", ["Code", "Name", "Function type"], FUNCTIONS],
     ["04-objects", ["Code", "Name", "Object type"], OBJECTS],
     ["05-cost-centers", ["Cost center number", "Name", "Category", "Cost Center Type"], COST_CENTERS],
-    [
-      "06-grants",
-      ["Grant Number", "Grant Name", "Revenue Type", "Award Amount", "Grant Status", "Grant Period", "Grant Manager", "Description", "CFDA Number"],
-      GRANTS,
-    ],
-    ["07-capital-projects", ["Project Number", "Project Name", "Description", "Status", "Project Type"], PROJECTS],
+    ["06-projects", ["Project Number", "Project Name"], PROJECTS],
   ];
   for (const [name, headers, rows] of master) {
     writeCsv(join("master-data", `${name}.csv`), headers, rows);

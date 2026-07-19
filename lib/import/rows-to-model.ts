@@ -42,8 +42,7 @@ const MAPPERS: Record<DatasetSlug, (r: ResolvedPayload, c: RowContext) => ModelR
     fundId: r.fundId,
     revenueSourceId: r.revenueSourceId,
     costCenterId: r.costCenterId ?? null,
-    capitalProjectId: r.capitalProjectId ?? null,
-    grantId: r.grantId ?? null,
+    projectId: r.projectId ?? null,
     amount: dec(r.amount),
   }),
 
@@ -56,8 +55,7 @@ const MAPPERS: Record<DatasetSlug, (r: ResolvedPayload, c: RowContext) => ModelR
     functionId: r.functionId,
     objectId: r.objectId,
     costCenterId: r.costCenterId ?? null,
-    capitalProjectId: r.capitalProjectId ?? null,
-    grantId: r.grantId ?? null,
+    projectId: r.projectId ?? null,
     amount: dec(r.amount),
   }),
 
@@ -88,9 +86,8 @@ const MAPPERS: Record<DatasetSlug, (r: ResolvedPayload, c: RowContext) => ModelR
     period: c.period,
     fundId: r.fundId,
     revenueSourceId: r.revenueSourceId,
-    // The single "Project / Grant" column resolved into exactly one of these two.
-    grantId: r.grantId ?? null,
-    capitalProjectId: r.capitalProjectId ?? null,
+    // The single "Project / Grant" column resolved to one Project in the master.
+    projectId: r.projectId ?? null,
     costCenterId: r.costCenterId ?? null,
     // The file's Budget column IS the current/revised budget — that is why it stays on
     // the row rather than moving to BudgetLine.
@@ -107,8 +104,7 @@ const MAPPERS: Record<DatasetSlug, (r: ResolvedPayload, c: RowContext) => ModelR
     functionId: r.functionId,
     objectId: r.objectId,
     costCenterId: r.costCenterId ?? null,
-    grantId: r.grantId ?? null,
-    capitalProjectId: r.capitalProjectId ?? null,
+    projectId: r.projectId ?? null,
     budget: dec(r.budget),
     actualMtd: dec(r.actualMtd),
     actualYtd: dec(r.actualYtd),

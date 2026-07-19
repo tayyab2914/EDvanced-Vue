@@ -119,7 +119,7 @@ export default async function MasterDataPage({
   return (
     <div>
       <PageHeader
-        title="Master data"
+        title="Chart of Accounts"
         description="Your district's account dimensions. Switch between them with the tabs below."
       />
       <MasterDataWorkspace

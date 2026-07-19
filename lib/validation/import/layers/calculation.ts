@@ -55,7 +55,11 @@ export function computedValues(
 
 export function calculationFindings(def: DatasetDef, rows: ResolvedRow[]): Finding[] {
   const findings: Finding[] = [];
-  const calculated = def.fields.filter((f) => f.formula);
+  // Checksum fields only. A `computeOnly` field (the Opening Fund Balance totals) is the
+  // platform's to compute — `computedValues` still derives and stores it, but we never hold
+  // the file to a figure the district was told not to supply. Absent that carve-out, a
+  // stray total column in an ERP export would resurrect the very error we removed.
+  const calculated = def.fields.filter((f) => f.formula && !f.computeOnly);
   if (calculated.length === 0) return findings;
 
   for (const row of rows) {
@@ -75,7 +79,7 @@ export function calculationFindings(def: DatasetDef, rows: ResolvedRow[]): Findi
           rowNumber: row.rowNumber,
           column: field.label,
           value: supplied,
-          message: `${field.label} should be ${money(expected.toFixed(2))} (${explain(field.formula!, def)}), but this file says ${money(actual.toFixed(2))}.`,
+          message: `${field.label} should be ${money(expected.toFixed(2))} — that's ${explain(field.formula!, def)}. This file says ${money(actual.toFixed(2))}, so one of those amounts is entered incorrectly. You can also leave the "${field.label}" column blank and the system will total it for you.`,
         }),
       );
     }

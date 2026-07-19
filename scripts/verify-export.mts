@@ -76,20 +76,17 @@ for (const kind of MASTER_KINDS) {
   );
 }
 
-console.log("\n[4] Master data: numbers export plain, selects export as their label");
+console.log("\n[4] Master data: selects export as their label");
 {
-  const def = toClientDef(RESOURCES["grants"]);
-  const revenueField = def.fields.find((f) => f.name === "revenueTypeId")!;
-  const statusField = def.fields.find((f) => f.name === "status")!;
+  const def = toClientDef(RESOURCES["funds"]);
+  const typeField = def.fields.find((f) => f.name === "fundTypeId")!;
   const relLabels: RelLabels = {
-    revenueTypeId: new Map([["rt_1", "Federal"]]),
+    fundTypeId: new Map([["ft_1", "General"]]),
   };
   const row = {
-    grantId: "G-100",
-    name: "Title I",
-    revenueTypeId: "rt_1",
-    awardAmount: "1000000",
-    status: "ACTIVE",
+    code: "1000",
+    name: "General Fund",
+    fundTypeId: "ft_1",
     active: true,
   };
   const headers = masterExportHeaders(def);
@@ -97,26 +94,18 @@ console.log("\n[4] Master data: numbers export plain, selects export as their la
   const at = (label: string) => cells[headers.indexOf(label)];
 
   assert(
-    at("Award Amount") === "1000000",
-    `award amount exports plain ("${at("Award Amount")}"), NOT currency-formatted`,
-  );
-  assert(
-    at(revenueField.label) === "Federal",
+    at(typeField.label) === "General",
     "a type column exports the type's NAME (what the importer resolves by), not its id",
-  );
-  assert(
-    at(statusField.label) === "Active",
-    "a fixed-option column exports the option LABEL (what the importer resolves by)",
   );
   assert(cells[cells.length - 1] === "Active", "the trailing Status column reflects `active`");
 }
 
 console.log("\n[5] Master data: blanks export empty, not the on-screen “—” placeholder");
 {
-  const def = toClientDef(RESOURCES["grants"]);
+  const def = toClientDef(RESOURCES["funds"]);
   const headers = masterExportHeaders(def);
   const cells = masterExportRow(
-    { grantId: "G-1", name: "Bare", active: false },
+    { code: "2000", name: "Bare", active: false },
     def,
     {},
   );
@@ -125,8 +114,8 @@ console.log("\n[5] Master data: blanks export empty, not the on-screen “—”
     "no em-dash placeholders leak into the file (they would re-import as junk)",
   );
   assert(
-    cells[headers.indexOf("Award Amount")] === "",
-    "a missing number is an empty cell",
+    cells[headers.indexOf("Fund type")] === "",
+    "a missing select is an empty cell",
   );
   assert(cells[cells.length - 1] === "Inactive", "an inactive row says Inactive");
 }

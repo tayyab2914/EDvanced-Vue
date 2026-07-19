@@ -14,8 +14,8 @@ export default async function PoliciesPage() {
   return (
     <div className="animate-fade-up space-y-[18px]">
       <PageHeader
-        title="Financial policies"
-        description="Your own thresholds for when a number is worth worrying about. They drive the import warnings and every alert on your dashboards."
+        title="Financial Policies"
+        description="Configure the policies, thresholds, and validation rules that determine import warnings, dashboard alerts, and financial status indicators."
       />
       <PolicyForm
         groups={POLICY_GROUPS}

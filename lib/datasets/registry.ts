@@ -79,7 +79,16 @@ const COST_CENTER_ALIASES = [
   "School",
 ];
 
-const PROJECT_GRANT_ALIASES = ["Project / Grant", "Project/Grant", "Grant / Project"];
+// The unified project column. The client's workbook still heads it "Project / Grant" on
+// the detail sheets, so those spellings stay accepted even though the canonical label is
+// now "Project Code" — one Project master backs them all.
+const PROJECT_GRANT_ALIASES = [
+  "Project / Grant",
+  "Project/Grant",
+  "Grant / Project",
+  "Project Number",
+  "Project",
+];
 
 // ===================== Annual =====================
 
@@ -93,19 +102,15 @@ const revenueBudget: DatasetDef = {
     code("fundId", "Fund Code", "fund"),
     code("revenueSourceId", "Revenue Object / Source Code", "revenueSource", "required", REVENUE_SOURCE_ALIASES),
     code("costCenterId", "Cost Center Code", "costCenter", "optional", COST_CENTER_ALIASES),
-    // Named projectOrGrant, not capitalProjectId, even though the column says "Project
-    // Code": resolution fans a grantOrProject field out into grantId OR capitalProjectId
-    // depending on what it matched, so a field named for one of the two outcomes would
-    // hold nothing whenever the other one happened.
-    code("projectOrGrant", "Project Code", "grantOrProject", "optional", PROJECT_GRANT_ALIASES),
+    code("projectId", "Project Code", "project", "optional", PROJECT_GRANT_ALIASES),
     amount("amount", "Budget Amount"),
   ],
-  grain: ["fundId", "revenueSourceId", "costCenterId", "projectOrGrant"],
+  grain: ["fundId", "revenueSourceId", "costCenterId", "projectId"],
   schema: z.object({
     fundId: requiredCode("Fund Code"),
     revenueSourceId: requiredCode("Revenue source code"),
     costCenterId: optionalCode,
-    projectOrGrant: optionalCode,
+    projectId: optionalCode,
     amount: requiredAmount("Budget Amount"),
   }),
 };
@@ -123,16 +128,16 @@ const expenditureBudget: DatasetDef = {
     // The workbook marks this Recommended, not Optional: a district CAN report without
     // it, but every cost-centre view goes blind if they do. Absence is a Warning.
     code("costCenterId", "Cost Center Code", "costCenter", "recommended", COST_CENTER_ALIASES),
-    code("projectOrGrant", "Project Code", "grantOrProject", "optional", PROJECT_GRANT_ALIASES),
+    code("projectId", "Project Code", "project", "optional", PROJECT_GRANT_ALIASES),
     amount("amount", "Budget Amount"),
   ],
-  grain: ["fundId", "functionId", "objectId", "costCenterId", "projectOrGrant"],
+  grain: ["fundId", "functionId", "objectId", "costCenterId", "projectId"],
   schema: z.object({
     fundId: requiredCode("Fund Code"),
     functionId: requiredCode("Function Code"),
     objectId: requiredCode("Object Code"),
     costCenterId: optionalCode,
-    projectOrGrant: optionalCode,
+    projectId: optionalCode,
     amount: requiredAmount("Budget Amount"),
   }),
 };
@@ -151,9 +156,15 @@ const openingFundBalance: DatasetDef = {
     amount("pyCommitted", "Prior Year Committed"),
     amount("pyAssigned", "Prior Year Assigned"),
     amount("pyUnassigned", "Prior Year Unassigned"),
-    calculated("pyTotal", "Prior Year Total Ending Fund Balance", {
-      plus: ["pyNonspendable", "pyRestricted", "pyCommitted", "pyAssigned", "pyUnassigned"],
-    }),
+    calculated(
+      "pyTotal",
+      "Prior Year Total Ending Fund Balance",
+      { plus: ["pyNonspendable", "pyRestricted", "pyCommitted", "pyAssigned", "pyUnassigned"] },
+      // The platform totals this — the district enters only the five components. Keeping it
+      // off the file removes the whole class of "your total doesn't match its parts" errors
+      // districts were tripping on, for a figure they never needed to supply.
+      { computeOnly: true },
+    ),
     amount("begNonspendable", "Beginning Nonspendable", "optional"),
     amount("begRestricted", "Beginning Restricted", "optional"),
     amount("begCommitted", "Beginning Committed", "optional"),
@@ -161,9 +172,12 @@ const openingFundBalance: DatasetDef = {
     // Required while its four siblings are optional: this is the reserve figure every
     // fund-balance KPI and threshold in the platform is built on.
     amount("begUnassigned", "Beginning Unassigned"),
-    calculated("begTotal", "Beginning Total Fund Balance", {
-      plus: ["begNonspendable", "begRestricted", "begCommitted", "begAssigned", "begUnassigned"],
-    }),
+    calculated(
+      "begTotal",
+      "Beginning Total Fund Balance",
+      { plus: ["begNonspendable", "begRestricted", "begCommitted", "begAssigned", "begUnassigned"] },
+      { computeOnly: true },
+    ),
     { name: "effectiveDate", label: "Effective Date", requiredness: "required", type: "date" },
     code("statusId", "Status", "status", "required"), // Preliminary · Unaudited · Final
     { name: "notes", label: "Notes", requiredness: "optional", type: "text" },
@@ -203,19 +217,19 @@ const revenueDetail: DatasetDef = {
     code("revenueSourceId", "Revenue Source / Object Code", "revenueSource", "required", REVENUE_SOURCE_ALIASES),
     // Required here but optional on the annual budget — and this column is why deferring
     // the Grants Activity importer costs so little: grant revenue arrives tagged, here,
-    // on every row.
-    code("projectOrGrant", "Project / Grant", "grantOrProject", "required", PROJECT_GRANT_ALIASES),
+    // on every row, against the unified Project master.
+    code("projectId", "Project Code", "project", "required", PROJECT_GRANT_ALIASES),
     code("costCenterId", "School / Cost Center", "costCenter", "optional", COST_CENTER_ALIASES),
     // The file's Budget column IS the current/revised budget, tagged CURRENT on ingest.
     amount("budget", "Budget"),
     amount("actualMtd", "Actual MTD"),
     amount("actualYtd", "Actual YTD"),
   ],
-  grain: ["fundId", "revenueSourceId", "projectOrGrant", "costCenterId"],
+  grain: ["fundId", "revenueSourceId", "projectId", "costCenterId"],
   schema: z.object({
     fundId: requiredCode("Fund Code"),
     revenueSourceId: requiredCode("Revenue source code"),
-    projectOrGrant: requiredCode("Project / Grant"),
+    projectId: requiredCode("Project Code"),
     costCenterId: optionalCode,
     budget: requiredAmount("Budget"),
     actualMtd: requiredAmount("Actual MTD"),
@@ -234,7 +248,7 @@ const expenditureDetail: DatasetDef = {
     code("functionId", "Function Code", "function"),
     code("objectId", "Object Code", "object"),
     code("costCenterId", "Cost Center", "costCenter", "optional", COST_CENTER_ALIASES),
-    code("projectOrGrant", "Project / Grant", "grantOrProject", "required", PROJECT_GRANT_ALIASES),
+    code("projectId", "Project Code", "project", "required", PROJECT_GRANT_ALIASES),
     amount("budget", "Budget"),
     amount("actualMtd", "Actual MTD"),
     amount("actualYtd", "Actual YTD"),
@@ -245,13 +259,13 @@ const expenditureDetail: DatasetDef = {
       minus: ["actualYtd", "encumbrances"],
     }),
   ],
-  grain: ["fundId", "functionId", "objectId", "costCenterId", "projectOrGrant"],
+  grain: ["fundId", "functionId", "objectId", "costCenterId", "projectId"],
   schema: z.object({
     fundId: requiredCode("Fund Code"),
     functionId: requiredCode("Function Code"),
     objectId: requiredCode("Object Code"),
     costCenterId: optionalCode,
-    projectOrGrant: requiredCode("Project / Grant"),
+    projectId: requiredCode("Project Code"),
     budget: requiredAmount("Budget"),
     actualMtd: requiredAmount("Actual MTD"),
     actualYtd: requiredAmount("Actual YTD"),
@@ -312,14 +326,18 @@ export function acceptedHeaders(field: DatasetField): string[] {
 }
 
 /**
- * The blank template: every field label, in declaration order.
+ * The blank template: every field label the district supplies, in declaration order.
  *
- * Calculated columns are included on purpose. The platform computes them regardless, but
- * a district exporting from its ERP will have them anyway, and a template that omitted
- * them would imply they are unwelcome — when in fact supplying them is useful: we
- * recompute and compare, which is how a district finds out its own ERP disagrees with
- * itself.
+ * Checksum calculated columns (Available Budget, Ending Cash) are included on purpose. The
+ * platform computes them regardless, but a district exporting from its ERP will have them
+ * anyway, and a template that omitted them would imply they are unwelcome — when in fact
+ * supplying them is useful: we recompute and compare, which is how a district finds out
+ * its own ERP disagrees with itself.
+ *
+ * `computeOnly` calculated columns (the Opening Fund Balance totals) are the exception and
+ * are left off: the platform owns them, the district enters only the components, and a
+ * total on the template is only an invitation to enter one that doesn't add up.
  */
 export function templateHeaders(def: DatasetDef): string[] {
-  return def.fields.map((f) => f.label);
+  return def.fields.filter((f) => !f.computeOnly).map((f) => f.label);
 }

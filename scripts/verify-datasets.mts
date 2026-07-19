@@ -147,6 +147,17 @@ assert(
   begTotal?.formula?.plus.length === 5 && !begTotal.formula.minus,
   "Beginning Total is the sum of its five components",
 );
+// The Opening Fund Balance totals are the platform's to compute — the district enters the
+// components only, so both are compute-only and off the import surface.
+assert(
+  pyTotal?.computeOnly === true && begTotal?.computeOnly === true,
+  "both Opening Fund Balance totals are compute-only",
+);
+// The checksums stay checksums: still on the file, still compared.
+assert(
+  !avail?.computeOnly && !ending?.computeOnly,
+  "Available Budget and Ending Cash remain checksums, not compute-only",
+);
 
 // ---- grain ----
 console.log("\nGrain");
@@ -187,8 +198,14 @@ assert(schemaDrift === null, `every field has a schema key and vice versa${schem
 // ---- template round-trip ----
 console.log("\nBlank template round-trips");
 assert(
-  defs.every((d) => templateHeaders(d).length === d.fields.length),
-  "the template names every field, including calculated ones",
+  defs.every((d) => templateHeaders(d).length === d.fields.filter((f) => !f.computeOnly).length),
+  "the template names every field the district supplies — checksums included, compute-only totals excluded",
+);
+// The compute-only totals must NOT appear on the blank template.
+assert(
+  !templateHeaders(DATASET_DEFS["opening-fund-balance"]).includes("Beginning Total Fund Balance") &&
+    !templateHeaders(DATASET_DEFS["opening-fund-balance"]).includes("Prior Year Total Ending Fund Balance"),
+  "the Opening Fund Balance template omits both computed totals",
 );
 // Emitting a header the importer cannot match back would make the template a trap.
 let unmatched: string | null = null;
@@ -265,7 +282,7 @@ console.log("\nSchemas accept good rows and reject bad ones");
 const goodRevenue = {
   fundId: "0101",
   revenueSourceId: "3310",
-  projectOrGrant: "TITLE-I",
+  projectId: "TITLE-I",
   costCenterId: "",
   budget: "$1,000,000.00",
   actualMtd: "80,000",

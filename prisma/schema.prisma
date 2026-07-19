@@ -196,6 +196,7 @@ model District {
   schools         School[]
   grants          Grant[]
   capitalProjects CapitalProject[]
+  projects        Project[]
   funds           Fund[]
   revenueSources  RevenueSource[]
   functions       AccountFunction[]
@@ -352,6 +353,11 @@ model School {
   @@index([typeId])
 }
 
+/// DORMANT (V2). The Grants module is not part of the MVP. Districts maintain projects
+/// in the unified `Project` master; when a district subscribes to Grants in V2, a grant
+/// will reference a Project (grant.projectId) and add its grant-specific fields on top.
+/// Kept in the schema so those field definitions survive; no longer referenced by the
+/// finance pipeline and removed from the Master Data nav.
 model Grant {
   id            String      @id @default(cuid())
   districtId    String
@@ -371,15 +377,14 @@ model Grant {
   district    District     @relation(fields: [districtId], references: [id], onDelete: Cascade)
   revenueType RevenueType? @relation(fields: [revenueTypeId], references: [id], onDelete: SetNull)
 
-  budgetLines        BudgetLine[]
-  revenueActuals     RevenueActual[]
-  expenditureActuals ExpenditureActual[]
-
   @@unique([districtId, grantId])
   @@index([districtId])
   @@index([revenueTypeId])
 }
 
+/// DORMANT (V2). The Capital Projects module is not part of the MVP — see the note on
+/// `Grant`. When a district subscribes in V2, a capital project references a Project and
+/// adds its own fields (project type, status). Kept in the schema; not in the MVP nav.
 model CapitalProject {
   id          String        @id @default(cuid())
   districtId  String
@@ -394,11 +399,31 @@ model CapitalProject {
 
   district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
 
+  @@unique([districtId, projectId])
+  @@index([districtId])
+}
+
+/// The unified Project master (MVP). One shared list per district, keyed by a
+/// district-unique Project Number. Every periodic detail row that names a "Project /
+/// Grant" resolves to exactly one of these. In V2 the Grant and Capital Project modules
+/// reference a Project rather than owning their own lists — a project can be referenced
+/// by more than one module (e.g. a capital project funded by a grant).
+model Project {
+  id            String   @id @default(cuid())
+  districtId    String
+  projectNumber String // "Project Number"
+  name          String // "Project Name"
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
   budgetLines        BudgetLine[]
   revenueActuals     RevenueActual[]
   expenditureActuals ExpenditureActual[]
 
-  @@unique([districtId, projectId])
+  @@unique([districtId, projectNumber])
   @@index([districtId])
 }
 
@@ -880,19 +905,17 @@ model BudgetLine {
   functionId       String? // EXPENDITURE lines
   objectId         String? // EXPENDITURE lines
   costCenterId     String?
-  capitalProjectId String?
-  grantId          String?
+  projectId        String?
   amount           Decimal    @db.Decimal(18, 2)
 
-  district       District         @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  version        DatasetVersion   @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  fund           Fund             @relation(fields: [fundId], references: [id], onDelete: Restrict)
-  revenueSource  RevenueSource?   @relation(fields: [revenueSourceId], references: [id], onDelete: Restrict)
-  function       AccountFunction? @relation(fields: [functionId], references: [id], onDelete: Restrict)
-  object         AccountObject?   @relation(fields: [objectId], references: [id], onDelete: Restrict)
-  costCenter     School?          @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
-  capitalProject CapitalProject?  @relation(fields: [capitalProjectId], references: [id], onDelete: Restrict)
-  grant          Grant?           @relation(fields: [grantId], references: [id], onDelete: Restrict)
+  district      District         @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  version       DatasetVersion   @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fund          Fund             @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  revenueSource RevenueSource?   @relation(fields: [revenueSourceId], references: [id], onDelete: Restrict)
+  function      AccountFunction? @relation(fields: [functionId], references: [id], onDelete: Restrict)
+  object        AccountObject?   @relation(fields: [objectId], references: [id], onDelete: Restrict)
+  costCenter    School?          @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  project       Project?         @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
   @@index([districtId, fiscalYear, kind, budgetType])
   @@index([versionId])
@@ -908,24 +931,22 @@ model RevenueActual {
   period           Int
   fundId           String
   revenueSourceId  String
-  /// Project/Grant is a Required column on this import; whichever it names resolves
-  /// into one of these two. This is why deferring the Grants Activity importer to
-  /// Phase 2 loses so little: grant revenue still arrives, tagged, right here.
-  grantId          String?
-  capitalProjectId String?
+  /// Project / Grant is a Required column on this import; whatever it names resolves to
+  /// one Project in the district's unified master. Grant revenue still arrives tagged
+  /// here, which is why deferring the Grants Activity module to V2 loses so little.
+  projectId        String?
   costCenterId     String?
   /// The file's Budget column == the CURRENT/revised budget for this line.
   budget           Decimal @db.Decimal(18, 2)
   actualMtd        Decimal @db.Decimal(18, 2)
   actualYtd        Decimal @db.Decimal(18, 2)
 
-  district       District        @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  version        DatasetVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  fund           Fund            @relation(fields: [fundId], references: [id], onDelete: Restrict)
-  revenueSource  RevenueSource   @relation(fields: [revenueSourceId], references: [id], onDelete: Restrict)
-  grant          Grant?          @relation(fields: [grantId], references: [id], onDelete: Restrict)
-  capitalProject CapitalProject? @relation(fields: [capitalProjectId], references: [id], onDelete: Restrict)
-  costCenter     School?         @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  district      District       @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  version       DatasetVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fund          Fund           @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  revenueSource RevenueSource  @relation(fields: [revenueSourceId], references: [id], onDelete: Restrict)
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  costCenter    School?        @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
 
   @@index([districtId, fiscalYear, period])
   @@index([versionId])
@@ -945,8 +966,7 @@ model ExpenditureActual {
   functionId       String
   objectId         String
   costCenterId     String?
-  grantId          String?
-  capitalProjectId String?
+  projectId        String?
   budget           Decimal @db.Decimal(18, 2) // CURRENT/revised, as above
   actualMtd        Decimal @db.Decimal(18, 2)
   actualYtd        Decimal @db.Decimal(18, 2)
@@ -956,14 +976,13 @@ model ExpenditureActual {
   /// also carry it, in which case we recompute and compare rather than trust it.
   availableBudget  Decimal @db.Decimal(18, 2)
 
-  district       District        @relation(fields: [districtId], references: [id], onDelete: Cascade)
-  version        DatasetVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  fund           Fund            @relation(fields: [fundId], references: [id], onDelete: Restrict)
-  function       AccountFunction @relation(fields: [functionId], references: [id], onDelete: Restrict)
-  object         AccountObject   @relation(fields: [objectId], references: [id], onDelete: Restrict)
-  costCenter     School?         @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
-  grant          Grant?          @relation(fields: [grantId], references: [id], onDelete: Restrict)
-  capitalProject CapitalProject? @relation(fields: [capitalProjectId], references: [id], onDelete: Restrict)
+  district      District        @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  version       DatasetVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  fund          Fund            @relation(fields: [fundId], references: [id], onDelete: Restrict)
+  function      AccountFunction @relation(fields: [functionId], references: [id], onDelete: Restrict)
+  object        AccountObject   @relation(fields: [objectId], references: [id], onDelete: Restrict)
+  costCenter    School?         @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  project       Project?        @relation(fields: [projectId], references: [id], onDelete: Restrict)
 
   @@index([districtId, fiscalYear, period])
   @@index([versionId])

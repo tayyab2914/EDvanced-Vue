@@ -87,8 +87,8 @@ export default async function VersionsPage() {
   return (
     <div className="animate-fade-up space-y-[18px]">
       <PageHeader
-        title="Data & versions"
-        description="Every upload is kept. One version per period drives the dashboards; the rest stay for audit and rollback."
+        title="Version Management"
+        description="Nothing is overwritten. Every upload is saved, one version powers the dashboards, and previous versions remain available for audit, comparison, or restoration."
         actions={
           userCan(user, "upload_data") ? (
             <Link href="/data/upload">

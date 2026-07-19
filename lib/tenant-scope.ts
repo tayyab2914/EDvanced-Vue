@@ -14,6 +14,7 @@ const TENANT_MODELS = new Set([
   "School",
   "Grant",
   "CapitalProject",
+  "Project",
   "Fund",
   "RevenueSource",
   "AccountFunction",

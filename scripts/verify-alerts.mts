@@ -49,9 +49,7 @@ function healthy(): AlertFacts {
     expenditureForecastVariancePercent: d("0"),
     expenditureMomIncreasePercent: d("2"),
 
-    endingCash: d("50000000"),
     daysCashOnHand: d("120"),
-    forecastCash: d("40000000"),
     cashDecreasePercent: d("1"),
 
     reservePercent: d("8"),
@@ -72,13 +70,13 @@ const severityOf = (id: string, f: AlertFacts, p: PolicyValues = P) =>
 
 // ===================== the catalogue =====================
 console.log("\nThe workbook's counts");
-assert(ALERTS.length === 27, `27 alerts (${ALERTS.length})`);
+assert(ALERTS.length === 24, `24 alerts (${ALERTS.length})`);
 assert(alertsByGroup("revenue").length === 5, `revenue: 5 (${alertsByGroup("revenue").length})`);
 assert(
   alertsByGroup("expenditure").length === 8,
   `expenditure: 8 (${alertsByGroup("expenditure").length})`,
 );
-assert(alertsByGroup("cash").length === 6, `cash: 6 (${alertsByGroup("cash").length})`);
+assert(alertsByGroup("cash").length === 3, `cash: 3 (${alertsByGroup("cash").length})`);
 assert(
   alertsByGroup("fundBalance").length === 8,
   `fund balance: 8 (${alertsByGroup("fundBalance").length})`,
@@ -108,7 +106,6 @@ const blind: AlertFacts = {
   expenditureForecastVariancePercent: null,
   expenditureMomIncreasePercent: null,
   daysCashOnHand: null,
-  forecastCash: null,
   cashDecreasePercent: null,
   reservePercent: null,
   forecastReservePercent: null,
@@ -283,14 +280,6 @@ assert(
   "90 days is fine",
 );
 assert(
-  fires("CASH_BALANCE_WARNING", { ...healthy(), endingCash: d("14000000") }),
-  "$14M cash warns (threshold $15M)",
-);
-assert(
-  fires("CASH_BALANCE_CRITICAL", { ...healthy(), endingCash: d("9000000") }),
-  "$9M is critical (threshold $10M)",
-);
-assert(
   fires("SIGNIFICANT_CASH_DECREASE", { ...healthy(), cashDecreasePercent: d("12") }),
   "a 12% cash drop warns (warning is 10%)",
 );
@@ -298,10 +287,6 @@ assert(
   severityOf("SIGNIFICANT_CASH_DECREASE", { ...healthy(), cashDecreasePercent: d("25") }) ===
     "CRITICAL",
   "25% is critical (critical is 20%)",
-);
-assert(
-  fires("FORECAST_CASH_BELOW_THRESHOLD", { ...healthy(), forecastCash: d("14000000") }),
-  "a forecast dip below $15M fires",
 );
 
 // ===================== fund balance =====================
@@ -412,11 +397,8 @@ const TRIPS: Record<string, Partial<AlertFacts>> = {
   FORECAST_EXCEEDS_BUDGET: { expenditureForecast: d("13000000") },
   MATERIAL_FORECAST_VARIANCE: { expenditureForecastVariancePercent: d("6") },
   SIGNIFICANT_MOM_INCREASE: { expenditureMomIncreasePercent: d("30") },
-  CASH_BALANCE_WARNING: { endingCash: d("14000000") },
-  CASH_BALANCE_CRITICAL: { endingCash: d("9000000") },
   DAYS_CASH_WARNING: { daysCashOnHand: d("50") },
   DAYS_CASH_CRITICAL: { daysCashOnHand: d("40") },
-  FORECAST_CASH_BELOW_THRESHOLD: { forecastCash: d("14000000") },
   SIGNIFICANT_CASH_DECREASE: { cashDecreasePercent: d("12") },
   FUND_BALANCE_BELOW_TARGET: { reservePercent: d("4.5") },
   FUND_BALANCE_WARNING: { reservePercent: d("3.5") },
@@ -429,7 +411,7 @@ const TRIPS: Record<string, Partial<AlertFacts>> = {
 };
 
 // An alert nobody can trip is an alert a district will never receive, and nobody notices
-// a missing alarm. Every one of the 27 needs a fixture here.
+// a missing alarm. Every one of the 24 needs a fixture here.
 const missing = ALERTS.filter((a) => !TRIPS[a.id]).map((a) => a.id);
 assert(missing.length === 0, `every alert has a fixture that trips it${missing.length ? ` (missing: ${missing.join(", ")})` : ""}`);
 
@@ -437,7 +419,7 @@ const unreachable: string[] = [];
 for (const [id, patch] of Object.entries(TRIPS)) {
   if (!fires(id, { ...healthy(), ...patch })) unreachable.push(id);
 }
-assert(unreachable.length === 0, `all 27 fire on their own fixture${unreachable.length ? ` (silent: ${unreachable.join(", ")})` : ""}`);
+assert(unreachable.length === 0, `all 24 fire on their own fixture${unreachable.length ? ` (silent: ${unreachable.join(", ")})` : ""}`);
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed === 0 ? 0 : 1);

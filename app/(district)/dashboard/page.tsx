@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { getRecentAuditRows } from "@/lib/audit";
+import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { RevenueExpenseBars, Donut } from "@/components/dashboard/charts";
 import { Icon, type IconName } from "@/components/icons";
@@ -68,11 +69,10 @@ function StatTile({
 
 export default async function DistrictDashboard() {
   const { db, user, districtId } = await getTenantDb();
-  const [schools, grants, projects, funds, revenueSources, functions, objects] =
+  const [schools, projects, funds, revenueSources, functions, objects] =
     await Promise.all([
       db.school.count(),
-      db.grant.count(),
-      db.capitalProject.count(),
+      db.project.count(),
       db.fund.count(),
       db.revenueSource.count(),
       db.accountFunction.count(),
@@ -88,12 +88,15 @@ export default async function DistrictDashboard() {
   const masterRows: { label: string; count: number; href: string; icon: IconName }[] = [
     { label: "Funds", count: funds, href: "/master-data?tab=funds", icon: "database" },
     { label: "Cost centers", count: schools, href: "/master-data?tab=cost-centers", icon: "building" },
-    { label: "Grants", count: grants, href: "/master-data?tab=grants", icon: "reports" },
-    { label: "Capital projects", count: projects, href: "/master-data?tab=capital-projects", icon: "database" },
+    { label: "Projects", count: projects, href: "/master-data?tab=projects", icon: "reports" },
   ];
 
   return (
     <div className="animate-fade-up space-y-[18px]">
+      <PageHeader
+        title="Executive Dashboard"
+        description="A district-wide view of budget, revenue, and spending for the current fiscal year."
+      />
       <div className="flex items-center gap-2 rounded-lg border border-[#d5e3fb] bg-[#f2f7ff] px-3.5 py-2 text-[12.5px] text-[#33507a]">
         <span className="font-semibold text-brand">ⓘ</span>
         <span>

@@ -29,27 +29,38 @@ export default async function DistrictLayout({
 
   const isExternal = user.role === Role.EXTERNAL_USER;
 
-  const overview: NavItem[] = [
-    { label: "Dashboard", href: "/dashboard", icon: "dashboard" },
-    { label: "Master data", href: "/master-data", icon: "database" },
+  // MAIN — the district's financial views. Only the Executive Dashboard exists today;
+  // Revenues / Expenditures / Fund Balance / Cash Position are planned as their own pages.
+  const main: NavItem[] = [
+    { label: "Executive Dashboard", href: "/dashboard", icon: "dashboard" },
   ];
-  // Reading the data is a view permission; uploading is not. A Viewer (or a View Only
-  // external user) sees the history and the numbers, and no Upload button.
+
+  // DATA MANAGEMENT — uploads/versions and the chart of accounts. Reading the data is a
+  // view permission; uploading is not. A Viewer (or a View Only external user) sees the
+  // history and the numbers, and no Upload button.
+  const dataManagement: NavItem[] = [
+    { label: "Chart of Accounts", href: "/master-data", icon: "database" },
+  ];
   if (userCan(user, "view_dashboards")) {
-    overview.push({ label: "Data", href: "/data/versions", icon: "reports" });
-    // Readable by anyone who can see the dashboards — a Viewer should be able to see the
-    // rules they are being measured against, even though only an admin can change them.
-    overview.push({ label: "Policies", href: "/policies", icon: "shield" });
+    dataManagement.unshift({ label: "Data Uploads", href: "/data/versions", icon: "reports" });
   }
+
   const admin: NavItem[] = [];
+  if (userCan(user, "configure_district"))
+    admin.push({ label: "District Settings", href: "/settings", icon: "settings" });
+  // Readable by anyone who can see the dashboards — a Viewer should be able to see the
+  // rules they are being measured against, even though only an admin can change them.
+  if (userCan(user, "view_dashboards"))
+    admin.push({ label: "Financial Policies", href: "/policies", icon: "shield" });
   if (userCan(user, "manage_users_own"))
     admin.push({ label: "Users", href: "/users", icon: "users" });
-  if (userCan(user, "configure_district"))
-    admin.push({ label: "Settings", href: "/settings", icon: "settings" });
   if (userCan(user, "view_audit"))
-    admin.push({ label: "Audit", href: "/audit", icon: "activity" });
+    admin.push({ label: "Audit Log", href: "/audit", icon: "activity" });
 
-  const nav: NavGroup[] = [{ label: "Overview", items: overview }];
+  const nav: NavGroup[] = [
+    { label: "Main", items: main },
+    { label: "Data Management", items: dataManagement },
+  ];
   if (admin.length) nav.push({ label: "Administration", items: admin });
 
   // External users get a switcher over their other live districts; district staff belong to

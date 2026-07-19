@@ -9,9 +9,13 @@ import type { PolicyValues } from "@/lib/policies/registry";
  * group, a title, and a predicate over the figures and the district's own thresholds. The
  * engine walks the list; nothing else knows how many there are.
  *
- * COUNTS, from the workbook's four tables: revenue 5, expenditure 8, cash 6, fund
- * balance 8 = 27. `verify:alerts` asserts each group's count, because the alert a district
+ * COUNTS, from the workbook's four tables: revenue 5, expenditure 8, cash 3, fund
+ * balance 8 = 24. `verify:alerts` asserts each group's count, because the alert a district
  * never receives is the one nobody notices is missing.
+ *
+ * Cash was trimmed to three: the district's cash policy is now Days Cash on Hand and Cash
+ * Decrease only. The two Cash Balance alerts and the Forecast Cash alert were retired along
+ * with the Cash Forecast Thresholds they read.
  *
  * Severity is returned, not declared. The workbook lists "Material Forecast Variance" as
  * ONE alert that fires "at the warning or critical threshold" — while listing "Budget
@@ -20,8 +24,6 @@ import type { PolicyValues } from "@/lib/policies/registry";
  *
  * Pure and client-safe — this also labels an alert on screen.
  */
-
-const D = Prisma.Decimal;
 
 export type AlertGroup = "revenue" | "expenditure" | "cash" | "fundBalance";
 export type AlertSeverity = "WARNING" | "CRITICAL";
@@ -48,9 +50,7 @@ export interface AlertFacts {
   expenditureForecastVariancePercent: Prisma.Decimal | null;
   expenditureMomIncreasePercent: Prisma.Decimal | null;
 
-  endingCash: Prisma.Decimal;
   daysCashOnHand: Prisma.Decimal | null;
-  forecastCash: Prisma.Decimal | null;
   cashDecreasePercent: Prisma.Decimal | null;
 
   reservePercent: Prisma.Decimal | null;
@@ -253,28 +253,7 @@ export const ALERTS: AlertDef[] = [
     },
   },
 
-  // ===================== Cash (6) =====================
-  {
-    id: "CASH_BALANCE_WARNING",
-    group: "cash",
-    title: "Cash balance",
-    evaluate: (f, p) => {
-      const w = n(p.cash.forecastCashWarning);
-      if (!f.endingCash.lessThan(w)) return null;
-      if (f.endingCash.lessThan(n(p.cash.forecastCashCritical))) return null;
-      return warn(`Cash is ${money(f.endingCash)}, below the ${money(new D(w))} threshold.`);
-    },
-  },
-  {
-    id: "CASH_BALANCE_CRITICAL",
-    group: "cash",
-    title: "Cash balance critical",
-    evaluate: (f, p) => {
-      const c = n(p.cash.forecastCashCritical);
-      if (!f.endingCash.lessThan(c)) return null;
-      return crit(`Cash is ${money(f.endingCash)}, below the ${money(new D(c))} critical threshold.`);
-    },
-  },
+  // ===================== Cash (3) =====================
   {
     id: "DAYS_CASH_WARNING",
     group: "cash",
@@ -296,21 +275,6 @@ export const ALERTS: AlertDef[] = [
       return crit(
         `${f.daysCashOnHand!.toFixed(0)} days of cash on hand, below the ${c}-day critical threshold.`,
       );
-    },
-  },
-  {
-    id: "FORECAST_CASH_BELOW_THRESHOLD",
-    group: "cash",
-    title: "Forecast cash below threshold",
-    evaluate: (f, p) => {
-      if (f.forecastCash === null) return null;
-      const w = n(p.cash.forecastCashWarning);
-      const c = n(p.cash.forecastCashCritical);
-      const msg = (t: number) =>
-        `Projected cash dips to ${money(f.forecastCash!)}, below the ${money(new D(t))} threshold.`;
-      if (f.forecastCash.lessThan(c)) return crit(msg(c));
-      if (f.forecastCash.lessThan(w)) return warn(msg(w));
-      return null;
     },
   },
   {

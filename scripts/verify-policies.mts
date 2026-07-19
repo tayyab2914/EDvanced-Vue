@@ -68,13 +68,14 @@ async function main() {
   assert(d.expenditure.budgetExceeded === 100, "budget exceeded is 100%");
   assert(d.expenditure.momIncreaseWarning === 15, "month-over-month warning is 15%");
   assert(d.expenditure.momIncreaseCritical === 25, "month-over-month critical is 25%");
+  assert(d.expenditure.ignoreSalaryObjectsMom === false, "salary objects are counted in MoM by default");
   assert(d.cash.daysCashWarning === 60, "days cash warning is 60 days");
   assert(d.cash.daysCashCritical === 45, "days cash critical is 45 days");
-  assert(d.cash.forecastCashWarning === 15_000_000, "forecast cash warning is $15.0M");
-  assert(d.cash.forecastCashCritical === 10_000_000, "forecast cash critical is $10.0M");
   assert(d.cash.decreaseWarning === 10, "cash decrease warning is 10%");
   assert(d.cash.decreaseCritical === 20, "cash decrease critical is 20%");
-  assert(d.fundBalance.target === 5, "target unassigned fund balance is 5%");
+  assert(d.fundBalance.target === 5, "district target unassigned fund balance is 5%");
+  assert(d.fundBalance.boardPolicyMinimum === 3, "board policy minimum is 3%");
+  assert(d.fundBalance.stateMinimum === 2, "state minimum is 2%");
   assert(d.fundBalance.warning === 4, "fund balance warning is 4%");
   assert(d.fundBalance.critical === 3, "fund balance critical is 3%");
 
@@ -109,8 +110,6 @@ async function main() {
   const ok = validateGroup("cash", {
     daysCashWarning: "60",
     daysCashCritical: "45",
-    forecastCashWarning: "15000000",
-    forecastCashCritical: "10000000",
     decreaseWarning: "10",
     decreaseCritical: "20",
   });

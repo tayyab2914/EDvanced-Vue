@@ -98,9 +98,12 @@ async function main() {
     const buf = readFileSync(join(DIR, `${file}.csv`));
     const text = buf.toString("utf8").split("\n")[0].split(",");
     const m = matchHeaders(def, text);
+    // The template carries every field the district supplies; compute-only fields (the
+    // Opening Fund Balance totals) are legitimately absent, so count against those.
+    const expected = def.fields.filter((f) => !f.computeOnly).length;
     assert(
-      m.columns.size === def.fields.length,
-      `${file}: all ${def.fields.length} columns match (${m.columns.size})`,
+      m.columns.size === expected && m.unknown.length === 0,
+      `${file}: all ${expected} columns match (${m.columns.size})`,
     );
   }
 
@@ -155,16 +158,21 @@ async function main() {
     "o.csv",
     readFileSync(join(DIR, "03-opening-fund-balance-FY2026-27.csv")),
   );
-  const badTotals = ofb.rows.filter((r) => {
-    const sum =
-      Number(r.raw.begNonspendable) +
-      Number(r.raw.begRestricted) +
-      Number(r.raw.begCommitted) +
-      Number(r.raw.begAssigned) +
-      Number(r.raw.begUnassigned);
-    return sum !== Number(r.raw.begTotal);
-  });
-  assert(badTotals.length === 0, "every Beginning Total is the sum of its five components");
+  // The totals are the platform's to compute, so the sample file must not carry them — and
+  // every row must still supply five numeric beginning components for that computation.
+  assert(
+    ofb.rows.every((r) => r.raw.begTotal === undefined && r.raw.pyTotal === undefined),
+    "the Opening Fund Balance sample omits the computed totals",
+  );
+  const badComponents = ofb.rows.filter((r) =>
+    ["begNonspendable", "begRestricted", "begCommitted", "begAssigned", "begUnassigned"].some(
+      (c) => Number.isNaN(Number(r.raw[c])),
+    ),
+  );
+  assert(
+    badComponents.length === 0,
+    "every Opening Fund Balance row supplies five numeric beginning components",
+  );
 
   // ---- every code the files reference is in the master-data files ----
   console.log("\nEvery code the files use exists in the master data beside them");
@@ -182,9 +190,7 @@ async function main() {
   const functions = masterCodes("03-functions.csv");
   const objects = masterCodes("04-objects.csv");
   const centers = masterCodes("05-cost-centers.csv");
-  const grants = masterCodes("06-grants.csv");
-  const projects = masterCodes("07-capital-projects.csv");
-  const projectsOrGrants = new Set([...grants, ...projects]);
+  const projects = new Set(masterCodes("06-projects.csv"));
 
   const dangling: string[] = [];
   for (const { file, slug } of FILES) {
@@ -200,7 +206,7 @@ async function main() {
       check("functionId", functions, "function");
       check("objectId", objects, "object");
       check("costCenterId", centers, "cost center");
-      check("projectOrGrant", projectsOrGrants, "project/grant");
+      check("projectId", projects, "project");
     }
   }
   assert(

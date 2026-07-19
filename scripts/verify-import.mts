@@ -8,7 +8,7 @@ import { DATASET_DEFS } from "@/lib/datasets/registry";
 import { parseFile, formatOf, UnsupportedFileError } from "@/lib/import/parse/rows";
 import { matchHeaders, normalizeHeader, suggestFor } from "@/lib/import/parse/headers";
 import { coerceCell, excelSerialToISO, isExcelSerial } from "@/lib/import/parse/values";
-import { loadResolveMaps, resolveCode, resolveProjectOrGrant } from "@/lib/import/resolve";
+import { loadResolveMaps, resolveCode } from "@/lib/import/resolve";
 import { readStagedRows, stageRows } from "@/lib/import/stage";
 
 /**
@@ -227,8 +227,12 @@ async function main() {
           { code: "0900", name: "Also Strips To 900" }, // ...as does this
         ]),
       });
-      await t.grant.createMany({ data: scoped([{ grantId: "TITLE-I", name: "Title I" }]) });
-      await t.capitalProject.createMany({ data: scoped([{ projectId: "PROJ-A", name: "Roof" }]) });
+      await t.project.createMany({
+        data: scoped([
+          { projectNumber: "TITLE-I", name: "Title I" },
+          { projectNumber: "PROJ-A", name: "Roof" },
+        ]),
+      });
 
       const maps = await loadResolveMaps(t);
 
@@ -259,20 +263,13 @@ async function main() {
       assert(resolveCode(maps, "fund", "0101").ok, "codes are matched case- and space-insensitively");
       assert(resolveCode(maps, "fund", " 0101 ").ok, "surrounding whitespace is tolerated");
 
-      // The single Project / Grant column resolves against both tables.
-      const asGrant = resolveProjectOrGrant(maps, "TITLE-I");
-      assert(asGrant.ok && asGrant.grantId !== undefined, "Project / Grant resolves a grant");
-      const asProject = resolveProjectOrGrant(maps, "PROJ-A");
-      assert(asProject.ok && asProject.capitalProjectId !== undefined, "Project / Grant resolves a capital project");
-      const neither = resolveProjectOrGrant(maps, "NOPE");
-      assert(!neither.ok && neither.reason === "unknown", "and refuses a value that is neither");
-
-      await t.capitalProject.createMany({ data: scoped([{ projectId: "TITLE-I", name: "Name Clash" }]) });
-      const clash = resolveProjectOrGrant(await loadResolveMaps(t), "TITLE-I");
-      assert(
-        !clash.ok && clash.reason === "ambiguous",
-        "a code that is BOTH a grant and a project is refused — guessing would file money against the wrong thing",
-      );
+      // The single Project / Grant column resolves against the unified Project master.
+      const asProject = resolveCode(maps, "project", "TITLE-I");
+      assert(asProject.ok, "Project / Grant resolves a project");
+      const alsoProject = resolveCode(maps, "project", "PROJ-A");
+      assert(alsoProject.ok, "and another project number");
+      const neither = resolveCode(maps, "project", "NOPE");
+      assert(!neither.ok && neither.reason === "unknown", "and refuses a value that is not a project");
 
       // ---- staging ----
       console.log("\nStaging");

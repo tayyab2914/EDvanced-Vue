@@ -1,25 +1,22 @@
 import * as z from "zod";
-import {
-  GRANT_STATUS,
-  PROJECT_STATUS,
-  PROJECT_TYPE,
-  values,
-  type EnumOption,
-} from "@/lib/master-data/enums";
+import { type EnumOption } from "@/lib/master-data/enums";
 import {
   COST_CENTER_CATEGORIES,
   COST_CENTER_CATEGORY_VALUES,
 } from "@/lib/master-data/cost-center";
 
 // District-owned account dimensions. Order here drives the nav order.
+//
+// Grants and Capital Projects are deferred to V2 — a district maintains its projects in
+// the single `projects` master below, and the paid modules reference those projects when
+// they ship. See the dormant Grant / CapitalProject models in prisma/schema.prisma.
 export type MasterKind =
   | "funds"
   | "revenues"
   | "functions"
   | "objects"
   | "cost-centers"
-  | "grants"
-  | "capital-projects";
+  | "projects";
 
 // Platform-managed global lookup delegates a dimension can categorize against.
 export type GlobalTypeModel =
@@ -78,22 +75,6 @@ export function toClientDef(def: ResourceDef): ClientResourceDef {
 
 const codeField = z.string().trim().min(1, { error: "Code is required." }).max(40);
 const nameField = z.string().trim().min(1, { error: "Name is required." }).max(160);
-const optionalText = z
-  .string()
-  .trim()
-  .max(300)
-  .optional()
-  .transform((v) => (v ? v : undefined));
-
-const optionalAmount = z
-  .string()
-  .trim()
-  .optional()
-  .transform((v) => (v ? v : undefined))
-  .refine((v) => v === undefined || (!isNaN(Number(v)) && Number(v) >= 0), {
-    error: "Enter a valid amount.",
-  });
-
 const requiredSelect = (label: string) =>
   z.string().trim().min(1, { error: `Select a ${label.toLowerCase()}.` });
 
@@ -209,96 +190,23 @@ export const RESOURCES: Record<MasterKind, ResourceDef> = {
       typeId: requiredSelect("Cost Center Type"),
     }),
   },
-  grants: {
-    kind: "grants",
-    model: "grant",
-    title: "Grants",
-    singular: "Grant",
+  // The unified Projects master (MVP). Just the shared essentials — Project Number and
+  // Project Name — that both the Grants and Capital Projects modules build on in V2. A
+  // Project Number is unique per district; districts use their own numbering convention.
+  projects: {
+    kind: "projects",
+    model: "project",
+    title: "Projects",
+    singular: "Project",
     fields: [
-      { name: "grantId", label: "Grant Number", type: "text", required: true },
-      { name: "name", label: "Grant Name", type: "text", required: true },
-      {
-        name: "revenueTypeId",
-        label: "Revenue Type",
-        type: "select",
-        required: true,
-        placeholder: "Select a revenue type…",
-        optionsKey: "revenueTypes",
-        globalType: "revenueType",
-      },
-      {
-        name: "awardAmount",
-        label: "Award Amount",
-        type: "text",
-        numeric: true,
-        placeholder: "e.g. 1200000",
-      },
-      {
-        name: "status",
-        label: "Grant Status",
-        type: "select",
-        required: true,
-        staticOptions: GRANT_STATUS,
-      },
-      { name: "grantPeriod", label: "Grant Period", type: "text", placeholder: "e.g. 2026-27" },
-      { name: "grantManager", label: "Grant Manager", type: "text" },
-      { name: "description", label: "Description", type: "textarea" },
-      { name: "cfdaNumber", label: "CFDA Number", type: "text" },
-    ],
-    columns: [
-      "grantId",
-      "name",
-      "grantPeriod",
-      "grantManager",
-      "status",
-      "awardAmount",
-    ],
-    defaultSort: "grantId",
-    schema: z.object({
-      grantId: codeField,
-      name: nameField,
-      revenueTypeId: requiredSelect("Revenue Type"),
-      awardAmount: optionalAmount,
-      status: z.enum(values(GRANT_STATUS)),
-      grantPeriod: optionalText,
-      grantManager: optionalText,
-      description: optionalText,
-      cfdaNumber: optionalText,
-    }),
-  },
-  "capital-projects": {
-    kind: "capital-projects",
-    model: "capitalProject",
-    title: "Capital Projects",
-    singular: "Capital Project",
-    fields: [
-      { name: "projectId", label: "Project Number", type: "text", required: true },
+      { name: "projectNumber", label: "Project Number", type: "text", required: true },
       { name: "name", label: "Project Name", type: "text", required: true },
-      { name: "description", label: "Description", type: "textarea" },
-      {
-        name: "status",
-        label: "Status",
-        type: "select",
-        required: true,
-        staticOptions: PROJECT_STATUS,
-      },
-      {
-        name: "projectType",
-        label: "Project Type",
-        type: "select",
-        required: true,
-        placeholder: "Select a project type…",
-        staticOptions: PROJECT_TYPE,
-      },
     ],
-    columns: ["projectId", "name", "status", "projectType"],
-    defaultSort: "projectId",
+    columns: ["projectNumber", "name"],
+    defaultSort: "projectNumber",
     schema: z.object({
-      projectId: codeField,
+      projectNumber: codeField,
       name: nameField,
-      description: optionalText,
-      status: z.enum(values(PROJECT_STATUS)),
-      projectType: requiredSelect("Project Type"),
     }),
   },
 };

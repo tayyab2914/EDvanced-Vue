@@ -68,8 +68,8 @@ async function main() {
     "a code column knows its relation, so it can sort by the code and not the id",
   );
   assert(
-    expCols.find((c) => c.key === "projectOrGrant")?.relation === undefined,
-    "Project / Grant has no single relation — it fanned out into two ids",
+    expCols.find((c) => c.key === "projectId")?.relation === "project",
+    "Project / Grant resolves to the single Project relation",
   );
   assert(
     expCols.find((c) => c.key === "availableBudget")?.type === "amount",
@@ -81,7 +81,7 @@ async function main() {
     "fund" in inc && "function" in inc && "object" in inc,
     "the include pulls every relation in one query, not one per row",
   );
-  assert("grant" in inc && "capitalProject" in inc, "and both halves of Project / Grant");
+  assert("project" in inc, "and the Project relation for the Project / Grant column");
 
   // ---- against the database ----
   const district = await prisma.district.findFirst({ orderBy: { createdAt: "asc" } });
@@ -191,10 +191,10 @@ async function main() {
       (nameOf("expenditure-detail", row, fundCol) ?? "").length > 0,
       "and carries the name for the tooltip",
     );
-    const projCol = cols.find((c) => c.key === "projectOrGrant")!;
+    const projCol = cols.find((c) => c.key === "projectId")!;
     assert(
       cellOf("expenditure-detail", row, projCol) === "BRW-P1",
-      "Project / Grant renders as one column again, whichever id it became",
+      "Project / Grant renders the project's number",
     );
     const availCol = cols.find((c) => c.key === "availableBudget")!;
     assert(
@@ -284,7 +284,7 @@ async function seedRows(db: TenantDb, districtId: string) {
   });
   await db.accountFunction.createMany({ data: scoped([{ code: "BRW-FN1", name: "Instruction" }]) });
   await db.accountObject.createMany({ data: scoped([{ code: "BRW-O1", name: "Salaries" }]) });
-  await db.capitalProject.createMany({ data: scoped([{ projectId: "BRW-P1", name: "Project" }]) });
+  await db.project.createMany({ data: scoped([{ projectNumber: "BRW-P1", name: "Project" }]) });
 
   const [f1, f2] = await Promise.all([
     db.fund.findFirst({ where: { code: "BRW-F1" } }),
@@ -292,7 +292,7 @@ async function seedRows(db: TenantDb, districtId: string) {
   ]);
   const fn = await db.accountFunction.findFirst({ where: { code: "BRW-FN1" } });
   const ob = await db.accountObject.findFirst({ where: { code: "BRW-O1" } });
-  const pj = await db.capitalProject.findFirst({ where: { projectId: "BRW-P1" } });
+  const pj = await db.project.findFirst({ where: { projectNumber: "BRW-P1" } });
 
   const mkVersion = async (period: number) => {
     const batch = await db.importBatch.create({
@@ -351,7 +351,7 @@ async function seedRows(db: TenantDb, districtId: string) {
       fundId: i % 3 === 0 ? f2!.id : f1!.id,
       functionId: fn!.id,
       objectId: ob!.id,
-      capitalProjectId: pj!.id,
+      projectId: pj!.id,
       budget: "100000",
       actualMtd: "0",
       actualYtd: String(ytd),
@@ -384,7 +384,7 @@ async function cleanup(districtId: string) {
 }
 
 async function teardown() {
-  await prisma.capitalProject.deleteMany({ where: { projectId: { startsWith: "BRW-" } } });
+  await prisma.project.deleteMany({ where: { projectNumber: { startsWith: "BRW-" } } });
   await prisma.accountObject.deleteMany({ where: { code: { startsWith: "BRW-" } } });
   await prisma.accountFunction.deleteMany({ where: { code: { startsWith: "BRW-" } } });
   await prisma.fund.deleteMany({ where: { code: { startsWith: "BRW-" } } });
