@@ -88,16 +88,31 @@ function GroupForm({
   // rather than being maintained a second time here. Hidden settings never render but still
   // ride along as hidden inputs, so a save doesn't drop a value the engine still reads.
   const hidden = group.settings.filter((s) => s.hidden);
-  const sections: { name: string; settings: Setting[] }[] = [];
+  const sections: { name: string; description: string | null; settings: Setting[] }[] = [];
   for (const s of group.settings) {
     if (s.hidden) continue;
     const name = s.section ?? "";
     const existing = sections.find((x) => x.name === name);
     if (existing) existing.settings.push(s);
-    else sections.push({ name, settings: [s] });
+    else sections.push({ name, description: null, settings: [s] });
   }
 
-  const renderNumber = (s: Setting) => {
+  // The description belongs to the sub-section, not to every entry under it. A paired
+  // threshold (Warning + Critical) carries the same one line on both fields, so repeating it
+  // under each input just says the same thing twice. When every numeric setting in a section
+  // shares one line of help, that line is the section's description — shown once beneath the
+  // sub-heading, and dropped from under the inputs. Derived from the settings' own `help` so
+  // there is still a single source of truth. (Toggles keep their own help: each switch is a
+  // distinct rule, so those descriptions genuinely differ and are not repeats.)
+  for (const sec of sections) {
+    const numeric = sec.settings.filter((s) => s.type !== "toggle");
+    const help = numeric[0]?.help ?? "";
+    if (numeric.length > 0 && help && numeric.every((s) => s.help === help)) {
+      sec.description = help;
+    }
+  }
+
+  const renderNumber = (s: Setting, showHelp: boolean) => {
     const err = state.fieldErrors?.[s.key]?.[0];
     return (
       <div key={s.key} className="space-y-1.5">
@@ -134,9 +149,9 @@ function GroupForm({
         </div>
         {err ? (
           <p className="text-xs text-bad">{err}</p>
-        ) : (
+        ) : showHelp ? (
           <p className="text-[11.5px] leading-relaxed text-muted-2">{s.help}</p>
-        )}
+        ) : null}
       </div>
     );
   };
@@ -191,12 +206,24 @@ function GroupForm({
             return (
               <div key={sec.name || i} className={cn(i > 0 && "border-t border-line-soft pt-5")}>
                 {sec.name && (
-                  <h3 className="mb-3 text-[10.5px] font-semibold uppercase tracking-[0.09em] text-muted-2">
+                  <h3
+                    className={cn(
+                      "text-[10.5px] font-semibold uppercase tracking-[0.09em] text-muted-2",
+                      sec.description ? "mb-1" : "mb-3",
+                    )}
+                  >
                     {sec.name}
                   </h3>
                 )}
+                {sec.description && (
+                  <p className="mb-3.5 text-[12px] leading-relaxed text-muted-2">
+                    {sec.description}
+                  </p>
+                )}
                 {nums.length > 0 && (
-                  <div className="grid gap-4 sm:grid-cols-2">{nums.map(renderNumber)}</div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {nums.map((s) => renderNumber(s, !sec.description))}
+                  </div>
                 )}
                 {secToggles.length > 0 && (
                   <div className={cn("space-y-2", nums.length > 0 && "mt-4")}>

@@ -1,10 +1,15 @@
 import { redirect } from "next/navigation";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
-import { datasetsByRhythm } from "@/lib/datasets/kinds";
+import { datasetsByRhythm, type DatasetMeta } from "@/lib/datasets/kinds";
+import { datasetDef, templateHeaders } from "@/lib/datasets/registry";
 import { fiscalYearFor, parseFiscalYear, formatFiscalYear } from "@/lib/periods/fiscal";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { UploadForm } from "@/components/import/upload-form";
+import {
+  ImportTemplates,
+  type TemplateItem,
+} from "@/components/import/import-templates";
 
 export default async function UploadPage() {
   const { db, user, districtId } = await getTenantDb();
@@ -28,6 +33,15 @@ export default async function UploadPage() {
     formatFiscalYear(current.startYear - 1),
   ];
 
+  const datasets = datasetsByRhythm();
+  const toTemplates = (metas: DatasetMeta[]): TemplateItem[] =>
+    metas.map((m) => ({
+      slug: m.slug,
+      label: m.label,
+      description: m.description,
+      headers: templateHeaders(datasetDef(m.slug)),
+    }));
+
   return (
     <div className="animate-fade-up space-y-[18px]">
       <PageHeader
@@ -36,10 +50,16 @@ export default async function UploadPage() {
       />
       <Card>
         <UploadForm
-          datasets={datasetsByRhythm()}
+          datasets={datasets}
           fiscalYears={fiscalYears}
           startMonth={startMonth}
           districtId={districtId}
+        />
+      </Card>
+      <Card>
+        <ImportTemplates
+          annual={toTemplates(datasets.annual)}
+          monthly={toTemplates(datasets.monthly)}
         />
       </Card>
     </div>
