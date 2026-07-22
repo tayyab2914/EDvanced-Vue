@@ -35,14 +35,19 @@ export default async function DistrictLayout({
     { label: "Executive Dashboard", href: "/dashboard", icon: "dashboard" },
   ];
 
-  // DATA MANAGEMENT — uploads/versions and the chart of accounts. Reading the data is a
-  // view permission; uploading is not. A Viewer (or a View Only external user) sees the
-  // history and the numbers, and no Upload button.
+  // DATA MANAGEMENT — uploading, the version history, and the chart of accounts. Reading the
+  // data is a view permission; uploading is not. So "Upload Data" appears only for someone who
+  // can actually upload, while "Version Management" (the history) is visible to any viewer.
+  // These are two distinct destinations: the menu label now matches the page it opens, rather
+  // than "Data Uploads" quietly opening the version history.
   const dataManagement: NavItem[] = [
     { label: "Chart of Accounts", href: "/master-data", icon: "database" },
   ];
   if (userCan(user, "view_dashboards")) {
-    dataManagement.unshift({ label: "Data Uploads", href: "/data/versions", icon: "reports" });
+    dataManagement.unshift({ label: "Version Management", href: "/data/versions", icon: "reports" });
+  }
+  if (userCan(user, "upload_data")) {
+    dataManagement.unshift({ label: "Upload Data", href: "/data/upload", icon: "upload" });
   }
 
   const admin: NavItem[] = [];

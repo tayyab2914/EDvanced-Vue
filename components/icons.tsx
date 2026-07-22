@@ -19,7 +19,8 @@ export type IconName =
   | "unlock"
   | "shield"
   | "book"
-  | "chart";
+  | "chart"
+  | "upload";
 
 const PATHS: Record<IconName, string> = {
   dashboard:
@@ -51,6 +52,7 @@ const PATHS: Record<IconName, string> = {
   book: '<path d="M12 6.6C10.6 5.1 8.6 4.4 6 4.4H3.2v13.9H6c2.6 0 4.6.7 6 2.2 1.4-1.5 3.4-2.2 6-2.2h2.8V4.4H18c-2.6 0-4.6.7-6 2.2Z"/><path d="M12 6.6v13.9"/>',
   chart:
     '<path d="M3.5 20.5h17"/><rect x="5.5" y="12.5" width="3.4" height="5"/><rect x="10.3" y="8.5" width="3.4" height="9"/><rect x="15.1" y="4.5" width="3.4" height="13"/>',
+  upload: '<path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 21h14"/>',
 };
 
 export function Icon({

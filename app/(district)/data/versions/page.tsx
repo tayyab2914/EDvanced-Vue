@@ -7,7 +7,7 @@ import { periodLabel } from "@/lib/periods/fiscal";
 import { formatDateTime } from "@/lib/format";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { VersionList, type VersionRow } from "@/components/import/version-list";
+import { VersionLog, type VersionLogRow } from "@/components/import/version-log";
 import type { DatasetKind, PeriodType } from "@/lib/enums";
 
 /**
@@ -15,6 +15,9 @@ import type { DatasetKind, PeriodType } from "@/lib/enums";
  *
  * "Exactly one version per period is marked current and drives the dashboards. The others
  * are retained for audit and rollback." (Spec §5.9)
+ *
+ * Presented as a flat, filterable, exportable log — the same shape as the audit log — with
+ * Compare and Restore as per-row actions.
  */
 export default async function VersionsPage() {
   const { db, user, districtId } = await getTenantDb();
@@ -46,7 +49,7 @@ export default async function VersionsPage() {
   // to be asked per dataset, since each lands in its own table.
   const rowCounts = await countRowsPerVersion(db, versions);
 
-  const rows: VersionRow[] = versions.map((v) => {
+  const rows: VersionLogRow[] = versions.map((v) => {
     const meta = datasetByKind(v.dataset as DatasetKind);
     return {
       id: v.id,
@@ -56,14 +59,17 @@ export default async function VersionsPage() {
       periodLabel: periodLabel(v.periodType as PeriodType, v.period, startMonth),
       version: v.version,
       isCurrent: v.isCurrent,
-      action: v.action as VersionRow["action"],
+      action: v.action as VersionLogRow["action"],
       rowCount: v.rowCount,
       warningCount: v.warningCount,
       fileName: v.fileName,
       committedAt: formatDateTime(v.committedAt),
+      committedAtMs: v.committedAt.getTime(),
       committedBy: actorName.get(v.committedByUserId) ?? "—",
       hasData: (rowCounts.get(v.id) ?? 0) > 0,
       restoredFrom: null,
+      compareToId: null,
+      compareToVersion: null,
     };
   });
 
@@ -75,20 +81,35 @@ export default async function VersionsPage() {
     }
   });
 
-  // One group per period: "what happened to August" is the question being asked.
-  const groups = new Map<string, (typeof rows)[number][]>();
+  // Within one dataset + period, a version's Compare target is the version right before it.
+  // The query returns each period's versions newest-first, so a row's predecessor is simply
+  // the next entry in its group — "what did this re-upload change?" is the comparison people want.
+  const groups = new Map<string, VersionLogRow[]>();
   for (const r of rows) {
     const key = `${r.dataset}|${r.fiscalYear}|${r.periodLabel}`;
     const list = groups.get(key) ?? [];
     list.push(r);
     groups.set(key, list);
   }
+  for (const list of groups.values()) {
+    for (let i = 0; i < list.length - 1; i++) {
+      list[i].compareToId = list[i + 1].id;
+      list[i].compareToVersion = list[i + 1].version;
+    }
+  }
+
+  // The log reads newest-committed first, like the audit log.
+  const ordered = [...rows].sort((a, b) => b.committedAtMs - a.committedAtMs);
 
   return (
-    <div className="animate-fade-up space-y-[18px]">
+    // No `animate-fade-up` here: its transform would become the containing block for the row
+    // actions / filter popovers (which are position: fixed), throwing their placement off —
+    // which is why the other pages that use this Menu (config, master data, users, audit) don't
+    // animate either.
+    <div className="space-y-[18px]">
       <PageHeader
         title="Version Management"
-        description="Nothing is overwritten. Every upload is saved, one version powers the dashboards, and previous versions remain available for audit, comparison, or restoration."
+        description="Every upload is kept and nothing is overwritten: one version powers the dashboards, and the rest stay for audit, comparison, and rollback. Search, filter, and export the full history below."
         actions={
           userCan(user, "upload_data") ? (
             <Link href="/data/upload">
@@ -98,14 +119,8 @@ export default async function VersionsPage() {
         }
       />
 
-      <VersionList
-        groups={[...groups.entries()].map(([key, versions]) => ({
-          key,
-          datasetLabel: versions[0].datasetLabel,
-          fiscalYear: versions[0].fiscalYear,
-          periodLabel: versions[0].periodLabel,
-          versions,
-        }))}
+      <VersionLog
+        rows={ordered}
         districtId={districtId}
         canManage={userCan(user, "manage_versions")}
       />
