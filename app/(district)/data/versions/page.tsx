@@ -98,8 +98,9 @@ export default async function VersionsPage() {
     }
   }
 
-  // The log reads newest-committed first, like the audit log.
-  const ordered = [...rows].sort((a, b) => b.committedAtMs - a.committedAtMs);
+  // Rows stay in the query order (fiscal year, then period, then version — newest-first) so
+  // that within each dataset group they read as that dataset's history. The log groups them by
+  // dataset and orders the groups by most-recent upload.
 
   return (
     // No `animate-fade-up` here: its transform would become the containing block for the row
@@ -120,7 +121,7 @@ export default async function VersionsPage() {
       />
 
       <VersionLog
-        rows={ordered}
+        rows={rows}
         districtId={districtId}
         canManage={userCan(user, "manage_versions")}
       />
