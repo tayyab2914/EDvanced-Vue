@@ -10,6 +10,43 @@ import {
   type PolicyGroupKey,
 } from "@/lib/policies/registry";
 import type { FormState } from "@/lib/forms";
+import type { TenantDb } from "@/lib/tenant-db";
+
+/**
+ * Writes one or more policy groups for the signed-in user's district.
+ *
+ * This was an `upsert`, which the tenant extension now refuses: DistrictPolicy became a
+ * district-scoped model when it was found to be missing from the allowlist, and the
+ * extension cannot safely widen an upsert's `where` (it must be a unique selector, and
+ * districtId is not part of every model's unique key). So it is the explicit two-step.
+ *
+ * updateMany first, create second — that order matters. updateMany is district-scoped by
+ * the extension and returns a count, so it doubles as the existence check without a
+ * separate read. `create` then has districtId injected for it.
+ *
+ * The create path races only against the same district saving twice in the same instant.
+ * The unique index on districtId is what stops both winning, and the retry turns the
+ * loser into an update rather than an error page.
+ */
+async function writePolicy(
+  db: TenantDb,
+  userId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const data = { ...patch, updatedByUserId: userId };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const updated = await db.districtPolicy.updateMany({ where: {}, data: data as any });
+  if (updated.count > 0) return;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await db.districtPolicy.create({ data: { ...defaultPolicy(), ...data } as any });
+  } catch {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await db.districtPolicy.updateMany({ where: {}, data: data as any });
+  }
+}
 
 /**
  * Saving one group of a district's financial policies.
@@ -47,24 +84,7 @@ export async function savePolicyGroup(
     return { error: "Please fix the errors below.", fieldErrors: errors };
   }
 
-  // upsert, not updateMany: DistrictPolicy is NOT a tenant model in the scoping sense —
-  // it is keyed one-per-district and the row may not exist yet. The extension leaves it
-  // alone, so districtId is set explicitly here.
-  await db.districtPolicy.upsert({
-    where: { districtId },
-    create: {
-      districtId,
-      ...defaultPolicy(),
-      [key]: values,
-      updatedByUserId: user.id,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any,
-    update: {
-      [key]: values,
-      updatedByUserId: user.id,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any,
-  });
+  await writePolicy(db, user.id, { [key]: values });
 
   await writeAudit({
     action: "POLICY_UPDATED",
@@ -95,14 +115,7 @@ export async function resetPolicyGroup(
     return { error: "Only a district administrator can change financial policies." };
   }
 
-  const defaults = defaultPolicy()[key];
-  await db.districtPolicy.upsert({
-    where: { districtId },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    create: { districtId, ...defaultPolicy(), updatedByUserId: user.id } as any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    update: { [key]: defaults, updatedByUserId: user.id } as any,
-  });
+  await writePolicy(db, user.id, { [key]: defaultPolicy()[key] });
 
   await writeAudit({
     action: "POLICY_RESET",

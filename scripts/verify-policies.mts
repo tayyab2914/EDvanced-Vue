@@ -192,13 +192,20 @@ async function main() {
     );
     assert(offRules.flagRevenueOverCollected === false, "and the same for over-collection");
 
-    await db.districtPolicy.upsert({
-      where: { districtId: district.id },
+    // updateMany + create rather than upsert: DistrictPolicy is a district-scoped model,
+    // and the tenant extension refuses upsert so scoping stays enforceable. Same shape as
+    // app/actions/policies.ts#writePolicy.
+    const bumped = await db.districtPolicy.updateMany({
+      where: {},
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      create: { districtId: district.id, ...defaultPolicy(), cash: { daysCashWarning: 90 } } as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      update: { cash: { daysCashWarning: 90 } } as any,
+      data: { cash: { daysCashWarning: 90 } } as any,
     });
+    if (bumped.count === 0) {
+      await db.districtPolicy.create({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: { ...defaultPolicy(), cash: { daysCashWarning: 90 } } as any,
+      });
+    }
     const saved = await loadPolicy(db, district.id);
     assert(saved.cash.daysCashWarning === 90, "a saved threshold round-trips through the database");
     assert(

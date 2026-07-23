@@ -15,16 +15,95 @@
   --color-brand: #2f6bf6;
   --color-brand-dark: #245ce0;
   --color-panel: #f7f9fc;
-  --color-ok: #0f8a52;
+  /* Semantic feedback, re-stepped in M3 — see the status ladder below. The old pair
+     (warn #b57a17, bad #c2542e) measured ΔE 4.7 apart under deuteranopia and 9.6 under
+     normal vision: a Monitor badge and an Action Required badge were genuinely hard to
+     tell apart, which is the one confusion this product cannot afford. These are the
+     ladder's ink steps, so the two vocabularies cannot drift. */
+  --color-ok: #0a6b40;
   --color-ok-bg: #e4f2ea;
-  --color-warn: #b57a17;
+  --color-warn: #8a6510;
   --color-warn-bg: #fbf1df;
-  --color-bad: #c2542e;
+  --color-bad: #9c2820;
   --color-bad-bg: #fbeae2;
 
   /* EDvanced Vue brand marks (logo only — not the UI accent, which is --color-brand) */
   --color-logo-navy: #14304e;
   --color-logo-green: #2f9e4f;
+
+  /* ===================== M3: the status ladder =====================
+     Strong · Acceptable · Monitor · Action Required, plus N/A. One vocabulary, read by
+     the badges, the gauge, the benchmark band and the threshold lines alike, so a badge
+     and the alert printed beside it can never disagree (Spec §5.17).
+
+     TWO tokens per rung, and the split is load-bearing:
+
+       --color-<rung>-mark   a CHART fill. Validated as a categorical set against the
+                             white card: every rung clears 3:1, and the worst adjacent
+                             pair is ΔE 11.8 under deuteranopia (the old ok/warn/bad
+                             trio managed 4.7).
+       --color-<rung>        BADGE TEXT. A darker step, because text needs 4.5:1 and the
+                             mark steps do not reach it on their own tint — Monitor gets
+                             2.86:1, which is unreadable.
+
+     Darkening for text compresses hue separation, so the ink steps sit closer together
+     than the marks do. That is acceptable, and only because a status badge in this
+     product ALWAYS carries its word — "Monitor", "Action Required". The label is the
+     identity channel; hue reinforces it. Do not "fix" the ink steps by pulling them
+     apart at the cost of contrast, and do not use an ink step as a chart fill. */
+  --color-strong: #0a6b40;
+  --color-strong-mark: #0f8a52;
+  --color-strong-bg: #e4f2ea;
+
+  --color-acceptable: #235780;
+  --color-acceptable-mark: #2d6ca3;
+  --color-acceptable-bg: #e6eef6;
+
+  --color-monitor: #8a6510;
+  --color-monitor-mark: #b8880f;
+  --color-monitor-bg: #fbf1df;
+
+  --color-action: #9c2820;
+  --color-action-mark: #c0342b;
+  --color-action-bg: #fbeae2;
+
+  /* "We cannot work this out yet" — never green, never zero. Grey is the whole point. */
+  --color-na: #5c6a80;
+  --color-na-bg: #f0f3f7;
+
+  /* ===================== M3: data-viz series =====================
+     Six categorical slots in a FIXED order, assigned in sequence and never cycled. The
+     order is the colour-blindness mechanism, not decoration: of the 120 orderings of
+     these six hues, 8 clear every gate, and this is one of them (worst adjacent ΔE 11.8
+     under protanopia, 24.1 under normal vision, all ≥3:1 on white).
+
+     A seventh category does not get a generated hue. It folds into "Other". */
+  --color-viz-1: #2f6bf6;
+  --color-viz-2: #d0682f;
+  --color-viz-3: #0a9c8f;
+  --color-viz-4: #6a4fc0;
+  --color-viz-5: #1f7a3d;
+  --color-viz-6: #c0608c;
+
+  /* Named roles for the charts that repeat across every dashboard. These are identity,
+     not polarity: "actual" is not good and "budget" is not bad. */
+  --color-viz-actual: #1f7a3d;
+  --color-viz-budget: #2f6bf6;
+  --color-viz-forecast: #6a4fc0;
+
+  /* Positive vs negative variance IS polarity, so it gets a diverging pair rather than
+     two categorical slots. Plain green-vs-red fails badly under deuteranopia (ΔE 5.3);
+     splitting them by LIGHTNESS as well as hue — a mid green against a deep red — takes
+     the same pair to 17.9 while keeping the reading a finance office expects. */
+  --color-viz-positive: #19a86e;
+  --color-viz-negative: #9c2820;
+
+  /* Chrome, not series. The full-year budget line is a reference, drawn dashed and
+     recessive so it never competes with the two series it frames. */
+  --color-viz-reference: #7d8ba3;
+  --color-viz-grid: #eef1f5;
+  --color-viz-axis: #c7cfdb;
+  --color-viz-label: #93a0b4;
 }
 
 @theme inline {
@@ -89,4 +168,57 @@ body {
 
 .animate-fade-up {
   animation: fadeUp 0.35s ease both;
+}
+
+/* ===================== PDF export =====================
+   Spec §8.5: "PDF — the dashboard rendered to a print stylesheet. No headless browser at
+   MVP scale." So the browser's own Print / Save as PDF IS the export, and this is what
+   makes the result worth keeping.
+
+   The charts survive this because they are server-rendered SVG. A client-only charting
+   library would print blank here, which is the concrete reason this product has none. */
+@media print {
+  /* Without this, every chart fill, status badge and threshold band prints white — and a
+     dashboard whose colours carry meaning becomes unreadable on paper. */
+  *,
+  *::before,
+  *::after {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body {
+    background: #ffffff;
+  }
+
+  /* Navigation, controls and anything that only works when clicked. */
+  aside,
+  header nav,
+  [data-print="hide"],
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* The app is a fixed sidebar plus a scrolling column; on paper it is one column. */
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  /* A card split across a page break loses the relationship between its title and its
+     figures, which is the only thing making the figures legible. */
+  section,
+  figure,
+  table {
+    break-inside: avoid;
+  }
+
+  /* Animation on a printed page is either invisible or a half-drawn element. */
+  .animate-fade-up {
+    animation: none !important;
+  }
+
+  a[href]::after {
+    content: "";
+  }
 }

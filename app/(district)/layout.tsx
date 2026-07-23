@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { requireAuth, userCan } from "@/lib/auth/dal";
+import { tenantDb } from "@/lib/tenant-db";
 import { AppShell } from "@/components/app-shell";
 import { ROLE_LABELS } from "@/lib/auth/permissions";
 import { ACCESS_LEVEL_LABELS } from "@/lib/external-access";
@@ -29,10 +30,19 @@ export default async function DistrictLayout({
 
   const isExternal = user.role === Role.EXTERNAL_USER;
 
-  // MAIN — the district's financial views. Only the Executive Dashboard exists today;
-  // Revenues / Expenditures / Fund Balance / Cash Position are planned as their own pages.
+  // MAIN — the district's financial views. All five dashboards ship in Milestone 3.
+  //
+  // Capital Projects and Grants appear in the client's reference navigation but are V2
+  // subscribable modules in both the Feature Specification (§5.14) and the Milestone Plan.
+  // Project spend is already collected, tagged, on every detail row, so those screens can
+  // be built later from data the platform holds today — they are deliberately not here.
   const main: NavItem[] = [
-    { label: "Executive Dashboard", href: "/dashboard", icon: "dashboard" },
+    { label: "Executive Dashboard", href: "/dashboard", icon: "dashboard", exact: true },
+    { label: "Revenues", href: "/revenues", icon: "chart" },
+    { label: "Expenditures", href: "/expenditures", icon: "database" },
+    { label: "Fund Balance", href: "/fund-balance", icon: "shield" },
+    { label: "Cash Position", href: "/cash", icon: "activity" },
+    { label: "Alerts", href: "/alerts", icon: "mail" },
   ];
 
   // DATA MANAGEMENT — uploading, the version history, and the chart of accounts. Reading the
@@ -45,6 +55,10 @@ export default async function DistrictLayout({
   ];
   if (userCan(user, "view_dashboards")) {
     dataManagement.unshift({ label: "Version Management", href: "/data/versions", icon: "reports" });
+    // The periodic browse was reachable only from the version history and from each
+    // dataset page — Spec §5.19 flags the missing top-level entry as a known gap and
+    // suggests folding it into this milestone. This is that.
+    dataManagement.unshift({ label: "Browse Data", href: "/data/revenue-detail", icon: "search" });
   }
   if (userCan(user, "upload_data")) {
     dataManagement.unshift({ label: "Upload Data", href: "/data/upload", icon: "upload" });
@@ -72,6 +86,15 @@ export default async function DistrictLayout({
   // exactly one district and get the plain workspace card.
   const grants = isExternal ? await listLiveGrants(user.id) : [];
 
+  // The header's fiscal-year chip. Resolved from committed data rather than hardcoded —
+  // it used to read "2024–25" for every district forever, which would now visibly
+  // contradict the year every dashboard resolves for itself.
+  const latest = await tenantDb(user.districtId).datasetVersion.findFirst({
+    where: { isCurrent: true },
+    orderBy: [{ fiscalYear: "desc" }],
+    select: { fiscalYear: true },
+  });
+
   // Only someone who can act on requests should be told about them.
   const pending = userCan(user, "manage_users_own")
     ? await pendingRequestCount(user.districtId)
@@ -85,7 +108,8 @@ export default async function DistrictLayout({
           ? `External · ${ACCESS_LEVEL_LABELS[user.accessLevel]}`
           : "Finance workspace"
       }
-      contextTag="2024–25"
+      contextTag={latest?.fiscalYear}
+      hideHeader
       nav={nav}
       user={{ name: user.name, roleLabel: ROLE_LABELS[user.role] }}
       switcher={

@@ -17,6 +17,7 @@ import { computeFundBalance, reservePercent } from "@/lib/finance/fund-balance";
 import { activityTotals, netOperatingSurplus, endingCash } from "@/lib/finance/engine";
 import { evaluateAlerts } from "@/lib/alerts/engine";
 import { csvEscape } from "@/lib/csv";
+import { PERIOD_LABELS } from "@/lib/sample-data";
 
 /**
  * Loads the sample data into the demo district, end to end, through the real pipeline.
@@ -64,7 +65,8 @@ async function main() {
   await importFile(db, district.id, "03-opening-fund-balance-FY2026-27.csv", "opening-fund-balance", null);
 
   console.log("\nMonthly");
-  for (const [p, label] of [[1, "P1-July"], [2, "P2-August"]] as const) {
+  for (let p = 1; p <= 12; p++) {
+    const label = PERIOD_LABELS[p - 1];
     await importFile(db, district.id, `04-revenue-detail-FY2026-27-${label}.csv`, "revenue-detail", p);
     await importFile(db, district.id, `05-expenditure-detail-FY2026-27-${label}.csv`, "expenditure-detail", p);
     await importFile(db, district.id, `06-cash-position-FY2026-27-${label}.csv`, "cash-position", p);
@@ -73,7 +75,8 @@ async function main() {
   // ---- read it back through the engines ----
   const codes = await loadActivityCodes(prisma);
   const fund = await db.fund.findFirst({ where: { code: "1000" } });
-  const scope = { fiscalYear: FY, period: 2, fundId: fund!.id };
+  // Read back at the LAST period, which is where the year's story has actually happened.
+  const scope = { fiscalYear: FY, period: 12, fundId: fund!.id };
 
   const [fb, reserve, totals, cash] = await Promise.all([
     computeFundBalance(db, scope, codes),

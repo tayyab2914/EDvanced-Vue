@@ -9,6 +9,7 @@ import { DATASET_DEFS } from "@/lib/datasets/registry";
 import { parseFile } from "@/lib/import/parse/rows";
 import { matchHeaders } from "@/lib/import/parse/headers";
 import type { DatasetSlug } from "@/lib/datasets/kinds";
+import { PERIOD_LABELS } from "@/lib/sample-data";
 
 /**
  * Checks that the sample files actually import.
@@ -46,12 +47,14 @@ const FILES: { file: string; slug: DatasetSlug; rows: number }[] = [
   { file: "01-revenue-budget-FY2026-27", slug: "revenue-budget", rows: 7 },
   { file: "02-expenditure-budget-FY2026-27", slug: "expenditure-budget", rows: 20 },
   { file: "03-opening-fund-balance-FY2026-27", slug: "opening-fund-balance", rows: 3 },
-  { file: "04-revenue-detail-FY2026-27-P1-July", slug: "revenue-detail", rows: 7 },
-  { file: "05-expenditure-detail-FY2026-27-P1-July", slug: "expenditure-detail", rows: 20 },
-  { file: "06-cash-position-FY2026-27-P1-July", slug: "cash-position", rows: 3 },
-  { file: "04-revenue-detail-FY2026-27-P2-August", slug: "revenue-detail", rows: 7 },
-  { file: "05-expenditure-detail-FY2026-27-P2-August", slug: "expenditure-detail", rows: 20 },
-  { file: "06-cash-position-FY2026-27-P2-August", slug: "cash-position", rows: 3 },
+  // Every one of the twelve monthly periods, derived rather than listed. The old version
+  // named two files by hand; at twelve, a hand-written list is how a period goes missing
+  // from the sample and from every trend chart while this script still reports success.
+  ...PERIOD_LABELS.flatMap((label) => [
+    { file: `04-revenue-detail-FY2026-27-${label}`, slug: "revenue-detail" as const, rows: 7 },
+    { file: `05-expenditure-detail-FY2026-27-${label}`, slug: "expenditure-detail" as const, rows: 20 },
+    { file: `06-cash-position-FY2026-27-${label}`, slug: "cash-position" as const, rows: 3 },
+  ]),
 ];
 
 async function main() {
@@ -109,29 +112,53 @@ async function main() {
 
   // ---- the numbers are internally consistent ----
   console.log("\nThe figures hold together");
-  const cashAug = await parseFile(
-    DATASET_DEFS["cash-position"],
-    "c.csv",
-    readFileSync(join(DIR, "06-cash-position-FY2026-27-P2-August.csv")),
+  /**
+   * The cash chain, across ALL twelve months rather than one pair.
+   *
+   * This replaces two assertions written when the sample had two periods: one checked the
+   * workbook's own worked example in August, the other that July's ending cash equalled
+   * August's beginning. Both were true of a two-month file and neither would have noticed a
+   * break at, say, February.
+   *
+   * The workbook's arithmetic is not lost — `verify:finance` still reproduces the client's
+   * worked example against its own fixture, which is where an ENGINE assertion belongs.
+   * What matters here is a property of the sample: every month begins where the last one
+   * ended, and every month's ending cash is its own arithmetic. If either fails, the trend
+   * chart, the 12-month high/low and the volatility figure are all quietly wrong.
+   */
+  const cashByPeriod: { raw: Record<string, unknown> }[] = [];
+  for (const label of PERIOD_LABELS) {
+    const parsed = await parseFile(
+      DATASET_DEFS["cash-position"],
+      "c.csv",
+      readFileSync(join(DIR, `06-cash-position-FY2026-27-${label}.csv`)),
+    );
+    cashByPeriod.push(parsed.rows.filter((r) => r.raw.fundId === "1000")[0]!);
+  }
+
+  const n = (v: unknown) => Number(String(v ?? "0"));
+
+  const footsEveryMonth = cashByPeriod.every(
+    (r) =>
+      Math.abs(
+        n(r.raw.beginningCash) + n(r.raw.receiptsMtd) - n(r.raw.disbursementsMtd) - n(r.raw.endingCash),
+      ) < 0.01,
   );
-  const gf = cashAug.rows.find((r) => r.raw.fundId === "1000")!;
   assert(
-    gf.raw.beginningCash === "72000000" &&
-      gf.raw.receiptsMtd === "48500000" &&
-      gf.raw.disbursementsMtd === "44200000" &&
-      gf.raw.endingCash === "76300000",
-    "August cash reproduces the workbook's example: 72.0 + 48.5 − 44.2 = 76.3M",
+    footsEveryMonth,
+    `every one of the ${PERIOD_LABELS.length} months foots: beginning + receipts − disbursements = ending`,
   );
 
-  const cashJul = await parseFile(
-    DATASET_DEFS["cash-position"],
-    "c.csv",
-    readFileSync(join(DIR, "06-cash-position-FY2026-27-P1-July.csv")),
+  const chains = cashByPeriod.every(
+    (r, i) => i === 0 || Math.abs(n(r.raw.beginningCash) - n(cashByPeriod[i - 1].raw.endingCash)) < 0.01,
   );
-  const gfJul = cashJul.rows.find((r) => r.raw.fundId === "1000")!;
+  assert(chains, "and each month begins exactly where the previous one ended — the chain holds");
+
+  // The story the demo is meant to tell: cash falls across the year, which is what puts
+  // days-cash under policy and gives the §3.2c gauge something to point at.
   assert(
-    gfJul.raw.endingCash === gf.raw.beginningCash,
-    "and July's ending cash IS August's beginning cash — the months chain",
+    n(cashByPeriod[cashByPeriod.length - 1].raw.endingCash) < n(cashByPeriod[0].raw.beginningCash),
+    "and the district ends the year with less cash than it started — the demo's own story",
   );
 
   // Available Budget is supplied in the file, so the calculation layer recomputes and
@@ -140,7 +167,7 @@ async function main() {
   const exp = await parseFile(
     DATASET_DEFS["expenditure-detail"],
     "e.csv",
-    readFileSync(join(DIR, "05-expenditure-detail-FY2026-27-P2-August.csv")),
+    readFileSync(join(DIR, "05-expenditure-detail-FY2026-27-P12-June.csv")),
   );
   const badMath = exp.rows.filter((r) => {
     const b = Number(r.raw.budget);

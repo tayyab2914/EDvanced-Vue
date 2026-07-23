@@ -58,10 +58,30 @@ To wipe everything and start clean: `npm run db:reset && npm run db:seed`.
 | `npm run lint` | ESLint |
 | `npm run db:migrate` / `db:reset` / `db:studio` | Prisma Migrate / reset / Studio |
 | `npm run db:seed` / `seed:demo` | Seed Platform Admin / sample district |
+| `npm run sample:data` / `sample:load` | Generate the demo files (12 periods) / import them end to end |
+| `npm run verify:tenancy` | **Every district-owned model is scoped; raw SQL is refused on a tenant client** |
+| `npm run verify:dashboard` | Dashboard data layer: totals equal their breakdowns, N/A never reads as zero |
 | `npm run verify:m1` | Integration checks: tenant isolation, RBAC matrix, argon2 |
 | `npm run verify:external` | External-user checks: approval required, derived expiry, district-local revoke |
 | `npm run verify:sort` | Table-sorting rules: natural order, blanks last, stable ties |
 | `npm run verify:export` | CSV export ↔ import round-trip (columns, plain numbers, no BOM) |
+
+Eighteen `verify:*` scripts run against a live database. `verify:tenancy` is the one to run
+first after any schema change — the tenant allowlist **fails open**, so a district-owned
+model added without being registered is silently visible to every other district.
+
+## Seeing a dashboard
+
+```bash
+npm run db:seed && npm run seed:demo   # platform admin + a demo district
+npm run sample:data                    # write 12 periods of sample files
+npm run sample:load                    # import them through the real pipeline
+npm run dev                            # sign in as demo.admin@k12finance.local
+```
+
+The demo district is deliberately shaped as one in **mild difficulty** — reserve just under
+target, days-cash under policy, budget utilisation past its warning — because a demo where
+nothing ever fires teaches nobody what the thresholds do.
 
 ## How email works (dev)
 

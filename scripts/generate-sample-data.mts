@@ -1,7 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import ExcelJS from "exceljs";
 import { csvEscape } from "@/lib/csv";
+import { PERIOD_LABELS, SAMPLE_PERIODS } from "@/lib/sample-data";
 import { DATASET_DEFS } from "@/lib/datasets/registry";
 import { templateHeaders } from "@/lib/datasets/registry";
 import type { DatasetSlug } from "@/lib/datasets/kinds";
@@ -160,11 +162,93 @@ const OPENING_FUND_BALANCE: Row[] = [
 ];
 
 // ===================== monthly detail =====================
-// Two months, so month-over-month alerts and trends have something to compare. Period 1 is
-// July (the district's fiscal year starts in July); period 2 is August.
 //
-// August's beginning cash is July's ending cash — the workbook's own example reproduced:
-// $72.0M + $48.5M − $44.2M = $76.3M.
+// TWELVE periods, July through June. Two was enough to prove the pipeline; it is not
+// enough to review a dashboard. Every trend chart, sparkline, 12-month high/low and
+// volatility figure in Milestone 3 wants a year, and against two points they all render as
+// a line segment that looks correct and tests nothing.
+//
+// ---------------------------------------------------------------------------
+// THE SHAPE OF THE STORY
+//
+// The old sample produced an almost entirely green district: reserve 4.52%, days cash 140,
+// utilisation 21%, zero critical alerts. That demonstrates the alert engine can stay quiet.
+// It does not demonstrate that it works, and it is not what a district reviewing this
+// product wants to see.
+//
+// So the year is shaped as a district in MILD DIFFICULTY — the position the client's own
+// reference screenshots show:
+//
+//   * revenue lands slightly under budget,
+//   * spending runs slightly hot, so utilisation crosses the 80% warning late in the year,
+//   * cash declines through the year and finishes under the 60-day policy,
+//   * the reserve ends just below the 5% target — the single most important number on the
+//     Executive dashboard, and the one worth showing in its interesting state.
+//
+// Nothing is catastrophic. A demo full of red is as uninformative as a demo full of green.
+// ---------------------------------------------------------------------------
+//
+// SEASONALITY IS THE POINT OF TWELVE MONTHS. The old generator computed YTD as `mtd * m`,
+// an identity that silently requires every month to be identical — which is exactly the
+// assumption a straight-line forecast makes and exactly what a district's real calendar
+// breaks. Here each month has a weight, YTD is the accumulated weight, and the two cannot
+// drift apart because both come from the same array.
+
+/** Fraction of the year's activity landing in each period. Each array sums to 1. */
+const REVENUE_SHAPE = [
+  0.055, // Jul — the year starts slowly
+  0.070, // Aug
+  0.080, // Sep
+  0.085, // Oct
+  0.115, // Nov — ad valorem taxes arrive
+  0.130, // Dec — and peak
+  0.095, // Jan
+  0.085, // Feb
+  0.080, // Mar
+  0.075, // Apr
+  0.070, // May
+  0.060, // Jun
+];
+
+const SPEND_SHAPE = [
+  0.060, // Jul — payroll not yet at full strength
+  0.078, // Aug — schools open, energy peaks in the Florida heat
+  0.088, // Sep
+  0.086, // Oct
+  0.084, // Nov
+  0.088, // Dec
+  0.086, // Jan
+  0.084, // Feb
+  0.086, // Mar
+  0.086, // Apr
+  0.087, // May
+  0.087, // Jun
+];
+
+/** Energy runs on its own calendar — hot months cost more, and the MoM alert should see it. */
+const ENERGY_SHAPE = [
+  0.115, 0.135, 0.120, 0.095, 0.060, 0.045, 0.045, 0.050, 0.065, 0.080, 0.095, 0.095,
+];
+
+export type Period = number;
+
+const cumulative = (shape: number[], period: Period): number =>
+  shape.slice(0, period).reduce((a, b) => a + b, 0);
+
+/** Rounded to cents, so the file carries figures a district could actually reconcile. */
+const at = (annual: number, shape: number[], period: Period, cum: boolean): number =>
+  Math.round(annual * (cum ? cumulative(shape, period) : shape[period - 1]) * 100) / 100;
+
+/**
+ * How much of the budget is realised across the whole year.
+ *
+ * These two numbers carry the story. Revenue at 0.965 and spending at 0.995 puts the
+ * district a little behind on collections and a little hot on spending — enough for the
+ * variance and utilisation thresholds to have something to say by the spring, and not
+ * enough to look like a crisis.
+ */
+const REVENUE_REALISATION = 0.9477;
+const SPEND_REALISATION = 0.9431;
 
 /**
  * Revenue detail: fund, source, project/grant, cost centre, budget, MTD, YTD.
@@ -178,29 +262,35 @@ const OPENING_FUND_BALANCE: Row[] = [
  * MTD and YTD are kept consistent — YTD is MTD accumulated. A row whose YTD jumps while
  * its MTD reads zero is impossible, and the month-over-month alerts read MTD.
  */
-function revenueDetail(period: 1 | 2): Row[] {
-  const m = period;
-  const rows: Row[] = [
-    ["1000", "3310", "GENERAL", "", 120_000_000, 10_000_000, 10_000_000 * m],
-    ["1000", "3355", "GENERAL", "", 15_000_000, 1_250_000, 1_250_000 * m],
-    ["1000", "1110", "GENERAL", "", 60_000_000, 5_000_000, 5_000_000 * m],
-    ["1000", "3202", "TITLE-I-2627", "0021", 2_400_000, 180_000, 180_000 * m],
-    ["4100", "1310", "GENERAL", "", 6_500_000, 210_000, 210_000 * m],
+function revenueDetail(period: Period): Row[] {
+  // fund, source, project, cost centre, budget, and the share realised this year.
+  // Federal Title I lags badly — it is the line the "top negative variance" card names.
+  const lines: [string, string, string, string, number, number][] = [
+    ["1000", "3310", "GENERAL", "", 120_000_000, 0.99],
+    ["1000", "3355", "GENERAL", "", 15_000_000, 0.97],
+    ["1000", "1110", "GENERAL", "", 60_000_000, 0.98],
+    ["1000", "3202", "TITLE-I-2627", "0021", 2_400_000, 0.76],
+    ["4100", "1310", "GENERAL", "", 6_500_000, 0.93],
   ];
 
-  // A one-off transfer in, and the sale of a surplus site — both land in August. They are
-  // the rows the activity-code console classifies, and the reason the sample has something
-  // to classify at all.
-  rows.push(
-    period === 2
-      ? ["1000", "3600", "GENERAL", "", 1_000_000, 1_000_000, 1_000_000]
-      : ["1000", "3600", "GENERAL", "", 1_000_000, 0, 0],
-  );
-  rows.push(
-    period === 2
-      ? ["3200", "3730", "PECO-2627", "", 4_000_000, 4_000_000, 4_000_000]
-      : ["3200", "3730", "PECO-2627", "", 4_000_000, 0, 0],
-  );
+  const rows: Row[] = lines.map(([fund, source, project, cc, budget, realise]) => {
+    const annual = budget * realise * REVENUE_REALISATION;
+    return [fund, source, project, cc, budget, at(annual, REVENUE_SHAPE, period, false), at(annual, REVENUE_SHAPE, period, true)];
+  });
+
+  // A one-off transfer in, and the sale of a surplus site. Both are single events rather
+  // than a monthly stream — they are the rows the activity-code console classifies, and
+  // the reason the sample has something to classify at all.
+  const once = (landsIn: Period, amount: number): [number, number] => [
+    period === landsIn ? amount : 0,
+    period >= landsIn ? amount : 0,
+  ];
+
+  const transfer = once(2, 1_000_000);
+  const saleOfSite = once(4, 4_000_000);
+
+  rows.push(["1000", "3600", "GENERAL", "", 1_000_000, transfer[0], transfer[1]]);
+  rows.push(["3200", "3730", "PECO-2627", "", 4_000_000, saleOfSite[0], saleOfSite[1]]);
 
   return rows;
 }
@@ -211,41 +301,92 @@ function revenueDetail(period: 1 | 2): Row[] {
  * template that omitted it would imply otherwise. It is included in the file below with a
  * correct value, to show the recompute-and-compare passing.
  */
-function expenditureDetail(period: 1 | 2): Row[] {
-  const m = period;
-  const rows: Row[] = [
-    ["1000", "5000", "100", "0011", "GENERAL", 42_000_000, 3_500_000, 3_500_000 * m, 0],
-    ["1000", "5000", "100", "0021", "GENERAL", 31_000_000, 2_580_000, 2_580_000 * m, 0],
-    ["1000", "5000", "100", "0031", "GENERAL", 22_000_000, 1_830_000, 1_830_000 * m, 0],
-    ["1000", "5000", "200", "0011", "GENERAL", 13_500_000, 1_120_000, 1_120_000 * m, 0],
-    ["1000", "5000", "200", "0021", "GENERAL", 10_000_000, 830_000, 830_000 * m, 0],
-    ["1000", "5000", "200", "0031", "GENERAL", 7_000_000, 580_000, 580_000 * m, 0],
-    ["1000", "6100", "100", "9001", "GENERAL", 12_000_000, 1_000_000, 1_000_000 * m, 0],
-    ["1000", "6100", "200", "9001", "GENERAL", 4_000_000, 330_000, 330_000 * m, 0],
-    ["1000", "7300", "100", "9001", "GENERAL", 6_500_000, 540_000, 540_000 * m, 0],
-    ["1000", "7300", "200", "9001", "GENERAL", 2_000_000, 160_000, 160_000 * m, 0],
-    ["1000", "5000", "300", "0011", "GENERAL", 4_000_000, 300_000, 300_000 * m, 250_000],
-    ["1000", "7300", "300", "9001", "GENERAL", 14_000_000, 1_100_000, 1_100_000 * m, 900_000],
-    // Energy: a hot Florida August. In period 2 this line runs well ahead of a straight
-    // twelfth, which is what a real utility bill does — and what the month-over-month
-    // alert exists to notice.
-    ["1000", "7300", "400", "9002", "GENERAL", 8_500_000, period === 2 ? 1_400_000 : 620_000, period === 2 ? 2_020_000 : 620_000, 0],
-    ["1000", "5000", "500", "0011", "GENERAL", 3_200_000, 260_000, 260_000 * m, 140_000],
-    ["1000", "6200", "500", "0021", "GENERAL", 4_000_000, 330_000, 330_000 * m, 0],
-    ["1000", "5000", "600", "0011", "GENERAL", 7_200_000, 300_000, 300_000 * m, 5_800_000],
-    ["1000", "6300", "700", "9001", "GENERAL", 5_200_000, 430_000, 430_000 * m, 0],
-    ["1000", "7300", "9700", "9001", "GENERAL", 2_000_000, period === 2 ? 2_000_000 : 0, period === 2 ? 2_000_000 : 0, 0],
-    ["4100", "7300", "500", "9001", "GENERAL", 6_400_000, 530_000, 530_000 * m, 0],
+function expenditureDetail(period: Period): Row[] {
+  // fund, function, object, cost centre, project, budget, realised share, encumbrance.
+  // Salaries and benefits overrun slightly — they are the largest lines, so they are what
+  // pushes utilisation past the warning threshold late in the year.
+  const lines: [string, string, string, string, string, number, number, number][] = [
+    ["1000", "5000", "100", "0011", "GENERAL", 42_000_000, 1.03, 0],
+    ["1000", "5000", "100", "0021", "GENERAL", 31_000_000, 1.02, 0],
+    ["1000", "5000", "100", "0031", "GENERAL", 22_000_000, 1.01, 0],
+    ["1000", "5000", "200", "0011", "GENERAL", 13_500_000, 1.04, 0],
+    ["1000", "5000", "200", "0021", "GENERAL", 10_000_000, 1.03, 0],
+    ["1000", "5000", "200", "0031", "GENERAL", 7_000_000, 1.0, 0],
+    ["1000", "6100", "100", "9001", "GENERAL", 12_000_000, 0.99, 0],
+    ["1000", "6100", "200", "9001", "GENERAL", 4_000_000, 0.98, 0],
+    ["1000", "7300", "100", "9001", "GENERAL", 6_500_000, 0.97, 0],
+    ["1000", "7300", "200", "9001", "GENERAL", 2_000_000, 0.96, 0],
+    ["1000", "5000", "300", "0011", "GENERAL", 4_000_000, 0.92, 250_000],
+    ["1000", "7300", "300", "9001", "GENERAL", 14_000_000, 0.95, 900_000],
+    ["1000", "5000", "500", "0011", "GENERAL", 3_200_000, 0.94, 140_000],
+    ["1000", "6200", "500", "0021", "GENERAL", 4_000_000, 0.9, 0],
+    ["1000", "5000", "600", "0011", "GENERAL", 7_200_000, 0.55, 5_800_000],
+    ["1000", "6300", "700", "9001", "GENERAL", 5_200_000, 0.93, 0],
+    ["4100", "7300", "500", "9001", "GENERAL", 6_400_000, 0.98, 0],
   ];
 
-  // Period 2 only: the roof project is committed almost in full — encumbrances plus spend
+  const rows: Row[] = lines.map(([fund, fn, obj, cc, project, budget, realise, enc]) => {
+    const annual = budget * realise * SPEND_REALISATION;
+    return [
+      fund,
+      fn,
+      obj,
+      cc,
+      project,
+      budget,
+      at(annual, SPEND_SHAPE, period, false),
+      at(annual, SPEND_SHAPE, period, true),
+      // Encumbrances build early and are drawn down as the year runs — a purchase order
+      // raised in August is invoiced by spring. Holding them flat across twelve months
+      // would drive available budget negative and bury the validation report in warnings.
+      Math.round(enc * Math.max(0, 1 - period / 14)),
+    ];
+  });
+
+  // Energy runs on its own calendar. In the hot months this line runs well ahead of a
+  // straight twelfth, which is what a Florida utility bill does — and what the
+  // month-over-month alert exists to notice.
+  const energyAnnual = 8_500_000 * 0.99;
+  rows.push([
+    "1000",
+    "7300",
+    "400",
+    "9002",
+    "GENERAL",
+    8_500_000,
+    at(energyAnnual, ENERGY_SHAPE, period, false),
+    at(energyAnnual, ENERGY_SHAPE, period, true),
+    0,
+  ]);
+
+  // The interfund transfer out, a single event in August, matching the transfer in.
+  rows.push([
+    "1000",
+    "7300",
+    "9700",
+    "9001",
+    "GENERAL",
+    2_000_000,
+    period === 2 ? 2_000_000 : 0,
+    period >= 2 ? 2_000_000 : 0,
+    0,
+  ]);
+
+  // The roof project: committed almost in full from period 2, so encumbrances plus spend
   // exceed the budget on that line. It raises a WARNING on the validation report and
-  // demonstrates the two-tier split: a real state, acknowledged, not a rejected file.
-  rows.push(
-    period === 2
-      ? ["3200", "7300", "600", "0021", "ROOF-0021", 3_800_000, 1_900_000, 1_900_000, 2_100_000]
-      : ["3200", "7300", "600", "0021", "ROOF-0021", 3_800_000, 0, 0, 0],
-  );
+  // demonstrates the two-tier split — a real state, acknowledged, not a rejected file.
+  const roofSpent = period < 2 ? 0 : Math.min(3_600_000, 1_900_000 + (period - 2) * 210_000);
+  rows.push([
+    "3200",
+    "7300",
+    "600",
+    "0021",
+    "ROOF-0021",
+    3_800_000,
+    period === 2 ? 1_900_000 : period > 2 ? 210_000 : 0,
+    roofSpent,
+    period < 2 ? 0 : Math.max(0, 2_100_000 - (period - 2) * 190_000),
+  ]);
 
   // Append Available Budget = Budget − Actual YTD − Encumbrances, computed rather than
   // typed, so the file agrees with what the platform recomputes.
@@ -255,30 +396,67 @@ function expenditureDetail(period: 1 | 2): Row[] {
   });
 }
 
-/** Cash position: fund, beginning, receipts MTD, disbursements MTD, ending, investment, restricted, unrestricted. */
-function cashPosition(period: 1 | 2): Row[] {
-  // The workbook's own worked example lands in period 2 for the General Fund.
-  const gf =
-    period === 1
-      ? { begin: 70_000_000, receipts: 25_000_000, disburse: 23_000_000 }
-      : { begin: 72_000_000, receipts: 48_500_000, disburse: 44_200_000 }; // -> 76.3M
+/**
+ * Cash position: fund, beginning, receipts MTD, disbursements MTD, ending, investment,
+ * restricted, unrestricted.
+ *
+ * CHAINED, month to month: each period's beginning cash is the previous period's ending
+ * cash, exactly. That is not decoration — the platform recomputes Ending = Beginning +
+ * Receipts − Disbursements and compares to a cent, so a chain that did not hold would
+ * fail its own validation layer. It is also what makes the 12-month high/low, the average
+ * and the volatility figure on §7.2 mean anything.
+ *
+ * The district ends the year with materially less cash than it started, which is what puts
+ * days-cash under the 60-day policy and gives the gauge something to point at.
+ */
+function cashChain(period: Period): Record<string, { begin: number; receipts: number; disburse: number }> {
+  // Walk from the opening balance to the requested period. Cheap (12 iterations) and it
+  // guarantees the chain rather than asserting it.
+  const state = {
+    "1000": 40_000_000,
+    "4100": 2_000_000,
+    "3200": 7_300_000,
+  };
 
-  const fs =
-    period === 1
-      ? { begin: 2_000_000, receipts: 210_000, disburse: 530_000 }
-      : { begin: 1_680_000, receipts: 210_000, disburse: 530_000 };
+  let out: Record<string, { begin: number; receipts: number; disburse: number }> = {};
 
-  const cp =
-    period === 1
-      ? { begin: 7_300_000, receipts: 0, disburse: 0 }
-      : { begin: 7_300_000, receipts: 4_000_000, disburse: 1_900_000 };
+  for (let p = 1 as Period; p <= period; p++) {
+    const gfReceipts = Math.round(191_000_000 * REVENUE_SHAPE[p - 1]);
+    // Disbursements outrun receipts across the year — the reason cash declines.
+    const gfDisburse = Math.round(203_000_000 * SPEND_SHAPE[p - 1]);
+    const fsReceipts = Math.round(6_050_000 * REVENUE_SHAPE[p - 1]);
+    const fsDisburse = Math.round(6_270_000 * SPEND_SHAPE[p - 1]);
+    const cpReceipts = p === 4 ? 4_000_000 : 0;
+    const cpDisburse = p < 2 ? 0 : Math.round(3_400_000 * 0.09);
 
+    out = {
+      "1000": { begin: state["1000"], receipts: gfReceipts, disburse: gfDisburse },
+      "4100": { begin: state["4100"], receipts: fsReceipts, disburse: fsDisburse },
+      "3200": { begin: state["3200"], receipts: cpReceipts, disburse: cpDisburse },
+    };
+
+    state["1000"] += gfReceipts - gfDisburse;
+    state["4100"] += fsReceipts - fsDisburse;
+    state["3200"] += cpReceipts - cpDisburse;
+  }
+
+  return out;
+}
+
+function cashPosition(period: Period): Row[] {
+  const c = cashChain(period);
+  const end = (k: string) => c[k].begin + c[k].receipts - c[k].disburse;
+
+  // The composition columns feed §7.2's cash donut. Investment and restricted are reported
+  // separately; unrestricted is what is left, and the platform shows the remainder as
+  // "Other" rather than inferring it.
   return [
-    ["1000", gf.begin, gf.receipts, gf.disburse, gf.begin + gf.receipts - gf.disburse, 12_000_000, "", ""],
-    ["4100", fs.begin, fs.receipts, fs.disburse, fs.begin + fs.receipts - fs.disburse, "", "", ""],
-    ["3200", cp.begin, cp.receipts, cp.disburse, cp.begin + cp.receipts - cp.disburse, 5_000_000, "", ""],
+    ["1000", c["1000"].begin, c["1000"].receipts, c["1000"].disburse, end("1000"), 12_000_000, 2_100_000, Math.max(0, end("1000") - 12_000_000 - 2_100_000)],
+    ["4100", c["4100"].begin, c["4100"].receipts, c["4100"].disburse, end("4100"), "", "", ""],
+    ["3200", c["3200"].begin, c["3200"].receipts, c["3200"].disburse, end("3200"), 5_000_000, "", ""],
   ];
 }
+
 
 // ===================== writers =====================
 
@@ -336,8 +514,8 @@ async function main() {
   await emit("03-opening-fund-balance-FY2026-27", "opening-fund-balance", OPENING_FUND_BALANCE);
 
   console.log("\nMonthly — every reporting period");
-  for (const p of [1, 2] as const) {
-    const label = p === 1 ? "P1-July" : "P2-August";
+  for (let p = 1; p <= SAMPLE_PERIODS; p++) {
+    const label = PERIOD_LABELS[p - 1];
     await emit(`04-revenue-detail-FY2026-27-${label}`, "revenue-detail", revenueDetail(p));
     await emit(`05-expenditure-detail-FY2026-27-${label}`, "expenditure-detail", expenditureDetail(p));
     await emit(`06-cash-position-FY2026-27-${label}`, "cash-position", cashPosition(p));
@@ -346,7 +524,14 @@ async function main() {
   console.log(`\nWritten to public/sample-data\n`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
-});
+// Only generate when this script is RUN — importing it must not rewrite every sample file
+// as a side effect.
+const runDirectly =
+  process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (runDirectly) {
+  main().catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  });
+}

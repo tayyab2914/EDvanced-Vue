@@ -119,6 +119,7 @@ export async function commitBatch(
     // mean "delete", which is not what the district was offered.
     if (args.action === "REPLACED" && check.existing) {
       await deleteRowsOfVersion(t, meta.slug, check.existing.id);
+      await clearOverridesFor(t, batch.dataset, batch.fiscalYear, batch.period);
     }
 
     const version = await t.datasetVersion.create({
@@ -197,6 +198,39 @@ async function deleteRowsOfVersion(
   const model = datasetDef(slug).model;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (tx as any)[model].deleteMany({ where: { versionId } });
+}
+
+/**
+ * A Replace clears any manual fund-balance override for the period it replaced.
+ *
+ * Both client documents promise this — "Replace clears any manual fund-balance override
+ * for that period, and the prompt says so before you confirm" (Spec §5.8, §5.20) — and it
+ * was not implemented. An override therefore survived a replacement and went on correcting
+ * the NEW numbers, silently and indefinitely, which is the worst of the three outcomes the
+ * duplicate prompt offers.
+ *
+ * The override row is not cascaded away by the delete above: it hangs off the DatasetVersion,
+ * and a Replace deliberately keeps the version row alive so history stays readable.
+ *
+ * Only the datasets the balance is DERIVED from clear it. Replacing a cash position file
+ * changes no fund-balance component, and throwing away a district's audit adjustment
+ * because they re-uploaded cash would be its own kind of wrong.
+ */
+const FUND_BALANCE_INPUTS = new Set(["REVENUE_DETAIL", "EXPENDITURE_DETAIL", "OPENING_FUND_BALANCE"]);
+
+async function clearOverridesFor(
+  tx: TenantDb,
+  dataset: string,
+  fiscalYear: string,
+  period: number | null,
+): Promise<void> {
+  if (!FUND_BALANCE_INPUTS.has(dataset)) return;
+
+  // An annual import carries no period. Opening Fund Balance anchors the WHOLE year, so
+  // replacing it invalidates every period's correction, not one month's.
+  await tx.fundBalanceOverride.deleteMany({
+    where: period === null ? { fiscalYear } : { fiscalYear, period },
+  });
 }
 
 /**

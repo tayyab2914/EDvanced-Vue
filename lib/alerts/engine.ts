@@ -38,14 +38,34 @@ export interface Alert {
   message: string;
 }
 
+/**
+ * A fact worth stating that no threshold governs — §3.3c's "Informational · For awareness".
+ *
+ * Deliberately NOT a 25th alert. The catalogue's count of twenty-four is a number in both
+ * client documents, and the four groups map to the workbook's own four tables; growing it
+ * to make a dashboard tile read better would quietly make those documents wrong.
+ *
+ * These are observations instead: things true of the period that a finance officer would
+ * want to notice, with no threshold behind them and no severity to escalate. "Cash
+ * disbursements exceeded receipts this month" is the reference's own example — normal in
+ * any month with a bond payment, worth a glance, never an alarm.
+ */
+export interface Observation {
+  id: string;
+  title: string;
+  message: string;
+}
+
 export interface AlertReport {
   alerts: Alert[];
+  observations: Observation[];
   facts: AlertFacts;
   policy: PolicyValues;
   reserveStatus: ReserveStatus | null;
   /** Critical first — a district reads the top of the list. */
   criticalCount: number;
   warningCount: number;
+  informationalCount: number;
 }
 
 export async function evaluateAlerts(
@@ -73,15 +93,60 @@ export async function evaluateAlerts(
 
   alerts.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "CRITICAL" ? -1 : 1));
 
+  const observations = observe(facts);
+
   return {
     alerts,
+    observations,
     facts,
     policy,
     reserveStatus: reserveStatus(facts.reservePercent, policy),
     criticalCount: alerts.filter((a) => a.severity === "CRITICAL").length,
     warningCount: alerts.filter((a) => a.severity === "WARNING").length,
+    informationalCount: observations.length,
   };
 }
+
+/**
+ * The informational tier. No thresholds are consulted — that is what makes these
+ * observations rather than alerts.
+ */
+function observe(f: AlertFacts): Observation[] {
+  const out: Observation[] = [];
+
+  if (f.availableBudget.isPositive() && f.encumbrances.greaterThan(0)) {
+    out.push({
+      id: "ENCUMBRANCES_OUTSTANDING",
+      title: "Encumbrances outstanding",
+      message: `${money(f.encumbrances)} is committed but not yet paid, and is already counted against available budget.`,
+    });
+  }
+
+  if (f.expenditureForecast !== null && f.expenditureBudget.greaterThan(0)) {
+    out.push({
+      id: "YEAR_END_PROJECTION",
+      title: "Year-end projection",
+      message: `On the current pace, spending reaches ${money(f.expenditureForecast)} against a budget of ${money(f.expenditureBudget)}.`,
+    });
+  }
+
+  if (f.changeInFundBalance.isPositive()) {
+    out.push({
+      id: "FUND_BALANCE_GREW",
+      title: "Fund balance is growing",
+      message: `This year's operations have added ${money(f.changeInFundBalance)} to the fund balance.`,
+    });
+  }
+
+  return out;
+}
+
+const money = (v: Prisma.Decimal) =>
+  Number(v.toFixed(2)).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
 
 /**
  * Everything the catalogue can ask about, for one period.
@@ -179,6 +244,50 @@ export async function gatherFacts(
 
   const cashDecreasePercent = await monthOverMonthCashDrop(db, scope);
 
+  /**
+   * The projected year-end reserve — and the three alerts that could not fire without it.
+   *
+   * FORECAST_BELOW_TARGET, FORECAST_WARNING and FORECAST_CRITICAL all read
+   * `forecastReservePercent`, and it was hardcoded `null` here with a note saying the
+   * multi-year projection "lives on its own screen". The catalogue is covered by
+   * `verify:alerts`, which tests each definition against a fixture — but nothing tested
+   * that this function supplies the facts, so three of the twenty-four shipped
+   * permanently silent behind a passing suite.
+   *
+   * It does not need the multi-year projection. Year-end unassigned is today's unassigned
+   * plus the rest of THIS year's activity, and both projections are already computed a few
+   * lines above for the forecast-variance alerts:
+   *
+   *     projected unassigned = unassigned now
+   *                          + (year-end revenue − revenue so far)
+   *                          − (year-end spend  − spend so far)
+   *
+   * So this costs no extra queries. The divisor is the adopted expenditure budget, the
+   * same one `reservePercent()` uses, so the current and forecast reserve percentages are
+   * comparable — which is the whole point of showing them beside each other.
+   */
+  const remainingRevenue = revenueForecast.projected.minus(revenueYtd);
+  const remainingSpend = expenditureForecast.projected.minus(expenditureYtd);
+  const projectedUnassigned = reserve.unassigned.plus(remainingRevenue).minus(remainingSpend);
+  const forecastReservePercent = reserve.budget.isZero()
+    ? null
+    : projectedUnassigned.dividedBy(reserve.budget).times(100);
+
+  /**
+   * Whether the district's designated components exceed the projected balance — the 24th
+   * alert, also hardcoded (to `false`) and therefore also permanently silent.
+   *
+   * The components are the ones the district reported on its Opening Fund Balance:
+   * nonspendable, restricted, committed and assigned. If they add up to more than the
+   * balance the year is projected to end at, the unassigned reserve would be negative —
+   * a board having designated more money than the fund actually holds. That is worth a
+   * critical alert and it is computable from data already imported.
+   */
+  const components = await designatedComponents(db, scope);
+  const projectedTotal = fb.beginning.plus(remainingRevenue.minus(remainingSpend)).plus(
+    totals.totalRevenueYtd.minus(totals.totalExpenditureYtd),
+  );
+
   return {
     revenueBudget: budgets.revenue,
     revenueYtd,
@@ -199,11 +308,55 @@ export async function gatherFacts(
     cashDecreasePercent,
 
     reservePercent: reserve.percent,
-    // Needs the multi-year projection, which is per-fund and lives on its own screen.
-    forecastReservePercent: null,
+    forecastReservePercent,
     changeInFundBalance: fb.total.minus(fb.beginning),
-    componentsExceedTotal: false,
+    // Only meaningful where the district actually reported components. With none imported
+    // the sum is zero, which would never exceed anything — silence, not a false all-clear.
+    componentsExceedTotal: components !== null && components.greaterThan(projectedTotal),
   };
+}
+
+/**
+ * The district's designated fund-balance components, from the annual Opening Fund Balance.
+ *
+ * Null — not zero — when no opening balance has been imported. The distinction is the
+ * whole point: "this district designates nothing" and "we have not been told" must not
+ * both read as a comfortable zero.
+ */
+async function designatedComponents(
+  db: TenantDb,
+  scope: { fiscalYear: string; fundId?: string },
+): Promise<Prisma.Decimal | null> {
+  const version = await db.datasetVersion.findFirst({
+    where: {
+      fiscalYear: scope.fiscalYear,
+      period: null,
+      isCurrent: true,
+      dataset: "OPENING_FUND_BALANCE",
+    },
+    select: { id: true },
+  });
+  if (!version) return null;
+
+  const agg = await db.openingFundBalance.aggregate({
+    where: { versionId: version.id, ...(scope.fundId ? { fundId: scope.fundId } : {}) },
+    _sum: {
+      begNonspendable: true,
+      begRestricted: true,
+      begCommitted: true,
+      begAssigned: true,
+    },
+  });
+
+  // Every component is nullable on the import; a row that supplied none contributes zero.
+  if (agg._sum.begNonspendable === null && agg._sum.begRestricted === null) return null;
+
+  return [
+    agg._sum.begNonspendable,
+    agg._sum.begRestricted,
+    agg._sum.begCommitted,
+    agg._sum.begAssigned,
+  ].reduce<Prisma.Decimal>((a, b) => (b ? a.plus(b) : a), ZERO);
 }
 
 /** Budget and encumbrances for the period, from the current versions. */

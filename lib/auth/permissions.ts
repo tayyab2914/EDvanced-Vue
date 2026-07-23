@@ -15,7 +15,25 @@ export type Permission =
   | "upload_data" // M2
   | "manage_versions" // M2
   | "view_dashboards" // M2
-  | "export_data"; // M2
+  | "export_data" // M2
+  // ---- M3 ----
+  /**
+   * Set the district's forecast growth assumptions and its projected components.
+   *
+   * Sits with Finance Users as well as administrators, unlike `configure_district`: a
+   * growth assumption is a working estimate that gets revised as the year runs, which is
+   * day-to-day finance work rather than board policy. The THRESHOLDS those forecasts are
+   * judged against remain administrator-only — that split is §5.16's own argument.
+   */
+  | "edit_forecast_assumptions"
+  /**
+   * Override a derived fund-balance figure.
+   *
+   * District Administrators ONLY, and deliberately narrower than every other write in the
+   * product. This is a correction to a number the platform computed, it is the first thing
+   * an auditor asks about, and it is not finance-team routine.
+   */
+  | "override_fund_balance";
 
 /**
  * What each access level a district can grant an external user actually unlocks.
@@ -32,6 +50,9 @@ export const ACCESS_LEVEL_PERMISSIONS: Record<ExternalAccessLevel, Permission[]>
     "manage_versions",
     "view_dashboards",
     "export_data",
+    "edit_forecast_assumptions",
+    // NOT override_fund_balance. An external user never administers anything, at any
+    // level, and correcting a derived financial figure is the clearest case of that.
   ],
 };
 
@@ -48,6 +69,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "manage_versions",
     "view_dashboards",
     "export_data",
+    "edit_forecast_assumptions",
+    "override_fund_balance",
   ],
   DISTRICT_ADMIN: [
     "manage_users_own",
@@ -59,6 +82,8 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "manage_versions",
     "view_dashboards",
     "export_data",
+    "edit_forecast_assumptions",
+    "override_fund_balance",
   ],
   FINANCE_USER: [
     "manage_master_data",
@@ -67,6 +92,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "manage_versions",
     "view_dashboards",
     "export_data",
+    "edit_forecast_assumptions",
   ],
   VIEWER: ["view_master_data", "view_dashboards", "export_data"],
   // An external user holds NO permissions from their role alone — everything they can do

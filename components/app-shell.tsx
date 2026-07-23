@@ -77,6 +77,7 @@ export function AppShell({
   user,
   switcher,
   alerts,
+  hideHeader = false,
   children,
 }: {
   workspaceName: string;
@@ -88,6 +89,11 @@ export function AppShell({
   switcher?: ReactNode;
   /** Lights up the header bell. Omit it and the bell renders dark (nothing pending). */
   alerts?: ShellAlert;
+  /**
+   * Drops the sticky top header entirely (workspace title, fiscal-year chip, bell). A
+   * floating menu button takes over on mobile so the sidebar drawer is still reachable.
+   */
+  hideHeader?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -149,24 +155,33 @@ export function AppShell({
 
         {/* MAIN */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-[62px] flex-none items-center gap-3 border-b border-line bg-white px-4 sm:gap-4 sm:px-6">
-            <MenuButton />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[15px] font-semibold leading-tight text-ink">
-                {workspaceName}
-              </div>
-              <div className="truncate text-[12px] text-muted-2">
-                {workspaceSub}
-              </div>
+          {hideHeader ? (
+            // Header removed for this area. The sidebar is always visible on `lg`, but
+            // below it the drawer needs a trigger — this floating button is the only one
+            // left, so it stays mobile-only (`lg:hidden`).
+            <div className="sticky top-0 z-20 flex justify-start p-3 lg:hidden">
+              <MenuButton />
             </div>
-            {contextTag && (
-              <div className="hidden h-9 flex-none items-center gap-2 rounded-lg border border-line bg-panel px-3 text-[13px] font-medium text-ink-soft sm:flex">
-                <span className="text-[12px] text-muted-2">Fiscal Year</span>
-                <strong className="font-semibold">{contextTag}</strong>
+          ) : (
+            <header className="sticky top-0 z-20 flex h-[62px] flex-none items-center gap-3 border-b border-line bg-white px-4 sm:gap-4 sm:px-6">
+              <MenuButton />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-semibold leading-tight text-ink">
+                  {workspaceName}
+                </div>
+                <div className="truncate text-[12px] text-muted-2">
+                  {workspaceSub}
+                </div>
               </div>
-            )}
-            <Bell alert={alerts} />
-          </header>
+              {contextTag && (
+                <div className="hidden h-9 flex-none items-center gap-2 rounded-lg border border-line bg-panel px-3 text-[13px] font-medium text-ink-soft sm:flex">
+                  <span className="text-[12px] text-muted-2">Fiscal Year</span>
+                  <strong className="font-semibold">{contextTag}</strong>
+                </div>
+              )}
+              <Bell alert={alerts} />
+            </header>
+          )}
 
           <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-7 lg:py-7">
             {children}
