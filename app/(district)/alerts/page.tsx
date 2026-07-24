@@ -73,6 +73,12 @@ export default async function AlertsPage({
       <Row cols="1-2">
         <SectionCard title="Summary" footer="Review your thresholds" footerHref="/policies">
           <AlertSummary
+            alerts={(alerts?.alerts ?? []).map((a) => ({
+              id: a.id,
+              severity: a.severity,
+              title: a.title,
+              message: a.message,
+            }))}
             critical={alerts?.criticalCount ?? 0}
             warning={alerts?.warningCount ?? 0}
             informational={alerts?.informationalCount ?? 0}

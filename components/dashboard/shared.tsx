@@ -165,21 +165,83 @@ export function PolicyEchoCard({
   );
 }
 
-/** A two-column dashboard row that collapses on narrow screens. */
+/**
+ * A dashboard row that collapses on narrow screens.
+ *
+ * `2-2-1` is the shape the client's Revenue and Expenditure layout diagrams describe: two
+ * chart columns of equal weight and a narrower rail carrying the policy echo, the movers
+ * and the alerts. `minmax(0,…)` rather than a bare fraction on every track, because a wide
+ * table inside a grid child will otherwise blow the column past its share and push the rail
+ * off the page.
+ */
 export function Row({
   children,
   cols = "2",
   className,
 }: {
   children: ReactNode;
-  cols?: "2" | "3" | "1-2" | "2-1";
+  cols?: "2" | "3" | "1-2" | "2-1" | "2-2-1" | "1-2-rail";
   className?: string;
 }) {
   const grid = {
     "2": "lg:grid-cols-2",
     "3": "lg:grid-cols-3",
-    "1-2": "lg:grid-cols-[1fr_2fr]",
-    "2-1": "lg:grid-cols-[2fr_1fr]",
+    "1-2": "lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]",
+    "2-1": "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]",
+    "2-2-1": "xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)]",
+    "1-2-rail": "xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,0.9fr)]",
   }[cols];
   return <div className={cn("grid gap-4", grid, className)}>{children}</div>;
+}
+
+/**
+ * The narrative bar under a chart — "KEY INSIGHT: cash increased by $2.1M (5.32%) in May…".
+ *
+ * The client called Key Insights the section that "tells the story instead of simply
+ * displaying numbers", and asked for the same treatment on Fund Balance Trend and Cash.
+ * The sentence itself is always built in lib/ — see lib/alerts/insights.ts — so a
+ * conclusion on a superintendent's screen is a testable function of the district's own
+ * figures rather than a string assembled inside JSX.
+ */
+export function KeyInsightBar({
+  children,
+  tone = "info",
+  icon = "lightbulb",
+}: {
+  children: ReactNode;
+  tone?: "info" | "monitor" | "action" | "strong";
+  icon?: IconName;
+}) {
+  const TONE = {
+    info: "border-[#d5e3fb] bg-[#f2f7ff] text-[#33507a]",
+    strong: "border-strong-bg bg-strong-bg text-strong",
+    monitor: "border-monitor-bg bg-monitor-bg text-monitor",
+    action: "border-action-bg bg-action-bg text-action",
+  } as const;
+  const CHIP = {
+    info: "bg-brand text-white",
+    strong: "bg-strong-mark text-white",
+    monitor: "bg-monitor-mark text-white",
+    action: "bg-action-mark text-white",
+  } as const;
+
+  return (
+    <div className={cn("flex items-start gap-2.5 rounded-lg border px-3.5 py-3", TONE[tone])}>
+      <span
+        aria-hidden
+        className={cn(
+          "flex h-[24px] w-[24px] flex-none items-center justify-center rounded-full",
+          CHIP[tone],
+        )}
+      >
+        <Icon name={icon} size={13} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[9.5px] font-semibold uppercase tracking-[0.06em] opacity-80">
+          Key insight
+        </span>
+        <span className="mt-0.5 block text-[12.5px] leading-relaxed">{children}</span>
+      </span>
+    </div>
+  );
 }

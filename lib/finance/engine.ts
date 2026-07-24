@@ -184,6 +184,68 @@ export async function beginningFundBalance(
   };
 }
 
+/**
+ * The year's opening fund balance broken into its four designated components.
+ *
+ * `beginningFundBalance` returns the total and the unassigned share, which is all the
+ * reserve KPI needs. The Forecasting & Planning screen needs the components themselves —
+ * they are what the multi-year table subtracts, and what the district sets a forecast
+ * method against per component.
+ *
+ * Zeroes rather than nulls when a component column was left empty on the import: the four
+ * are optional on the file precisely because many districts report only unassigned, and a
+ * blank column there means "nothing designated", not "unknown".
+ */
+export async function beginningComponents(
+  db: TenantDb,
+  args: { fiscalYear: string; fundId?: string },
+): Promise<{
+  nonspendable: Prisma.Decimal;
+  restricted: Prisma.Decimal;
+  committed: Prisma.Decimal;
+  assigned: Prisma.Decimal;
+  unassigned: Prisma.Decimal;
+  total: Prisma.Decimal;
+  found: boolean;
+}> {
+  const versions = await currentVersionIds(db, { fiscalYear: args.fiscalYear, period: null });
+  const versionId = versions.get("OPENING_FUND_BALANCE");
+  const empty = {
+    nonspendable: ZERO,
+    restricted: ZERO,
+    committed: ZERO,
+    assigned: ZERO,
+    unassigned: ZERO,
+    total: ZERO,
+    found: false,
+  };
+  if (!versionId) return empty;
+
+  const r = await db.openingFundBalance.aggregate({
+    where: { versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+    _sum: {
+      begNonspendable: true,
+      begRestricted: true,
+      begCommitted: true,
+      begAssigned: true,
+      begUnassigned: true,
+      begTotal: true,
+    },
+  });
+
+  if (r._sum.begTotal === null) return empty;
+
+  return {
+    nonspendable: r._sum.begNonspendable ?? ZERO,
+    restricted: r._sum.begRestricted ?? ZERO,
+    committed: r._sum.begCommitted ?? ZERO,
+    assigned: r._sum.begAssigned ?? ZERO,
+    unassigned: r._sum.begUnassigned ?? ZERO,
+    total: r._sum.begTotal,
+    found: true,
+  };
+}
+
 /** Ending cash for the period, from the Cash Position import. */
 export async function endingCash(
   db: TenantDb,

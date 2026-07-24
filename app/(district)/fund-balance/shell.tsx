@@ -46,11 +46,13 @@ export function FundBalanceShell({
 
       <LinkTabs
         active={`${active}${q}`}
+        // The client's naming: "Tabs Update Names — Current Position, Forecasting &
+        // Planning".
         tabs={[
-          { href: `/fund-balance${q}`, label: "Current position", icon: "building" },
-          { href: `/fund-balance/forecast${q}`, label: "Forecast & planning", icon: "chart" },
+          { href: `/fund-balance${q}`, label: "Current Position", icon: "building" },
+          { href: `/fund-balance/forecast${q}`, label: "Forecasting & Planning", icon: "trend-up" },
           { href: `/fund-balance/policies${q}`, label: "Policies", icon: "shield" },
-          { href: `/fund-balance/alerts${q}`, label: "Alerts", icon: "activity", count: alertCount },
+          { href: `/fund-balance/alerts${q}`, label: "Alerts", icon: "warning", count: alertCount },
         ]}
       />
 

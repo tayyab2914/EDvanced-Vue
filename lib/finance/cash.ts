@@ -114,6 +114,65 @@ export function cashComposition(point: PeriodPoint | null): CashComposition | nu
   };
 }
 
+/**
+ * Receipts, disbursements and net flow for the YEAR to date — §3.2c's Cash Position card,
+ * which the client's mockup states in YTD terms rather than the month's.
+ *
+ * Summed from the monthly points rather than queried, because the cash file carries a
+ * month's movement and no cumulative column: a district that skipped a month would
+ * otherwise have that month silently absorbed into the next one's total. Periods with no
+ * cash file contribute nothing and are counted, so the card can say how many months it is
+ * actually adding up.
+ */
+export interface CashFlowYtd {
+  receipts: Prisma.Decimal | null;
+  disbursements: Prisma.Decimal | null;
+  net: Prisma.Decimal | null;
+  /** Ending cash of the earliest reporting period's opening — the year's starting point. */
+  beginningCash: Prisma.Decimal | null;
+  months: number;
+}
+
+export function cashFlowYtd(points: PeriodPoint[]): CashFlowYtd {
+  const withFlow = points.filter((p) => p.receiptsMtd !== null && p.disbursementsMtd !== null);
+  const withCash = points.filter((p) => p.beginningCash !== null);
+
+  if (withFlow.length === 0) {
+    return {
+      receipts: null,
+      disbursements: null,
+      net: null,
+      beginningCash: withCash[0]?.beginningCash ?? null,
+      months: 0,
+    };
+  }
+
+  const receipts = withFlow.reduce((a, p) => a.plus(p.receiptsMtd!), ZERO);
+  const disbursements = withFlow.reduce((a, p) => a.plus(p.disbursementsMtd!), ZERO);
+
+  return {
+    receipts,
+    disbursements,
+    net: receipts.minus(disbursements),
+    beginningCash: withCash[0]?.beginningCash ?? null,
+    months: withFlow.length,
+  };
+}
+
+/**
+ * Cash as a share of the year's spending — the "Cash % of expenditures" figure on §3.2c.
+ *
+ * Null when there is no spending to be a share of, never zero: a district in month one with
+ * no committed expenditure detail has an undefined ratio, not a 0% one.
+ */
+export function cashPercentOfExpenditures(
+  endingCash: Prisma.Decimal | null,
+  expenditureYtd: Prisma.Decimal | null,
+): Prisma.Decimal | null {
+  if (endingCash === null || expenditureYtd === null || expenditureYtd.isZero()) return null;
+  return endingCash.dividedBy(expenditureYtd).times(100);
+}
+
 // ===================== trailing statistics =====================
 
 /** Only the periods that actually reported cash. */

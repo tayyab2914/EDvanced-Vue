@@ -83,7 +83,16 @@ const P3 = 3;
 const M = (n: string | number) => new D(n);
 const m = (v: Prisma.Decimal) => v.dividedBy(1_000_000).toFixed(2);
 /** Revenue growing 3% a year against spending growing 5% — a district heading for trouble. */
-const GROWTH = { revenuePercent: new D(3), expenditurePercent: new D(5) };
+// The M4 adjustment fields are all null here on purpose: this assertion is about the
+// growth rates compounding, and a recurring adjustment would mask a rate that did not.
+const GROWTH = {
+  revenuePercent: new D(3),
+  expenditurePercent: new D(5),
+  recurringRevenueAdjustment: null,
+  oneTimeRevenueAdjustment: null,
+  recurringExpenditureAdjustment: null,
+  oneTimeExpenditure: null,
+};
 
 async function main() {
   // ===================== pure maths, no database =====================

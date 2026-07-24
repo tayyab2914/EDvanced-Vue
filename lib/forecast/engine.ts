@@ -1,9 +1,15 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { TenantDb } from "@/lib/tenant-db";
 import type { ActivityCodes } from "@/lib/finance/transfers";
-import { activityTotals, currentVersionIds } from "@/lib/finance/engine";
+import { activityTotals, currentVersionIds, beginningComponents } from "@/lib/finance/engine";
 import { computeUnassigned } from "@/lib/finance/fund-balance";
 import { parseFiscalYear, formatFiscalYear } from "@/lib/periods/fiscal";
+import {
+  FUND_BALANCE_COMPONENT_VALUES,
+  isForecastMethod,
+  type FundBalanceComponent,
+  type ForecastMethod,
+} from "@/lib/enums";
 
 /**
  * Forecasting: what the year is likely to end at, and what the reserve looks like in
@@ -245,8 +251,10 @@ export interface FundBalanceForecast {
   beginning: Prisma.Decimal;
   /** Beginning + net change. */
   total: Prisma.Decimal;
-  /** Nonspendable + restricted + committed + assigned, as the district typed them. */
+  /** Nonspendable + restricted + committed + assigned, under the district's own rules. */
   components: Prisma.Decimal;
+  /** The same four, individually — the "Less: …" rows of §6.2's calculation flow. */
+  componentBreakdown: Record<FundBalanceComponent, Prisma.Decimal>;
   /** What is left once the district's designated components are taken out. */
   unassigned: Prisma.Decimal;
   /** Unassigned as a share of that year's projected expenditure. Null when there is none. */
@@ -272,6 +280,27 @@ export interface FundBalanceForecast {
 export interface GrowthAssumptions {
   revenuePercent: Prisma.Decimal | null;
   expenditurePercent: Prisma.Decimal | null;
+  /**
+   * A permanent addition to revenue, applied to EVERY projected year — a millage change,
+   * a recurring grant the run-rate does not contain yet.
+   */
+  recurringRevenueAdjustment: Prisma.Decimal | null;
+  /** Non-recurring revenue, applied to the FIRST projected year only. */
+  oneTimeRevenueAdjustment: Prisma.Decimal | null;
+  /**
+   * A permanent addition to spending, applied to every projected year.
+   */
+  recurringExpenditureAdjustment: Prisma.Decimal | null;
+  /**
+   * One-time and carryforward spending EXCLUDED from the recurring operating base.
+   *
+   * This is the client's "Recurring Operating Base (Excludes One-Time)": growth should
+   * compound on the operations a district repeats, not on a bond-funded roof replacement
+   * that happens once. Without it, a single large capital year inflates every year of the
+   * plan — which is exactly the kind of quietly wrong forecast that gets a district into
+   * trouble three years out.
+   */
+  oneTimeExpenditure: Prisma.Decimal | null;
 }
 
 export async function districtGrowth(
@@ -280,13 +309,105 @@ export async function districtGrowth(
 ): Promise<GrowthAssumptions> {
   const rows = await db.forecastAssumption.findMany({
     where: { fiscalYear, revenueTypeId: null, objectTypeId: null },
-    select: { kind: true, growthPercent: true },
+    select: {
+      kind: true,
+      growthPercent: true,
+      recurringAdjustment: true,
+      oneTimeAdjustment: true,
+    },
   });
 
+  const revenue = rows.find((r) => r.kind === "REVENUE");
+  const expenditure = rows.find((r) => r.kind === "EXPENDITURE");
+
   return {
-    revenuePercent: rows.find((r) => r.kind === "REVENUE")?.growthPercent ?? null,
-    expenditurePercent: rows.find((r) => r.kind === "EXPENDITURE")?.growthPercent ?? null,
+    revenuePercent: revenue?.growthPercent ?? null,
+    expenditurePercent: expenditure?.growthPercent ?? null,
+    recurringRevenueAdjustment: revenue?.recurringAdjustment ?? null,
+    oneTimeRevenueAdjustment: revenue?.oneTimeAdjustment ?? null,
+    recurringExpenditureAdjustment: expenditure?.recurringAdjustment ?? null,
+    oneTimeExpenditure: expenditure?.oneTimeAdjustment ?? null,
   };
+}
+
+// ===================== fund balance component rules =====================
+
+export interface ComponentAssumption {
+  component: FundBalanceComponent;
+  method: ForecastMethod;
+  annualIncreasePercent: Prisma.Decimal | null;
+  /** Today's balance for this component, from the opening fund balance import. */
+  current: Prisma.Decimal;
+}
+
+/**
+ * The rule each component is projected by, defaulted for the components a district has
+ * not configured.
+ *
+ * CARRY_FORWARD is the default, and deliberately so: it is what the platform did before
+ * the rules existed, so an un-configured district's numbers do not move the day this
+ * shipped.
+ */
+export async function componentAssumptions(
+  db: TenantDb,
+  args: { fiscalYear: string; fundId: string },
+): Promise<ComponentAssumption[]> {
+  const [stored, current] = await Promise.all([
+    db.fundBalanceComponentAssumption.findMany({
+      where: { fiscalYear: args.fiscalYear, fundId: args.fundId },
+    }),
+    beginningComponents(db, { fiscalYear: args.fiscalYear, fundId: args.fundId }),
+  ]);
+
+  const byComponent = new Map(stored.map((s) => [s.component, s]));
+  const currentOf: Record<FundBalanceComponent, Prisma.Decimal> = {
+    NONSPENDABLE: current.nonspendable,
+    RESTRICTED: current.restricted,
+    COMMITTED: current.committed,
+    ASSIGNED: current.assigned,
+  };
+
+  return FUND_BALANCE_COMPONENT_VALUES.map((component) => {
+    const s = byComponent.get(component);
+    const method =
+      s && isForecastMethod(s.method) ? (s.method as ForecastMethod) : "CARRY_FORWARD";
+    return {
+      component,
+      method,
+      annualIncreasePercent: s?.annualIncreasePercent ?? null,
+      current: currentOf[component],
+    };
+  });
+}
+
+/**
+ * What a component is worth in projected year `index` (0 = the current year).
+ *
+ * `override` is the district's typed figure for that year, from FundBalanceProjection —
+ * read only by MANUAL_OVERRIDE, so switching a component to a derived method does not
+ * silently discard the numbers someone typed under the old one.
+ */
+export function projectComponent(
+  a: ComponentAssumption,
+  index: number,
+  override: Prisma.Decimal | null,
+): Prisma.Decimal {
+  if (index === 0) return a.current;
+
+  switch (a.method) {
+    case "MANUAL_OVERRIDE":
+      return override ?? a.current;
+    case "ONE_TIME_CARRYFORWARD":
+      // Survives the first projected year, then released.
+      return index === 1 ? a.current : ZERO;
+    case "INCREASE_BY_PERCENT": {
+      const rate = new D(a.annualIncreasePercent ?? 0).dividedBy(100);
+      return a.current.times(new D(1).plus(rate).pow(index));
+    }
+    case "CARRY_FORWARD":
+    default:
+      return a.current;
+  }
 }
 
 /**
@@ -340,11 +461,12 @@ export async function projectFundBalance(
   const years = args.years ?? 3;
   const scope = { fiscalYear: args.fiscalYear, period: args.period, fundId: args.fundId };
 
-  const [current, totals, projections, stored] = await Promise.all([
+  const [current, totals, projections, stored, componentRules] = await Promise.all([
     computeUnassigned(db, scope, codes),
     activityTotals(db, scope, codes),
     db.fundBalanceProjection.findMany({ where: { fundId: args.fundId } }),
     args.growth ? Promise.resolve(args.growth) : districtGrowth(db, args.fiscalYear),
+    componentAssumptions(db, { fiscalYear: args.fiscalYear, fundId: args.fundId }),
   ]);
 
   const start = parseFiscalYear(args.fiscalYear);
@@ -353,19 +475,39 @@ export async function projectFundBalance(
   const growth = args.growth ?? stored;
   const revenueRate = new D(growth.revenuePercent ?? 0).dividedBy(100);
   const spendRate = new D(growth.expenditurePercent ?? 0).dividedBy(100);
+  const recurringRevenue = growth.recurringRevenueAdjustment ?? ZERO;
+  const oneTimeRevenue = growth.oneTimeRevenueAdjustment ?? ZERO;
+  const recurringSpend = growth.recurringExpenditureAdjustment ?? ZERO;
+  const oneTimeSpend = growth.oneTimeExpenditure ?? ZERO;
 
   // This year, straight-lined from the pace so far. Budget ZERO because we want the
   // projection itself, not its variance against a budget.
-  let revenue = projectYearEnd({
+  const currentYearRevenue = projectYearEnd({
     actualYtd: totals.totalRevenueYtd,
     budget: ZERO,
     periodsElapsed: args.period,
   }).projected;
-  let expenditure = projectYearEnd({
+  const currentYearExpenditure = projectYearEnd({
     actualYtd: totals.totalExpenditureYtd,
     budget: ZERO,
     periodsElapsed: args.period,
   }).projected;
+
+  /**
+   * The bases the growth rates compound on.
+   *
+   * Revenue compounds on the whole year: a district's revenue streams are recurring by
+   * nature, and the one-off money is stated separately as an adjustment.
+   *
+   * Spending compounds on the RECURRING OPERATING BASE — this year's projection less the
+   * one-time and carryforward spending the district has excluded. That is the client's
+   * requirement and it is the arithmetically important one: compounding 3% growth on a
+   * one-off capital year builds the one-off into every future year of the plan.
+   */
+  const recurringBase = currentYearExpenditure.minus(oneTimeSpend);
+
+  let revenue = currentYearRevenue;
+  let expenditure = currentYearExpenditure;
 
   const byYear = new Map(projections.map((p) => [p.fiscalYear, p]));
   const out: FundBalanceForecast[] = [];
@@ -375,8 +517,14 @@ export async function projectFundBalance(
 
   for (let i = 0; i < years; i++) {
     if (i > 0) {
-      revenue = revenue.times(new D(1).plus(revenueRate));
-      expenditure = expenditure.times(new D(1).plus(spendRate));
+      // Compounded from the BASE each year rather than from the previous year's figure, so
+      // the one-time adjustments below do not themselves get grown by next year's rate.
+      revenue = currentYearRevenue
+        .times(new D(1).plus(revenueRate).pow(i))
+        .plus(recurringRevenue)
+        .plus(i === 1 ? oneTimeRevenue : ZERO);
+
+      expenditure = recurringBase.times(new D(1).plus(spendRate).pow(i)).plus(recurringSpend);
     }
 
     const fy = formatFiscalYear(start.startYear + i);
@@ -391,9 +539,20 @@ export async function projectFundBalance(
     const used = netChange.isNegative() ? netChange.abs() : ZERO;
     cumulativeUsed = cumulativeUsed.plus(used);
 
-    const components = [p?.nonspendable, p?.restricted, p?.committed, p?.assigned]
-      .filter((v): v is Prisma.Decimal => v != null)
-      .reduce((a, b) => a.plus(b), ZERO);
+    // Each component follows the rule the district set for it, falling back to the typed
+    // figure when the rule IS "type it yourself".
+    const overrideOf: Record<FundBalanceComponent, Prisma.Decimal | null> = {
+      NONSPENDABLE: p?.nonspendable ?? null,
+      RESTRICTED: p?.restricted ?? null,
+      COMMITTED: p?.committed ?? null,
+      ASSIGNED: p?.assigned ?? null,
+    };
+    const componentValues = componentRules.map((rule) => ({
+      component: rule.component,
+      method: rule.method,
+      value: projectComponent(rule, i, overrideOf[rule.component]),
+    }));
+    const components = componentValues.reduce((a, c) => a.plus(c.value), ZERO);
 
     const unassigned = total.minus(components);
 
@@ -411,6 +570,9 @@ export async function projectFundBalance(
       beginning,
       total,
       components,
+      componentBreakdown: Object.fromEntries(
+        componentValues.map((c) => [c.component, c.value]),
+      ) as Record<FundBalanceComponent, Prisma.Decimal>,
       unassigned,
       // Against THIS year's projected expenditure, not the current year's budget. Holding
       // the divisor flat while the numerator moves makes a reserve percentage that drifts

@@ -16,6 +16,7 @@ import { Input, Select } from "@/components/ui/input";
 import { Pagination, usePagination } from "@/components/ui/pagination";
 import { SortTH, useSort } from "@/components/ui/sortable";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/csv-export";
+import { money } from "@/lib/dashboard/format";
 import {
   masterExportHeaders,
   masterExportRow,
@@ -83,13 +84,7 @@ export function MasterDataManager({
     if (raw == null || raw === "") return "—";
     if (f.numeric) {
       const n = Number(raw);
-      return isNaN(n)
-        ? String(raw)
-        : n.toLocaleString("en-US", {
-            style: "currency",
-            currency: "USD",
-            maximumFractionDigits: 0,
-          });
+      return isNaN(n) ? String(raw) : money(n, 2);
     }
     if (f.staticOptions)
       return f.staticOptions.find((o) => o.value === String(raw))?.label ?? String(raw);

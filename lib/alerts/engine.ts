@@ -6,6 +6,7 @@ import { computeFundBalance, reservePercent } from "@/lib/finance/fund-balance";
 import { projectYearEnd } from "@/lib/forecast/engine";
 import { loadPolicy } from "@/lib/policies/load";
 import type { PolicyValues } from "@/lib/policies/registry";
+import { money as fmtMoney } from "@/lib/dashboard/format";
 import {
   ALERTS,
   reserveStatus,
@@ -141,12 +142,9 @@ function observe(f: AlertFacts): Observation[] {
   return out;
 }
 
-const money = (v: Prisma.Decimal) =>
-  Number(v.toFixed(2)).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
+// Comma-grouped by hand, like every other figure on these screens — see the note in
+// lib/dashboard/format.ts about ICU and the middle dot.
+const money = (v: Prisma.Decimal) => fmtMoney(v, 2);
 
 /**
  * Everything the catalogue can ask about, for one period.

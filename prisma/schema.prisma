@@ -218,6 +218,8 @@ model District {
   policy                 DistrictPolicy?
   forecastAssumptions    ForecastAssumption[]
   fundBalanceProjections FundBalanceProjection[]
+
+  fundBalanceComponentAssumptions FundBalanceComponentAssumption[]
 }
 
 /// districtId is NULL for Platform Admins (cross-district) and for External Users (whose
@@ -452,6 +454,8 @@ model Fund {
   fundBalanceOverrides   FundBalanceOverride[]
   fundBalanceProjections FundBalanceProjection[]
 
+  fundBalanceComponentAssumptions FundBalanceComponentAssumption[]
+
   @@unique([districtId, code])
   @@index([districtId])
   @@index([fundTypeId])
@@ -665,6 +669,20 @@ model ForecastAssumption {
   growthPercent    Decimal?   @db.Decimal(7, 3)
   /// Expenditure: the district's own projected year-end figure, typed in rather than derived.
   projectedYearEnd Decimal?   @db.Decimal(18, 2)
+  /// A permanent addition to (or subtraction from) the base, applied EVERY projected year.
+  ///
+  /// Revenue: a recurring adjustment — a millage change, a new recurring grant. Expenditure:
+  /// a recurring cost the run-rate does not yet contain.
+  ///
+  /// Only meaningful on the district-level row (both category columns null), which is the
+  /// row the Forecasting & Planning screen writes.
+  recurringAdjustment Decimal? @db.Decimal(18, 2)
+  /// A ONE-TIME amount, applied to the first projected year only.
+  ///
+  /// Revenue: non-recurring money — a settlement, a one-off grant. Expenditure: the
+  /// one-time and carryforward spending EXCLUDED from the recurring operating base, so
+  /// growth compounds on operations rather than on a bond-funded roof replacement.
+  oneTimeAdjustment Decimal?  @db.Decimal(18, 2)
   /// Districts can watch some categories and ignore others.
   monitored        Boolean    @default(true)
   createdAt        DateTime   @default(now())
@@ -703,6 +721,43 @@ model FundBalanceProjection {
 
   @@unique([districtId, fiscalYear, fundId])
   @@index([districtId])
+}
+
+/// HOW each fund balance component is projected forward.
+///
+/// The client's note on Forecasting & Planning: "there is not a one-size-fits-all approach.
+/// Districts have different board policies and budgeting practices, so assumptions such as
+/// one-time expenditures, recurring expenditures, committed reserves, restricted balances,
+/// and other fund balance components should be configurable rather than hard-coded."
+///
+/// FundBalanceProjection stores WHAT a component is projected to be, year by year. This
+/// stores the RULE that produces those figures, so a district sets it once rather than
+/// typing four numbers per component per year — and so the screen can explain, per row,
+/// why a figure is what it is.
+///
+/// One row per component per fund, keyed to the base year the rule was set from. The rule
+/// is not versioned per projected year on purpose: "committed reserves grow 2% a year" is a
+/// policy, and a policy that had to be restated for every year of the plan would drift.
+model FundBalanceComponentAssumption {
+  id                    String   @id @default(cuid())
+  districtId            String
+  /// The base year the rule is set from, e.g. "2026-27".
+  fiscalYear            String
+  fundId                String
+  /// One of FUND_BALANCE_COMPONENT_VALUES — NONSPENDABLE · RESTRICTED · COMMITTED · ASSIGNED.
+  component             String
+  /// One of FORECAST_METHOD_VALUES.
+  method                String
+  /// Only for INCREASE_BY_PERCENT.
+  annualIncreasePercent Decimal? @db.Decimal(7, 3)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+  fund     Fund     @relation(fields: [fundId], references: [id], onDelete: Restrict)
+
+  @@unique([districtId, fiscalYear, fundId, component])
+  @@index([districtId, fiscalYear])
 }
 
 /// Unlike the other lookups, a Cost Center Type belongs to one Cost Center Category,

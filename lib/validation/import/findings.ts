@@ -3,6 +3,7 @@
 // Pure — no database, no Prisma. The engine persists these; the layers only produce them.
 
 import type { Severity } from "@/lib/enums";
+import { money as fmtMoney } from "@/lib/dashboard/format";
 
 /** The seven layers of Spec §5.6, in the order the engine runs them. */
 export type Layer =
@@ -87,5 +88,5 @@ export function countBySeverity(findings: Finding[]): { errors: number; warnings
 export function money(v: string): string {
   const n = Number(v);
   if (!Number.isFinite(n)) return v;
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  return fmtMoney(n, 2);
 }

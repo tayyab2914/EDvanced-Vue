@@ -31,6 +31,16 @@ export interface BreakdownRow {
   id: string;
   code: string;
   name: string;
+  /**
+   * The classification this row rolls up to — Function Type for a function, Object Type for
+   * an object. Null when the district has not classified it.
+   *
+   * Carried on the row rather than looked up again by the page, because the client's
+   * requirement — "make sure Functions are listed based on the Function Type Code" — is an
+   * ORDERING requirement, and an ordering the page cannot see is an ordering the page will
+   * eventually re-sort away.
+   */
+  group?: { code: string | null; name: string; sortOrder: number } | null;
   budget: Prisma.Decimal;
   actualYtd: Prisma.Decimal;
   actualMtd: Prisma.Decimal;
@@ -93,6 +103,7 @@ function makeRow(
     encumbrances?: Prisma.Decimal | null;
   },
   periodsElapsed: number,
+  group?: BreakdownRow["group"],
 ): BreakdownRow {
   const budget = sums.budget ?? ZERO;
   const actualYtd = sums.actualYtd ?? ZERO;
@@ -103,6 +114,7 @@ function makeRow(
     id,
     code,
     name,
+    group: group ?? null,
     budget,
     actualYtd,
     actualMtd,
@@ -119,12 +131,51 @@ function bySize(a: BreakdownRow, b: BreakdownRow): number {
   return b.budget.comparedTo(a.budget) || b.actualYtd.comparedTo(a.actualYtd);
 }
 
+/**
+ * Chart-of-accounts order — classification first, then account code.
+ *
+ * The client's request on the Expenditures dashboard: "make sure Functions are listed based
+ * on the Function Type Code". A finance officer reads a function table the way the chart of
+ * accounts is written — Instruction, then Instructional Support, then General Support —
+ * because that is the order the ledger, the state report and the board packet all use.
+ * Sorting by size instead reorders the table every month as spending moves, which is fine
+ * for a "biggest movers" card and wrong for a reference table.
+ *
+ * Unclassified rows sort last rather than first: an account nobody has typed yet is a data
+ * gap, and putting it above Instruction would be giving it prominence it has not earned.
+ */
+function byChartOrder(a: BreakdownRow, b: BreakdownRow): number {
+  const ga = a.group;
+  const gb = b.group;
+  if (ga && !gb) return -1;
+  if (!ga && gb) return 1;
+  if (ga && gb) {
+    if (ga.sortOrder !== gb.sortOrder) return ga.sortOrder - gb.sortOrder;
+    const ca = ga.code ?? "";
+    const cb = gb.code ?? "";
+    if (ca !== cb) return ca.localeCompare(cb, "en");
+  }
+  return a.code.localeCompare(b.code, "en", { numeric: true });
+}
+
+/** How a breakdown's rows are ordered. */
+export type BreakdownOrder = "size" | "chart";
+
 export interface BreakdownArgs {
   /** The CURRENT version of the relevant monthly dataset. */
   versionId: string;
   fundId?: string;
   /** Drives the pro-rated `pace` figures. */
   periodsElapsed: number;
+  /**
+   * "size" ranks by budget — the right default for a top-five card. "chart" follows the
+   * chart of accounts, which is what a reference table wants.
+   */
+  order?: BreakdownOrder;
+}
+
+function sorter(order: BreakdownOrder | undefined) {
+  return order === "chart" ? byChartOrder : bySize;
 }
 
 // ===================== revenue =====================
@@ -220,16 +271,30 @@ export async function expenditureByFunction(db: TenantDb, args: BreakdownArgs): 
 
   const functions = await db.accountFunction.findMany({
     where: { id: { in: grouped.map((g) => g.functionId) } },
-    select: { id: true, code: true, name: true },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      // The Function Type the client asked the table to be ordered by. A left join on a
+      // ~10-row lookup, not a second query per row.
+      functionType: { select: { code: true, name: true, sortOrder: true } },
+    },
   });
   const byId = new Map(functions.map((f) => [f.id, f]));
 
   const rows = grouped
     .map((g) => {
       const f = byId.get(g.functionId);
-      return makeRow(g.functionId, f?.code ?? "", f?.name ?? "Unknown function", g._sum, args.periodsElapsed);
+      return makeRow(
+        g.functionId,
+        f?.code ?? "",
+        f?.name ?? "Unknown function",
+        g._sum,
+        args.periodsElapsed,
+        f?.functionType ?? null,
+      );
     })
-    .sort(bySize);
+    .sort(sorter(args.order));
 
   return { rows, total: totalOf(rows, args.periodsElapsed, "Total expenditures") };
 }
@@ -243,16 +308,28 @@ export async function expenditureByObject(db: TenantDb, args: BreakdownArgs): Pr
 
   const objects = await db.accountObject.findMany({
     where: { id: { in: grouped.map((g) => g.objectId) } },
-    select: { id: true, code: true, name: true },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      objectType: { select: { code: true, name: true, sortOrder: true } },
+    },
   });
   const byId = new Map(objects.map((o) => [o.id, o]));
 
   const rows = grouped
     .map((g) => {
       const o = byId.get(g.objectId);
-      return makeRow(g.objectId, o?.code ?? "", o?.name ?? "Unknown object", g._sum, args.periodsElapsed);
+      return makeRow(
+        g.objectId,
+        o?.code ?? "",
+        o?.name ?? "Unknown object",
+        g._sum,
+        args.periodsElapsed,
+        o?.objectType ?? null,
+      );
     })
-    .sort(bySize);
+    .sort(sorter(args.order));
 
   return { rows, total: totalOf(rows, args.periodsElapsed, "Total expenditures") };
 }
@@ -265,7 +342,7 @@ export async function expenditureByObjectType(db: TenantDb, args: BreakdownArgs)
       where: { versionId: args.versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
       _sum: { budget: true, actualYtd: true, actualMtd: true, encumbrances: true },
     }),
-    db.objectType.findMany({ select: { id: true, code: true, name: true } }),
+    db.objectType.findMany({ select: { id: true, code: true, name: true, sortOrder: true } }),
   ]);
 
   const objects = await db.accountObject.findMany({
@@ -299,9 +376,13 @@ export async function expenditureByObjectType(db: TenantDb, args: BreakdownArgs)
         t?.name ?? "Unclassified",
         { budget: s.budget, actualYtd: s.ytd, actualMtd: s.mtd, encumbrances: s.enc },
         args.periodsElapsed,
+        // An object TYPE is its own classification, so it groups by itself — which is what
+        // lets `order: "chart"` put Salaries before Employee Benefits before Purchased
+        // Services, the order the client listed them in.
+        t ? { code: t.code, name: t.name, sortOrder: t.sortOrder } : null,
       );
     })
-    .sort(bySize);
+    .sort(sorter(args.order));
 
   return { rows, total: totalOf(rows, args.periodsElapsed, "Total expenditures") };
 }
@@ -318,6 +399,58 @@ export interface FundBreakdownRow {
   /** Opening balance + revenue − expenditure. Null when the year has no opening import. */
   fundBalance: Prisma.Decimal | null;
   endingCash: Prisma.Decimal | null;
+  /**
+   * The fund's opening components, when an opening fund balance was imported.
+   *
+   * Carried so §6.1's table can name a PRIMARY CLASSIFICATION per fund — the client's
+   * question was whether districts should declare one during setup, and the honest answer
+   * for now is that they do not have to: the components they already upload say which
+   * classification dominates, and deriving it beats asking for a field that would then need
+   * to be kept in step with the file.
+   *
+   * If districts later want to override the derived answer, that becomes a column on Fund
+   * and this stays as the fallback.
+   */
+  components: {
+    nonspendable: Prisma.Decimal;
+    restricted: Prisma.Decimal;
+    committed: Prisma.Decimal;
+    assigned: Prisma.Decimal;
+    unassigned: Prisma.Decimal;
+  } | null;
+}
+
+/**
+ * Which classification a fund's balance mostly sits in.
+ *
+ * The largest component names it. A second is added — "Restricted / Committed" — only when
+ * it is at least 40% of the largest, because a fund that is 95% restricted with a rounding
+ * of committed is a restricted fund, and saying otherwise would make the column noise.
+ *
+ * Returns null rather than guessing when nothing has been imported. A blank cell is honest;
+ * "Unassigned" on a fund nobody has classified is not.
+ */
+export function primaryClassification(row: FundBreakdownRow): string | null {
+  const c = row.components;
+  if (!c) return null;
+
+  const parts: { label: string; value: Prisma.Decimal }[] = [
+    { label: "Nonspendable", value: c.nonspendable },
+    { label: "Restricted", value: c.restricted },
+    { label: "Committed", value: c.committed },
+    { label: "Assigned", value: c.assigned },
+    { label: "Unassigned", value: c.unassigned },
+  ].filter((p) => p.value.greaterThan(0));
+
+  if (parts.length === 0) return null;
+  parts.sort((a, b) => b.value.comparedTo(a.value));
+
+  const lead = parts[0];
+  const second = parts[1];
+  if (second && second.value.greaterThanOrEqualTo(lead.value.times(0.4))) {
+    return `${lead.label} / ${second.label}`;
+  }
+  return lead.label;
 }
 
 /**
@@ -362,7 +495,14 @@ export async function byFund(
       ? db.openingFundBalance.groupBy({
           by: ["fundId"],
           where: { versionId: args.openingVersionId },
-          _sum: { begTotal: true },
+          _sum: {
+            begTotal: true,
+            begNonspendable: true,
+            begRestricted: true,
+            begCommitted: true,
+            begAssigned: true,
+            begUnassigned: true,
+          },
         })
       : Promise.resolve([]),
     db.fund.findMany({
@@ -375,6 +515,18 @@ export async function byFund(
   const expById = new Map(spending.map((r) => [r.fundId, r._sum.actualYtd ?? ZERO]));
   const cashById = new Map(cash.map((r) => [r.fundId, r._sum.endingCash]));
   const openById = new Map(opening.map((r) => [r.fundId, r._sum.begTotal]));
+  const componentsById = new Map(
+    opening.map((r) => [
+      r.fundId,
+      {
+        nonspendable: r._sum.begNonspendable ?? ZERO,
+        restricted: r._sum.begRestricted ?? ZERO,
+        committed: r._sum.begCommitted ?? ZERO,
+        assigned: r._sum.begAssigned ?? ZERO,
+        unassigned: r._sum.begUnassigned ?? ZERO,
+      },
+    ]),
+  );
 
   const out: FundBreakdownRow[] = [];
   for (const f of funds) {
@@ -396,6 +548,7 @@ export async function byFund(
       expenditureYtd,
       fundBalance: openingTotal === null ? null : openingTotal.plus(revenueYtd).minus(expenditureYtd),
       endingCash,
+      components: componentsById.get(f.id) ?? null,
     });
   }
   return out;

@@ -1,5 +1,6 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { PolicyValues } from "@/lib/policies/registry";
+import { money as fmtMoney } from "@/lib/dashboard/format";
 
 /**
  * The twenty-seven alerts, declared rather than coded.
@@ -66,8 +67,10 @@ export interface AlertDef {
   evaluate: (f: AlertFacts, p: PolicyValues) => AlertHit | null;
 }
 
-const money = (v: Prisma.Decimal) =>
-  Number(v.toFixed(2)).toLocaleString("en-US", { style: "currency", currency: "USD" });
+// Shared with the dashboards so an alert sentence and the tile it sits under group their
+// thousands the same way. `toLocaleString` used to do this and produced middle dots on a
+// runtime without full ICU — see the note in lib/dashboard/format.ts.
+const money = (v: Prisma.Decimal) => fmtMoney(v, 2);
 const pct = (v: Prisma.Decimal) => `${v.toFixed(1)}%`;
 const n = (v: number | boolean) => Number(v);
 

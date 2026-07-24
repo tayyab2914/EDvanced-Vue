@@ -2,19 +2,30 @@
 
 /* Meridian design tokens */
 @theme {
-  --color-ink: #16202e;
-  --color-ink-soft: #344055;
-  --color-ink-muted: #475069;
-  --color-muted: #64728a;
-  --color-muted-2: #8592a6;
-  --color-faint: #93a0b4;
-  --color-line: #e2e7ef;
-  --color-line-soft: #f0f3f7;
+  /* ===================== the ink ladder =====================
+     Four steps, and the client named all four: KPI values #111827, section headings
+     #1F2937, body text #374151, secondary labels #6B7280. The previous ladder was a set of
+     blue-greys topping out at #16202e, which measured lighter at every step and made the
+     dashboards read washed-out rather than executive.
+
+     `ink` is the strongest — KPI values, table totals, chart callouts. `heading` is the
+     card title band. `ink-muted` is body copy and table cells. `muted-2` is the label
+     directly above or beneath a figure. `muted` sits between body and label for the few
+     places that need a step there, and `faint` is disabled/placeholder only. */
+  --color-ink: #111827;
+  --color-heading: #1f2937;
+  --color-ink-soft: #1f2937;
+  --color-ink-muted: #374151;
+  --color-muted: #4b5563;
+  --color-muted-2: #6b7280;
+  --color-faint: #9ca3af;
+  --color-line: #e5e7eb;
+  --color-line-soft: #f3f4f6;
   --color-canvas: #eef1f5;
   --color-navy: #0d1b2e;
   --color-brand: #2f6bf6;
   --color-brand-dark: #245ce0;
-  --color-panel: #f7f9fc;
+  --color-panel: #f9fafb;
   /* Semantic feedback, re-stepped in M3 — see the status ladder below. The old pair
      (warn #b57a17, bad #c2542e) measured ΔE 4.7 apart under deuteranopia and 9.6 under
      normal vision: a Monitor badge and an Action Required badge were genuinely hard to
@@ -101,9 +112,13 @@
   /* Chrome, not series. The full-year budget line is a reference, drawn dashed and
      recessive so it never competes with the two series it frames. */
   --color-viz-reference: #7d8ba3;
-  --color-viz-grid: #eef1f5;
-  --color-viz-axis: #c7cfdb;
-  --color-viz-label: #93a0b4;
+  --color-viz-grid: #f3f4f6;
+  --color-viz-axis: #d1d5db;
+  /* Axis and category text steps up to the secondary-label rung with the rest of the ink
+     ladder — a chart whose labels are lighter than the table beside it reads as decoration
+     rather than data. */
+  --color-viz-label: #6b7280;
+  --color-viz-ink: #374151;
 }
 
 @theme inline {
@@ -220,5 +235,31 @@ body {
 
   a[href]::after {
     content: "";
+  }
+
+  /* ---------- the one-page Executive Summary ----------
+     A different artefact from the multi-page print above: the client asked for "one-page
+     landscape PDF … intended for board meetings and executive leadership", and one page is
+     the requirement, not the aspiration. Six KPI tiles, three charts, a five-row table and
+     three insights do not fit an A4 landscape at screen sizes, so this trims the padding
+     and steps the type down rather than letting the page silently become two.
+
+     The @page landscape rule is injected by the route itself, so the detailed print of the
+     same dashboard stays portrait. */
+  [data-summary] {
+    font-size: 93%;
+  }
+  [data-summary] section,
+  [data-summary] [class*="rounded-xl"] {
+    box-shadow: none !important;
+  }
+  [data-summary] section {
+    padding: 9px !important;
+  }
+  [data-summary] figure svg {
+    max-height: 150px;
+  }
+  [data-summary] > * {
+    break-inside: avoid;
   }
 }

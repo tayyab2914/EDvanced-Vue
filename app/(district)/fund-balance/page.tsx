@@ -3,33 +3,46 @@ import Link from "next/link";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
 import { loadCore, reserveThresholds, periodAxisLabels } from "@/lib/dashboard/load";
-import { byFund } from "@/lib/finance/breakdown";
-import { activityTotals, transferIds } from "@/lib/finance/engine";
+import { byFund, primaryClassification } from "@/lib/finance/breakdown";
+import { activityTotals } from "@/lib/finance/engine";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
 import {
   compactMoney,
-  money,
   accounting,
   percent,
   signedPercent,
   toNumber,
   deltaTone,
   changePercent,
+  sharePercent,
 } from "@/lib/dashboard/format";
 import { SectionCard, FooterInfoBar } from "@/components/dashboard/section-card";
 import { KpiTile, KpiRow } from "@/components/dashboard/kpi-tile";
 import { DataTable } from "@/components/dashboard/data-table";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { EmptyState, Row } from "@/components/dashboard/shared";
+import { EmptyState, Row, KeyInsightBar } from "@/components/dashboard/shared";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
-import { DonutChart } from "@/components/dashboard/charts/donut-chart";
+import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
 import { WaterfallChart, waterfallFoots } from "@/components/dashboard/charts/waterfall-chart";
 import { BenchmarkBand } from "@/components/dashboard/charts/benchmark-band";
 import { FundBalanceShell } from "./shell";
 import { COMPONENT_COLORS } from "@/lib/dashboard/palette";
 import { PageHeader } from "@/components/page-header";
 
-/** Fund Balance — Current Position (Spec §6.1). */
+/**
+ * Fund Balance — Current Position (Spec §6.1), rebuilt to the client's M4 layout.
+ *
+ * Two substantive changes behind the rearrangement:
+ *
+ *   The by-fund table now shows the ENDING FUND BALANCE and nothing else per fund. The
+ *   client's reasoning: "from an executive/CFO perspective, the primary focus is the ending
+ *   fund balance for each fund and status." Revenue and spending YTD per fund were columns
+ *   answering a question this page does not ask — they live on the Revenue and Expenditures
+ *   dashboards, which is where someone comparing them would be.
+ *
+ *   "Reserve against policy" is now "Fund balance %", and the strip beneath it prints each
+ *   band's name and range rather than cramming the name inside the band.
+ */
 export default async function FundBalancePage({
   searchParams,
 }: {
@@ -55,17 +68,21 @@ export default async function FundBalancePage({
 
   const core = await loadCore(db, districtId, scope);
   const { series, point, previous, policy, alerts, codes, reserve } = core;
-  const facts = alerts?.facts ?? null;
   const fbAlerts = (alerts?.alerts ?? []).filter((a) => a.group === "fundBalance");
 
   const reserveT = reserveThresholds(policy);
   const reservePct = toNumber(reserve?.percent);
   const reserveRung = ladder(reservePct, reserveT);
+  const statutoryMinimum = Number(policy.fundBalance.boardPolicyMinimum);
 
   const totalNow = point?.fundBalance ?? null;
   const totalPrev = previous?.fundBalance ?? null;
   const change = totalNow && totalPrev ? totalNow.minus(totalPrev) : null;
+  const changePct = changePercent(totalNow, totalPrev);
   const unassignedNow = point?.unassignedFundBalance ?? null;
+  const unassignedPrev = previous?.unassignedFundBalance ?? null;
+  const unassignedChange =
+    unassignedNow && unassignedPrev ? unassignedNow.minus(unassignedPrev) : null;
 
   const labels = periodAxisLabels(scope, series.points.length);
 
@@ -111,6 +128,11 @@ export default async function FundBalancePage({
     cashVersionId: core.versions.get("CASH_POSITION"),
     openingVersionId: core.versions.get("OPENING_FUND_BALANCE"),
   });
+  const withBalance = fundRows.filter((f) => f.fundBalance !== null);
+  const allFundsTotal = withBalance.reduce(
+    (a, f) => (f.fundBalance ? a + (toNumber(f.fundBalance) ?? 0) : a),
+    0,
+  );
 
   const o = series.opening;
   const components = o
@@ -122,86 +144,205 @@ export default async function FundBalancePage({
         { label: "Unassigned", value: toNumber(unassignedNow) ?? 0, amount: unassignedNow },
       ].filter((c) => c.value > 0)
     : [];
+  const componentTotal = components.reduce((a, c) => a + c.value, 0);
 
   return (
     <FundBalanceShell scope={scope} active="/fund-balance" alertCount={fbAlerts.length}>
+      {/* ---------- KPI CARDS ---------- */}
       <KpiRow count={5}>
         <KpiTile
-          icon="database"
-          tone="blue"
+          icon="dollar"
+          tone="green"
           label="Total fund balance"
+          caption={scope.fund ? scope.fund.name : "All funds"}
           value={compactMoney(totalNow)}
           sub={previous ? `vs period ${previous.period}` : "no earlier period"}
           delta={
             change === null
               ? undefined
               : {
-                  text: accounting(change, { compact: true }),
+                  text: `${accounting(change, { compact: true })}${changePct === null ? "" : ` (${signedPercent(changePct)})`}`,
                   tone: deltaTone(toNumber(change), "up"),
+                  direction: change.isNegative() ? "down" : "up",
                 }
           }
           unavailableReason="Needs an opening fund balance for the year."
         />
+
         <KpiTile
-          icon="chart"
+          icon="trend-up"
           tone="teal"
           label="Change from prior month"
+          caption={previous ? `Since period ${previous.period}` : "No earlier period"}
           value={accounting(change, { compact: true })}
-          sub={previous ? `since period ${previous.period}` : "no earlier period with data"}
+          sub="movement in total fund balance"
           delta={
             change === null
               ? undefined
               : {
-                  text: signedPercent(changePercent(totalNow, totalPrev)),
+                  text: signedPercent(changePct),
                   tone: deltaTone(toNumber(change), "up"),
+                  direction: change.isNegative() ? "down" : "up",
                 }
           }
         />
+
         <KpiTile
           icon="shield"
-          tone="purple"
+          tone="blue"
           label="Unassigned fund balance"
+          caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
           value={compactMoney(unassignedNow)}
-          sub={scope.generalFund ? `${scope.generalFund.name} basis` : "general fund only"}
+          sub="the reserve a board asks about"
+          delta={
+            unassignedChange === null
+              ? undefined
+              : {
+                  text: accounting(unassignedChange, { compact: true }),
+                  tone: deltaTone(toNumber(unassignedChange), "up"),
+                  direction: unassignedChange.isNegative() ? "down" : "up",
+                  note: previous ? `vs period ${previous.period}` : undefined,
+                }
+          }
         />
+
         <KpiTile
-          icon="activity"
-          tone="amber"
+          icon="pie"
+          tone="purple"
           label="Unassigned fund balance %"
+          caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
           value={percent(reserve?.percent)}
-          sub="of budgeted expenditures"
+          sub="of budgeted general fund expenditures"
           status={reserveRung}
           statusNote={`Target ≥ ${reserveT.target.toFixed(2)}%`}
+          unavailableReason="Needs a fund typed General, an opening fund balance and an adopted expenditure budget."
         />
+
         <KpiTile
-          icon="reports"
+          icon="scale"
           tone={reserveRung === "Action Required" ? "red" : reserveRung === "Monitor" ? "amber" : "green"}
           label="Reserve status"
-          value={reserveRung}
-          sub={`Warning below ${reserveT.warning}% · critical below ${reserveT.critical}%`}
-          status={reserveRung}
+          caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
+          value={reserveRung === "N/A" ? "Not available" : reserveRung}
+          valueStatus={reserveRung}
+          sub={`Policy range: ${statutoryMinimum.toFixed(2)}% – ${reserveT.target.toFixed(2)}%`}
+          statusNote={`Warning below ${reserveT.warning.toFixed(2)}%`}
         />
       </KpiRow>
 
-      <Row cols="2-1">
-        <SectionCard title="Fund balance trend" subtitle={scope.fund ? scope.fund.name : "All funds"}>
+      {/* ---------- ROW 2: by fund · trend ---------- */}
+      <Row cols="1-2">
+        <SectionCard
+          title="Fund balance by fund"
+          info="Unassigned fund balance and its percentage apply to the General Fund only. Other funds are shown with their primary fund balance classification."
+          footerNote="All amounts are unaudited"
+        >
+          <DataTable
+            columns={[
+              { key: "fund", label: "Fund" },
+              { key: "balance", label: "Ending fund balance", align: "right" },
+              { key: "class", label: "Primary classification" },
+              { key: "status", label: "Status", align: "right" },
+            ]}
+            rows={withBalance.map((f) => {
+              const isGeneral = core.generalFund?.id === f.fundId;
+              const balance = toNumber(f.fundBalance);
+              const rung = isGeneral
+                ? reserveRung
+                : balance === null
+                  ? "N/A"
+                  : balance < 0
+                    ? "Action Required"
+                    : "Strong";
+              const label = isGeneral
+                ? reserveRung === "Strong"
+                  ? "Healthy"
+                  : reserveRung === "N/A"
+                    ? undefined
+                    : reserveRung
+                : balance !== null && balance < 0
+                  ? "Deficit"
+                  : "Healthy";
+
+              return {
+                id: f.fundId,
+                flag: balance !== null && balance < 0 ? ("negative" as const) : undefined,
+                cells: {
+                  fund: { value: `${f.code} — ${f.name}`, strong: true },
+                  balance: { value: compactMoney(f.fundBalance), strong: true },
+                  class: isGeneral ? (
+                    <span>
+                      Unassigned
+                      <span className="block text-[11px] text-muted-2">
+                        {compactMoney(unassignedNow)}
+                        {reservePct === null ? "" : ` (${percent(reservePct)})`}
+                      </span>
+                    </span>
+                  ) : (
+                    (primaryClassification(f) ?? "—")
+                  ),
+                  status: (
+                    <span className="flex justify-end">
+                      <StatusBadge status={rung} label={label} size="sm" dot={false} />
+                    </span>
+                  ),
+                },
+              };
+            })}
+            total={{
+              id: "total",
+              total: true,
+              cells: {
+                fund: "Total all funds",
+                balance: compactMoney(allFundsTotal),
+                class: "—",
+                status: "—",
+              },
+            }}
+            empty="No fund has a committed opening balance for this year."
+          />
+          {userCan(user, "configure_district") && (
+            <p className="mt-3 text-[11.5px] text-muted-2">
+              A fund&apos;s balance can be corrected from{" "}
+              <Link
+                href={`/fund-balance/override?fy=${scope.fiscalYear}&period=${scope.period}`}
+                className="font-medium text-brand hover:underline"
+              >
+                Corrections
+              </Link>
+              .
+            </p>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Fund balance trend"
+          subtitle={scope.fund ? scope.fund.name : "All funds"}
+          badge={<StatusBadge status={reserveRung} size="sm" />}
+          footer="Go to forecast and planning"
+          footerHref={`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`}
+          footerNote="All amounts are unaudited"
+        >
           <LineChart
             title="Fund balance trend"
             summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
             categories={labels}
             format={(v) => compactMoney(v, 0)}
-            height={250}
+            height={280}
             series={[
               {
                 key: "total",
-                label: "Total fund balance",
+                label: "Ending fund balance",
                 color: "var(--color-viz-budget)",
                 labelLast: true,
-                points: series.points.map((p) => ({ value: toNumber(p.fundBalance), label: compactMoney(p.fundBalance) })),
+                points: series.points.map((p) => ({
+                  value: toNumber(p.fundBalance),
+                  label: compactMoney(p.fundBalance),
+                })),
               },
               {
                 key: "unassigned",
-                label: "Unassigned",
+                label: "Unassigned fund balance",
                 color: "var(--color-viz-actual)",
                 labelLast: true,
                 points: series.points.map((p) => ({
@@ -211,22 +352,61 @@ export default async function FundBalancePage({
               },
             ]}
           />
-        </SectionCard>
-
-        <SectionCard
-          title="Reserve against policy"
-          info="The bands are your own thresholds, so this strip and the badge above it cannot disagree."
-        >
-          <BenchmarkBand
-            value={reservePct}
-            bands={statusBands(reserveT)}
-            format={(v) => `${v.toFixed(v % 1 === 0 ? 0 : 2)}%`}
-            label={`Policy target: maintain unassigned fund balance at ${reserveT.target.toFixed(2)}% of budgeted general fund expenditures.`}
-          />
+          <div className="mt-4 flex flex-col gap-3">
+            <MetricStrip
+              cols={5}
+              items={[
+                { label: "Ending fund balance", value: compactMoney(totalNow) },
+                {
+                  label: "Unassigned fund balance",
+                  value: compactMoney(unassignedNow),
+                  note: reservePct === null ? undefined : percent(reservePct),
+                },
+                {
+                  label: "Status",
+                  value: reserveRung === "N/A" ? "Not available" : reserveRung,
+                  tone:
+                    reserveRung === "Strong"
+                      ? "positive"
+                      : reserveRung === "N/A"
+                        ? "neutral"
+                        : "negative",
+                },
+                { label: "Target", value: `${reserveT.target.toFixed(2)}%` },
+                { label: "Minimum", value: `${statutoryMinimum.toFixed(2)}%` },
+              ]}
+            />
+            {reservePct !== null && (
+              <KeyInsightBar tone={reserveRung === "Strong" ? "info" : "monitor"}>
+                Unassigned fund balance is {percent(reservePct)}, which is{" "}
+                {reservePct >= statutoryMinimum ? "above" : "below"} the{" "}
+                {statutoryMinimum.toFixed(2)}% statutory minimum and{" "}
+                {reservePct >= reserveT.target ? "at or above" : "below"} the district target of{" "}
+                {reserveT.target.toFixed(2)}%.
+              </KeyInsightBar>
+            )}
+          </div>
         </SectionCard>
       </Row>
 
-      <Row cols="2-1">
+      {/* ---------- ROW 3: policy % · waterfall · composition ---------- */}
+      <Row cols="3">
+        <SectionCard
+          title="Fund balance %"
+          subtitle="Policy benchmark"
+          info="The bands are your own thresholds, so this strip and the badge above it cannot disagree."
+        >
+          <div className="pt-7">
+            <BenchmarkBand
+              value={reservePct}
+              bands={statusBands(reserveT)}
+              target={reserveT.target}
+              format={(v) => `${v.toFixed(v % 1 === 0 ? 0 : 2)}%`}
+              label={`Policy target: maintain unassigned fund balance at ${reserveT.target.toFixed(2)}% of budgeted general fund expenditures. The dotted rule marks the target.`}
+            />
+          </div>
+        </SectionCard>
+
         <SectionCard
           title="Fund balance waterfall"
           subtitle={foots ? undefined : "Components do not reconcile to the ending balance"}
@@ -237,7 +417,7 @@ export default async function FundBalancePage({
             summary={`How the fund balance moved from ${compactMoney(series.opening?.total)} at the start of the year to ${compactMoney(totalNow)}.`}
             steps={steps}
             format={(v) => compactMoney(v, 0)}
-            height={260}
+            height={270}
           />
           {!foots && (
             <p className="mt-2 text-[11.5px] text-monitor">
@@ -247,20 +427,35 @@ export default async function FundBalancePage({
           )}
         </SectionCard>
 
-        <SectionCard title="Fund balance composition" info="Components are as reported on the opening fund balance; unassigned moves with the year's activity.">
+        <SectionCard
+          title="Fund balance composition"
+          info="Components are as reported on the opening fund balance; unassigned moves with the year's activity."
+        >
           {components.length > 0 ? (
-            <DonutChart
-              title="Fund balance composition"
-              summary="How the fund balance splits between its designated components and the unassigned reserve."
-              centerValue={compactMoney(totalNow)}
-              centerLabel="Total fund balance"
-              slices={components.map((c) => ({
-                label: c.label,
-                value: c.value,
-                color: COMPONENT_COLORS[c.label],
-                display: compactMoney(c.amount),
-              }))}
-            />
+            <>
+              <ShareBars
+                title="Fund balance composition"
+                summary="How the fund balance splits between its designated components and the unassigned reserve."
+                rows={components.map((c) => ({
+                  id: c.label,
+                  label: c.label,
+                  value: c.value,
+                  display: compactMoney(c.amount),
+                  share: percent(sharePercent(c.value, componentTotal), 1),
+                  color: COMPONENT_COLORS[c.label],
+                }))}
+              />
+              <div className="mt-4">
+                <MetricStrip
+                  cols={3}
+                  items={[
+                    { label: "Total fund balance", value: compactMoney(totalNow) },
+                    { label: "Unassigned", value: compactMoney(unassignedNow) },
+                    { label: "Components", value: String(components.length) },
+                  ]}
+                />
+              </div>
+            </>
           ) : (
             <p className="py-8 text-center text-[12.5px] text-muted-2">
               No opening fund balance has been committed for this year.
@@ -268,53 +463,6 @@ export default async function FundBalancePage({
           )}
         </SectionCard>
       </Row>
-
-      <SectionCard
-        title="Fund balance by fund"
-        info="Unassigned fund balance and its percentage apply to the General Fund only."
-      >
-        <DataTable
-          columns={[
-            { key: "fund", label: "Fund" },
-            { key: "type", label: "Classification" },
-            { key: "revenue", label: "Revenue (YTD)", align: "right" },
-            { key: "spend", label: "Spending (YTD)", align: "right" },
-            { key: "balance", label: "Fund balance", align: "right" },
-            { key: "action", label: "", align: "right" },
-          ]}
-          rows={fundRows.map((f) => ({
-            id: f.fundId,
-            cells: {
-              fund: `${f.code} — ${f.name}`,
-              type: f.typeName ?? "—",
-              revenue: money(f.revenueYtd),
-              spend: money(f.expenditureYtd),
-              balance: money(f.fundBalance),
-              action: userCan(user, "configure_district") ? (
-                <Link
-                  href={`/fund-balance/override?fy=${scope.fiscalYear}&period=${scope.period}&fund=${f.fundId}`}
-                  className="text-[11.5px] font-medium text-brand hover:underline"
-                >
-                  Correct
-                </Link>
-              ) : null,
-            },
-          }))}
-          total={{
-            id: "total",
-            total: true,
-            cells: {
-              fund: "Total all funds",
-              type: "",
-              revenue: money(point?.revenueYtd),
-              spend: money(point?.expenditureYtd),
-              balance: money(totalNow),
-              action: null,
-            },
-          }}
-          empty="No fund has committed data for this period."
-        />
-      </SectionCard>
 
       <FooterInfoBar action="Go to forecast and planning" href={`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`}>
         Want to see the future? Build a three-year projection from your own growth assumptions

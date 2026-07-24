@@ -48,6 +48,7 @@ const TENANT_MODELS = new Set([
   "DistrictPolicy",
   "ForecastAssumption",
   "FundBalanceProjection",
+  "FundBalanceComponentAssumption",
 ]);
 
 /** Exposed for the verification script, which compares it against schema.prisma. */

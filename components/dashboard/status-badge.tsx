@@ -41,19 +41,26 @@ export function StatusBadge({
   status: StatusRung;
   label?: string;
   reason?: string;
-  size?: "sm" | "md";
+  /** "lg" is §3.2a's Financial Health Summary, where the badge IS the column. */
+  size?: "sm" | "md" | "lg";
   dot?: boolean;
   className?: string;
 }) {
   const rung = RUNG[status];
   const text = label ?? (status === "N/A" ? "Not available" : status);
 
+  const SIZE = {
+    sm: "px-1.5 py-0.5 text-[10.5px]",
+    md: "px-2 py-[3px] text-[11.5px]",
+    lg: "px-2.5 py-[5px] text-[12px]",
+  } as const;
+
   return (
     <span
       title={status === "N/A" ? (reason ?? "Not enough data to work this out yet.") : undefined}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full font-semibold",
-        size === "sm" ? "px-1.5 py-0.5 text-[10.5px]" : "px-2 py-[3px] text-[11.5px]",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-semibold",
+        SIZE[size],
         rung.bg,
         rung.text,
         className,

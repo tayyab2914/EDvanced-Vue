@@ -14,9 +14,11 @@ export function SectionCard({
   title,
   subtitle,
   info,
+  badge,
   control,
   footer,
   footerHref,
+  footerNote,
   children,
   className,
   bodyClassName,
@@ -25,10 +27,14 @@ export function SectionCard({
   subtitle?: string;
   /** One sentence explaining what the card shows, on the title's ⓘ. */
   info?: string;
+  /** A status badge that belongs to the card as a whole, set beside its title. */
+  badge?: ReactNode;
   /** A range toggle, a "view by" — anything that changes only this card. */
   control?: ReactNode;
   footer?: string;
   footerHref?: string;
+  /** A caveat set opposite the footer link — "All amounts are unaudited". */
+  footerNote?: string;
   children: ReactNode;
   className?: string;
   bodyClassName?: string;
@@ -42,13 +48,17 @@ export function SectionCard({
     >
       <header className="mb-3.5 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.055em] text-muted">
+          {/* #1F2937 and a step up in size — the client's "section headings" rung. The old
+              heading wore the secondary-label token, which put a card's title at the same
+              weight as the labels inside it and flattened the hierarchy. */}
+          <h2 className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.055em] text-heading">
             <span className="truncate">{title}</span>
+            {badge}
             {info && (
               <span
                 title={info}
                 aria-label={info}
-                className="flex h-[13px] w-[13px] flex-none cursor-help items-center justify-center rounded-full border border-line-soft bg-panel text-[9px] font-bold text-muted-2"
+                className="flex h-[13px] w-[13px] flex-none cursor-help items-center justify-center rounded-full border border-line bg-panel text-[9px] font-bold text-muted-2"
               >
                 i
               </span>
@@ -61,16 +71,21 @@ export function SectionCard({
 
       <div className={cn("min-w-0 flex-1", bodyClassName)}>{children}</div>
 
-      {footer && footerHref && (
-        <footer className="mt-3.5 border-t border-line-soft pt-3">
-          <Link
-            href={footerHref}
-            className="text-[12px] font-medium text-brand transition-opacity hover:opacity-75"
-          >
-            {footer} →
-          </Link>
+      {(footer && footerHref) || footerNote ? (
+        <footer className="mt-3.5 flex flex-wrap items-center justify-between gap-2 border-t border-line-soft pt-3">
+          {footer && footerHref ? (
+            <Link
+              href={footerHref}
+              className="text-[12.5px] font-semibold text-brand transition-opacity hover:opacity-75"
+            >
+              {footer} →
+            </Link>
+          ) : (
+            <span />
+          )}
+          {footerNote && <span className="text-[11px] text-muted-2">{footerNote}</span>}
         </footer>
-      )}
+      ) : null}
     </section>
   );
 }
