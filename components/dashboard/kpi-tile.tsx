@@ -312,7 +312,7 @@ export function MiniStat({
     neutral: "text-ink",
   };
   return (
-    <div className="flex min-w-0 flex-col rounded-lg border border-line-soft bg-panel px-3 py-3">
+    <div className="flex min-w-0 flex-col rounded-lg border border-line-soft bg-panel px-2.5 py-3">
       {icon && (
         <span
           className={cn(

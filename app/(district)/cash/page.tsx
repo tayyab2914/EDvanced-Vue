@@ -444,7 +444,14 @@ export default async function CashDashboard({
           footer="View cash flow details"
           footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+          {/*
+            Sized by what a nine-figure balance needs, not by a viewport breakpoint. This
+            card is the 1.4fr column of a three-column row, so `lg:grid-cols-5` handed each
+            tile ~79px on a 1440px laptop and "$44.75M" ran straight out of the card. auto-fit
+            keeps five across when the column is wide enough for them and drops to four or
+            three when it is not — the figure never overflows at any width.
+          */}
+          <div className="grid gap-2.5 grid-cols-[repeat(auto-fit,minmax(96px,1fr))]">
             <MiniStat
               icon="wallet"
               tone="slate"

@@ -63,11 +63,23 @@ export function Gauge({
   const needleRad = ((needle - 90) * Math.PI) / 180;
   const needleLen = rOuter - 6;
 
+  /**
+   * Gutter for the tick labels, which live OUTSIDE the arc.
+   *
+   * The arc's own extent is the box: rOuter = size/2 - 6, so the semicircle's ends sit 6px
+   * inside the left and right edges. The end labels are drawn at rOuter + 9, which is 3px
+   * PAST each edge — so the first and last tick ("0" and the scale top) were half-painted
+   * outside the viewBox and clipped. Widening the box rather than pulling the labels in
+   * keeps every label centred on the tick it names, which is the one thing a tick label has
+   * to do; the arc simply renders a few percent smaller inside the same layout width.
+   */
+  const pad = 16;
+
   return (
     <ChartFigure title={title} summary={summary}>
       <svg
         width="100%"
-        viewBox={`0 0 ${size} ${size * 0.78}`}
+        viewBox={`${-pad} 0 ${size + pad * 2} ${size * 0.78}`}
         style={{ display: "block", maxWidth: size * 1.4 }}
       >
         {bands.map((b, i) => {

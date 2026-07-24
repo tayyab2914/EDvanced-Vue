@@ -268,16 +268,40 @@ export function ShareBars({
   return (
     <figure role="img" aria-label={`${title}. ${summary}`}>
       <span className="sr-only">{summary}</span>
-      <ul aria-hidden className="flex flex-col gap-3">
+      {/*
+       * A CONTAINER query, not a viewport one, and that distinction is the whole fix.
+       *
+       * The row used to be four fixed columns — 122px label, 74px figure, 52px share, 36px
+       * of gaps — with the bar taking whatever was left. That is 284px of track that cannot
+       * shrink, and this component is dropped into cards from ~290px (Cash composition, a
+       * 0.85fr column) to ~600px (Revenues by source) wide. In the narrow card the bar's
+       * `flex-1` collapsed to nothing — the chart drew no bars at all — and the fixed
+       * columns still pushed the row past the card's edge. No viewport breakpoint can see
+       * that, because the viewport was wide; the CARD was not.
+       *
+       * So: under 28rem of available width the bar takes its own full-width line beneath the
+       * figures, which is the only layout that keeps the mark visible at that size. Above it
+       * the original single-line row is unchanged.
+       */}
+      <ul aria-hidden className="@container flex flex-col gap-3">
         {rows.map((r) => (
-          <li key={r.id} className="flex items-center gap-3">
+          <li
+            key={r.id}
+            className="grid grid-cols-[minmax(0,1fr)_auto_46px] items-center gap-x-3 gap-y-1.5 @md:grid-cols-[minmax(80px,122px)_minmax(56px,1fr)_74px_52px]"
+          >
             <span
-              className="w-[122px] flex-none truncate text-[11.5px] text-ink-muted"
+              className="min-w-0 truncate text-[11.5px] text-ink-muted @md:col-start-1 @md:row-start-1"
               title={r.label}
             >
               {r.label}
             </span>
-            <span className="relative h-[11px] min-w-0 flex-1 rounded-full bg-line-soft">
+            <span className="text-right text-[11.5px] font-semibold tabular-nums text-ink @md:col-start-3 @md:row-start-1">
+              {r.display}
+            </span>
+            <span className="text-right text-[11px] tabular-nums text-muted-2 @md:col-start-4 @md:row-start-1">
+              {r.share}
+            </span>
+            <span className="relative col-span-3 h-[11px] min-w-0 rounded-full bg-line-soft @md:col-span-1 @md:col-start-2 @md:row-start-1">
               <span
                 className="absolute inset-y-0 left-0 rounded-full"
                 style={{
@@ -285,12 +309,6 @@ export function ShareBars({
                   background: r.color,
                 }}
               />
-            </span>
-            <span className="w-[74px] flex-none text-right text-[11.5px] font-semibold tabular-nums text-ink">
-              {r.display}
-            </span>
-            <span className="w-[52px] flex-none text-right text-[11px] tabular-nums text-muted-2">
-              {r.share}
             </span>
           </li>
         ))}
