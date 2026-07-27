@@ -5,6 +5,7 @@ import { resolveScope } from "@/lib/dashboard/scope";
 import { loadCore } from "@/lib/dashboard/load";
 import { money, compactMoney } from "@/lib/dashboard/format";
 import { formatDateTime } from "@/lib/format";
+import { fundLabel } from "@/lib/finance/funds";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { OverrideForm } from "./override-form";
@@ -59,7 +60,7 @@ export default async function OverridePage({
     <div className="animate-fade-up mx-auto max-w-[720px] space-y-[18px]">
       <PageHeader
         title="Correct a fund balance figure"
-        description={`${scope.fund.code} — ${scope.fund.name} · ${scope.label}`}
+        description={`${fundLabel(scope.fund)} · ${scope.label}`}
         actions={
           <Link
             href={`/fund-balance?fy=${scope.fiscalYear}&period=${scope.period}`}

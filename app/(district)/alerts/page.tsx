@@ -6,8 +6,8 @@ import { PageHeader } from "@/components/page-header";
 import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/section-card";
 import { AlertList, AlertSummary } from "@/components/dashboard/alert-list";
 import { EmptyState, SubstitutionNotice, Row } from "@/components/dashboard/shared";
-import { ScopeBar } from "@/components/dashboard/scope-bar";
-import { scopeOptions } from "@/lib/dashboard/options";
+import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
+import { alertFunds, scopeDescription } from "@/lib/dashboard/options";
 import type { AlertGroup } from "@/lib/alerts/catalog";
 
 /**
@@ -51,7 +51,6 @@ export default async function AlertsPage({
 
   const core = await loadCore(db, districtId, scope);
   const alerts = core.alerts;
-  const options = scopeOptions(scope);
 
   return (
     <div className="animate-fade-up space-y-[18px]">
@@ -59,16 +58,13 @@ export default async function AlertsPage({
         title="Alerts"
         description="Everything needing attention this period, judged against your own thresholds."
         actions={
-          <ScopeBar
-            periods={options.periods}
-            period={options.period}
-            funds={options.funds}
-            fund={scope.fundId ?? ""}
+          <DashboardFilters
+            scope={scope}
           />
         }
       />
       {scope.substituted && <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />}
-      <DataAsOf date={scope.dataAsOf} note={scope.fund ? scope.fund.name : "All funds"} />
+      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
       <Row cols="1-2">
         <SectionCard title="Summary" footer="Review your thresholds" footerHref="/policies">
@@ -78,6 +74,7 @@ export default async function AlertsPage({
               severity: a.severity,
               title: a.title,
               message: a.message,
+              funds: alertFunds(scope, "/alerts", a.funds),
             }))}
             critical={alerts?.criticalCount ?? 0}
             warning={alerts?.warningCount ?? 0}
@@ -115,6 +112,10 @@ export default async function AlertsPage({
                   severity: a.severity,
                   title: a.title,
                   message: a.message,
+                  // The drill-down stays on this page rather than jumping to the group's
+                  // dashboard: the reader came here to triage, and narrowing to a fund
+                  // re-triages everything, not just the row they clicked.
+                  funds: alertFunds(scope, "/alerts", a.funds),
                 }))}
                 empty={`No ${g.title.toLowerCase()} thresholds have been crossed.`}
               />

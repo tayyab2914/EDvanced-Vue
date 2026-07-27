@@ -37,13 +37,19 @@ import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/sec
 import { DataTable } from "@/components/dashboard/data-table";
 import { AlertSummary, InsightList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { EmptyState, SubstitutionNotice, Row, KeyInsightBar } from "@/components/dashboard/shared";
-import { ScopeBar } from "@/components/dashboard/scope-bar";
+import {
+  EmptyState,
+  SubstitutionNotice,
+  Row,
+  KeyInsightBar,
+  FundLevelOnly,
+} from "@/components/dashboard/shared";
+import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { BudgetBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
 import { Gauge } from "@/components/dashboard/charts/gauge";
 import { Sparkline } from "@/components/dashboard/charts/sparkline";
-import { scopeOptions } from "@/lib/dashboard/options";
+import { scopeOptions, alertFunds, scopeDescription } from "@/lib/dashboard/options";
 import { SummaryPrint } from "./summary-print";
 
 /**
@@ -100,7 +106,7 @@ export default async function ExecutiveDashboard({
 
   const [revenue, expenditure] = await Promise.all([
     revVersion
-      ? revenueBySource(db, { versionId: revVersion, fundId: scope.fundId, periodsElapsed: scope.period })
+      ? revenueBySource(db, { versionId: revVersion, filter: scope.filter, periodsElapsed: scope.period })
       : null,
     // BY OBJECT, not by function — the client's note on §3.3b: "change to objects easier to
     // scan (Salaries, Employee Benefits, Purchased Svc, Energy Svc, Materials & Supplies,
@@ -110,7 +116,7 @@ export default async function ExecutiveDashboard({
     expVersion
       ? expenditureByObjectType(db, {
           versionId: expVersion,
-          fundId: scope.fundId,
+          filter: scope.filter,
           periodsElapsed: scope.period,
           // Chart-of-accounts order, so the card reads Salaries · Employee Benefits ·
           // Purchased Svc · Energy Svc · Materials & Supplies · Capital Outlay · Other —
@@ -343,8 +349,10 @@ export default async function ExecutiveDashboard({
     point?.endingCash ?? null,
     point?.expenditureYtd ?? null,
   );
-  const avgMonthlySpend = toNumber(series.adoptedExpenditureBudget)
-    ? toNumber(series.adoptedExpenditureBudget)! / 12
+  // The FUND-level budget, not the filtered one. This divides a cash figure, and cash has
+  // no cost centre to narrow by — see `cashBasisExpenditureBudget` in lib/finance/series.ts.
+  const avgMonthlySpend = toNumber(series.cashBasisExpenditureBudget)
+    ? toNumber(series.cashBasisExpenditureBudget)! / 12
     : null;
   const cashTrendPct = changePercent(point?.endingCash, previous?.endingCash);
 
@@ -363,6 +371,10 @@ export default async function ExecutiveDashboard({
     severity: a.severity,
     title: a.title,
     message: a.message,
+    // Which fund each alert is about, on the All Funds view — the client's "I do not know
+    // where to go". From here the drill-down narrows the whole executive summary, which is
+    // the right move on a page whose every tile is district-wide.
+    funds: alertFunds(scope, "/dashboard", a.funds),
   }));
 
   const options = scopeOptions(scope);
@@ -520,9 +532,11 @@ export default async function ExecutiveDashboard({
   const fundBalanceCard = (
     <SectionCard
       title="Fund balance trend"
-      subtitle={scope.fund ? scope.fund.name : "All funds"}
+      subtitle={scopeDescription(scope)}
       badge={
-        isGeneralFund ? (
+        scope.fundLevelOnly ? (
+          <FundLevelOnly what="Fund balance is" />
+        ) : isGeneralFund ? (
           <StatusBadge status={reserveRung} size="sm" className="uppercase" />
         ) : (
           <span className="rounded-full border border-line bg-panel px-2 py-[2px] text-[9.5px] font-medium normal-case tracking-normal text-muted-2">
@@ -576,6 +590,7 @@ export default async function ExecutiveDashboard({
     <SectionCard
       title="Cash position"
       subtitle={`As of ${scope.label} (FY ${scope.fiscalYear})`}
+      badge={scope.fundLevelOnly ? <FundLevelOnly what="Cash is" /> : undefined}
       footer="Go to cash"
       footerHref="/cash"
     >
@@ -752,11 +767,8 @@ export default async function ExecutiveDashboard({
         title="Executive Dashboard"
         description="Financial summary and key indicators of fiscal health."
         actions={
-          <ScopeBar
-            periods={options.periods}
-            period={options.period}
-            funds={options.funds}
-            fund={scope.fundId ?? ""}
+          <DashboardFilters
+            scope={scope}
             exportHref={options.exportHref("/dashboard/export")}
             summaryHref={summaryHref}
           />
@@ -766,7 +778,7 @@ export default async function ExecutiveDashboard({
       {scope.substituted && (
         <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />
       )}
-      <DataAsOf date={scope.dataAsOf} note={scope.fund ? scope.fund.name : "All funds"} />
+      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
       {/* ---------- §3.1 KPI row ---------- */}
       {kpis}

@@ -1,6 +1,8 @@
 import "server-only";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
+import { ALL_FILTER_PARAMS } from "@/lib/dashboard/filter-params";
+import { scopeDescription } from "@/lib/dashboard/options";
 import { buildDashboardSheets, sheetsToCsv, type DashboardKind } from "@/lib/export/dashboard-export";
 import { buildWorkbook, downloadHeaders, exportFilename } from "@/lib/export/workbook";
 import { writeAudit } from "@/lib/audit";
@@ -30,18 +32,29 @@ export async function handleDashboardExport(
   const url = new URL(request.url);
   const format = url.searchParams.get("format") === "csv" ? "csv" : "xlsx";
 
-  const scope = await resolveScope(db, districtId, {
-    fy: url.searchParams.get("fy") ?? undefined,
-    period: url.searchParams.get("period") ?? undefined,
-    fund: url.searchParams.get("fund") ?? undefined,
-  });
+  /**
+   * Every scope parameter the dashboards use, read straight off the URL.
+   *
+   * Enumerated from `FILTER_PARAMS` rather than listed by hand: this route and the page
+   * must resolve the SAME slice, and a hand-written list is how an export quietly stops
+   * honouring a filter the screen added — the download then disagrees with the dashboard
+   * it was taken from, which is the one thing an export must never do.
+   */
+  const params: Record<string, string | undefined> = {};
+  for (const key of ALL_FILTER_PARAMS) {
+    params[key] = url.searchParams.get(key) ?? undefined;
+  }
+
+  const scope = await resolveScope(db, districtId, params);
 
   if (scope.empty) {
     return new Response("This district has no committed data to export.", { status: 404 });
   }
 
   const sheets = await buildDashboardSheets(db, districtId, scope, kind);
-  const scopeLabel = `${scope.fiscalYear}-p${scope.period}${scope.fund ? `-${scope.fund.code}` : ""}`;
+  const scopeLabel = `${scope.fiscalYear}-p${scope.period}${scope.fund ? `-${scope.fund.code}` : ""}${
+    !scope.fund && scope.filters.active ? "-filtered" : ""
+  }`;
 
   await writeAudit({
     action: "DASHBOARD_EXPORTED",
@@ -49,7 +62,16 @@ export async function handleDashboardExport(
     districtId,
     entityType: "Dashboard export",
     entityId: kind,
-    metadata: { kind, format, fiscalYear: scope.fiscalYear, period: scope.period, fundId: scope.fundId },
+    // The whole slice, not just the fund: an auditor asking "what did this person
+    // download" needs the filter that produced it, and a multi-fund export is no longer
+    // describable by one id.
+    metadata: {
+      kind,
+      format,
+      fiscalYear: scope.fiscalYear,
+      period: scope.period,
+      filters: scope.filters.chips.map((c) => `${c.dimension}: ${c.values.join(", ")}`),
+    },
   });
 
   if (format === "csv") {
@@ -61,7 +83,9 @@ export async function handleDashboardExport(
   const buffer = await buildWorkbook({
     title: TITLES[kind],
     district: user.districtName ?? "District",
-    scope: `${scope.label}${scope.fund ? ` · ${scope.fund.name}` : " · All funds"}`,
+    // The workbook's header line names the slice in full, so a file that leaves someone's
+    // inbox still says what it is scoped to.
+    scope: `${scope.label} · ${scopeDescription(scope)}`,
     sheets,
   });
 

@@ -10,6 +10,7 @@ import {
 } from "@/lib/finance/engine";
 import { adoptedBudget } from "@/lib/finance/versions";
 import { memo, dbKey } from "@/lib/request-cache";
+import { fundOnly, soleFundId, narrowsCostCenter, filterKey } from "@/lib/finance/filter";
 import type { FundBalanceField } from "@/lib/enums";
 
 /**
@@ -86,6 +87,13 @@ export interface FundBalanceResult {
    * number wearing the same label.
    */
   missingOpeningBalance: boolean;
+  /**
+   * True when the page asked for a cost-centre slice and this figure is FUND-level anyway.
+   *
+   * See `balanceScope` below for why it has to be. The page badges it rather than showing a
+   * fund-level balance beside department-level spending as though the two matched.
+   */
+  fundLevelOnly: boolean;
 }
 
 /**
@@ -97,8 +105,27 @@ const scopeKey = (db: TenantDb, scope: PeriodScope, codes: ActivityCodes) => {
   const k = dbKey(db);
   return k === null
     ? null
-    : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}|${codesKey(codes)}`;
+    : `${k}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}|${codesKey(codes)}`;
 };
+
+/**
+ * A FUND BALANCE IS ALWAYS A FUND-LEVEL FIGURE. THIS IS WHERE THAT IS ENFORCED.
+ *
+ * The formula is `beginning + revenue − expenditure`. Revenue and expenditure carry a cost
+ * centre; the beginning balance does not, and cannot — `OpeningFundBalance` is one row per
+ * fund because that is the grain a district closes its books at.
+ *
+ * So under a cost-centre filter the three terms do not agree, and honouring the filter on
+ * the two that can would subtract one department's spending from the whole district's
+ * opening balance. The result looks like a balance, is in the right order of magnitude, and
+ * is not a quantity that exists. Dropping the cost-centre half of the filter and saying so
+ * is the only honest option: the number is then a real fund balance for a real set of
+ * funds, and `fundLevelOnly` tells the page to badge it.
+ */
+const balanceScope = (scope: PeriodScope): PeriodScope => ({
+  ...scope,
+  filter: fundOnly(scope.filter),
+});
 
 export const computeFundBalance = memo("computeFundBalance", scopeKey, buildFundBalance);
 
@@ -107,9 +134,10 @@ async function buildFundBalance(
   scope: PeriodScope,
   codes: ActivityCodes,
 ): Promise<FundBalanceResult> {
+  const level = balanceScope(scope);
   const [beginning, activity] = await Promise.all([
-    beginningFundBalance(db, { fiscalYear: scope.fiscalYear, fundId: scope.fundId }),
-    activityTotals(db, scope, codes),
+    beginningFundBalance(db, { fiscalYear: level.fiscalYear, filter: level.filter }),
+    activityTotals(db, level, codes),
   ]);
 
   // Beginning + all revenue − all expenditure. See the derivation above for why the
@@ -118,7 +146,7 @@ async function buildFundBalance(
     .plus(activity.totalRevenueYtd)
     .minus(activity.totalExpenditureYtd);
 
-  const override = await findOverride(db, scope, "TOTAL");
+  const override = await findOverride(db, level, "TOTAL");
 
   return {
     total: override ? override.value : computed,
@@ -128,6 +156,7 @@ async function buildFundBalance(
     beginning: beginning.total,
     activity,
     missingOpeningBalance: !beginning.found,
+    fundLevelOnly: narrowsCostCenter(scope.filter),
   };
 }
 
@@ -147,16 +176,17 @@ async function buildUnassigned(
   scope: PeriodScope,
   codes: ActivityCodes,
 ): Promise<FundBalanceResult> {
+  const level = balanceScope(scope);
   const [beginning, activity] = await Promise.all([
-    beginningFundBalance(db, { fiscalYear: scope.fiscalYear, fundId: scope.fundId }),
-    activityTotals(db, scope, codes),
+    beginningFundBalance(db, { fiscalYear: level.fiscalYear, filter: level.filter }),
+    activityTotals(db, level, codes),
   ]);
 
   const computed = beginning.unassigned
     .plus(activity.totalRevenueYtd)
     .minus(activity.totalExpenditureYtd);
 
-  const override = await findOverride(db, scope, "UNASSIGNED");
+  const override = await findOverride(db, level, "UNASSIGNED");
 
   return {
     total: override ? override.value : computed,
@@ -166,6 +196,7 @@ async function buildUnassigned(
     beginning: beginning.unassigned,
     activity,
     missingOpeningBalance: !beginning.found,
+    fundLevelOnly: narrowsCostCenter(scope.filter),
   };
 }
 
@@ -187,10 +218,12 @@ async function buildReservePercent(
   // series divides by, resolved through the same shared lookup so the two cannot disagree.
   const [unassigned, adopted] = await Promise.all([
     computeUnassigned(db, scope, codes),
+    // Fund-level divisor to match the fund-level numerator above. A reserve percentage
+    // whose halves are filtered differently is not a percentage of anything.
     adoptedBudget(db, {
       fiscalYear: scope.fiscalYear,
       kind: "EXPENDITURE",
-      fundId: scope.fundId,
+      filter: fundOnly(scope.filter),
     }),
   ]);
 
@@ -217,16 +250,14 @@ async function findOverride(
   field: FundBalanceField,
 ): Promise<{ value: Prisma.Decimal; reason: string; at: Date; by: string } | null> {
   // An override is per fund. Asking for every fund at once has no single figure to
-  // override — the district corrects a fund, not a total.
-  if (!scope.fundId) return null;
+  // override — the district corrects a fund, not a total — and neither does a SET of
+  // funds: three funds have three corrections, and applying one of them to their sum
+  // would silently misstate the other two.
+  const fundId = soleFundId(scope.filter);
+  if (!fundId) return null;
 
   const row = await db.fundBalanceOverride.findFirst({
-    where: {
-      fiscalYear: scope.fiscalYear,
-      period: scope.period,
-      fundId: scope.fundId,
-      field,
-    },
+    where: { fiscalYear: scope.fiscalYear, period: scope.period, fundId, field },
   });
   if (!row) return null;
 

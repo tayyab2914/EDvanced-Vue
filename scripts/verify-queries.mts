@@ -36,17 +36,52 @@ import { loadCore } from "@/lib/dashboard/load";
  */
 
 /**
- * Measured 27 on the Demo ISD fixture. The ceiling leaves room for a page that legitimately
+ * Measured 33 on the Demo ISD fixture. The ceiling leaves room for a page that legitimately
  * needs another figure without leaving room for a caller to start re-resolving versions
  * again — the regression this exists to catch cost fifty.
+ *
+ * It was 27 against a ceiling of 35 until the alerts learned to say WHICH FUND
+ * (lib/alerts/attribution.ts). That is four grouped aggregates plus a fund list, and they
+ * are counted here but they are NOT five round trips: they ride inside a `Promise.all` that
+ * was already waiting on `gatherFacts`, so they add one shape of database work to a round
+ * the page was paying for anyway. Wall clock is what this number is a proxy for, and it
+ * barely moved.
+ *
+ * They also only run on the ALL FUNDS view. A page scoped to one fund pays none of them,
+ * because an alert that already names its own fund needs nothing pointing at it.
+ *
+ * Raised to 40 rather than to 34 so the headroom the original ceiling described still
+ * exists. If this number climbs again, check that the climb is deliberate the way this one
+ * was: `MAX_REPEATS` below is what catches the accidental kind.
  */
-const MAX_QUERIES = 35;
+const MAX_QUERIES = 40;
 /**
  * Repeats of one normalised SQL shape. Not zero: three of the remaining repeats are the
  * SAME shape with genuinely different parameters (period 12 and 11, all-funds and General
  * Fund), which the normalisation cannot tell apart because it strips the placeholders.
  */
 const MAX_REPEATS = 4;
+
+/**
+ * What `resolveScope` may cost, separately from `loadCore`.
+ *
+ * Measured 10 on the Demo ISD fixture, every one of them a distinct shape: the district's
+ * fiscal-year start, every committed period, the four master-data lists behind the filter
+ * bar (funds, fund types, cost centres, cost-centre types), the year's current versions, and
+ * the three grouped aggregates that mark which options the scoped period actually has rows
+ * for.
+ *
+ * TWO WAVES, not ten round trips. Everything except the presence check is one `Promise.all`,
+ * and the presence check waits only because it is scoped to the period the resolver has just
+ * chosen.
+ *
+ * It was 14 when the filter bar first landed, because `listFunds`, `generalFund` and the
+ * option lists each read Fund and FundType for themselves — and Prisma answers a nested
+ * relation select with a second statement, so two "one query" helpers were four. They share
+ * one read now (lib/master-data/lists.ts). The ceiling is what stops that regrowing: this
+ * runs BEFORE `loadCore` on every dashboard, so it is latency nothing else can hide.
+ */
+const MAX_SCOPE_QUERIES = 12;
 
 const base = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL }),
@@ -120,19 +155,47 @@ async function main() {
     orderBy: [{ fiscalYear: "desc" }, { period: "desc" }],
     select: { fiscalYear: true, period: true },
   });
-  const scope = await resolveScope(db, district.id, {
-    fy: latest?.fiscalYear,
-    period: latest?.period === null ? undefined : String(latest?.period),
-  });
+
+  // Warm the pool so the connect handshake is not counted as a query.
+  await base.$queryRaw`SELECT 1`;
+
+  /**
+   * `resolveScope` is measured TOO, and separately.
+   *
+   * It used to be four small reads and nobody thought about it. The global filter bar made
+   * it bigger — it now also loads the option lists (fund types, funds, cost centres and
+   * their types) and works out which of them the scoped period actually has rows for. Those
+   * are cheap queries on small tables, but "cheap query" is not the unit that matters here:
+   * every page pays this BEFORE `loadCore` starts, so it is round trips on the critical
+   * path, and the header comment on this file is about exactly that.
+   *
+   * Counted in its own request scope so the two ceilings stay independent — otherwise a
+   * regression in one would be masked by headroom in the other.
+   */
+  const scopeSeen: typeof seen = [];
+  capture = true;
+  const scope = await runInRequestScope(() =>
+    resolveScope(db, district.id, {
+      fy: latest?.fiscalYear,
+      period: latest?.period === null ? undefined : String(latest?.period),
+    }),
+  );
+  capture = false;
+  scopeSeen.push(...seen.splice(0, seen.length));
+
   if (scope.empty) {
     console.log(`${district.name} has no committed data — nothing to count. Skipping.`);
     return;
   }
 
-  console.log(`\nloadCore — ${district.name}, FY ${scope.fiscalYear}, period ${scope.period}\n`);
+  console.log(`\nresolveScope — ${district.name}, FY ${scope.fiscalYear}, period ${scope.period}\n`);
+  console.log(`  ${scopeSeen.length} queries\n`);
+  assert(
+    scopeSeen.length <= MAX_SCOPE_QUERIES,
+    `resolveScope issues ${scopeSeen.length} queries (ceiling ${MAX_SCOPE_QUERIES})`,
+  );
 
-  // Warm the pool so the connect handshake is not counted as a query.
-  await base.$queryRaw`SELECT 1`;
+  console.log(`\nloadCore — ${district.name}, FY ${scope.fiscalYear}, period ${scope.period}\n`);
 
   // ONE request scope = one render, the boundary React gives the app at runtime.
   capture = true;

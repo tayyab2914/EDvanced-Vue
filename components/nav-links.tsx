@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/cn";
+import { withScope } from "@/lib/dashboard/filter-params";
 
 export interface NavItem {
   label: string;
@@ -11,6 +12,8 @@ export interface NavItem {
 
 export function NavLinks({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
+  // The dashboards' filters ride along, same as the sidebar. See SidebarNav for the why.
+  const params = useSearchParams();
   return (
     <div className="-mb-px flex gap-1 overflow-x-auto">
       {items.map((item) => {
@@ -19,7 +22,7 @@ export function NavLinks({ items }: { items: NavItem[] }) {
         return (
           <Link
             key={item.href}
-            href={item.href}
+            href={withScope(item.href, params)}
             className={cn(
               "whitespace-nowrap border-b-2 px-3 py-2.5 text-[13px] font-medium transition-colors",
               active

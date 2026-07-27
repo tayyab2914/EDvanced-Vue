@@ -2,6 +2,14 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import type { TenantDb } from "@/lib/tenant-db";
 import { currentVersionsForYear, adoptedBudget } from "@/lib/finance/versions";
 import { memo, dbKey } from "@/lib/request-cache";
+import {
+  detailWhere,
+  fundWhere,
+  fundOnly,
+  narrowsCostCenter,
+  filterKey,
+  type FinanceFilter,
+} from "@/lib/finance/filter";
 
 /**
  * Every figure a trend chart needs, for a whole fiscal year, in four queries.
@@ -87,9 +95,32 @@ export interface YearSeries {
     committed: Prisma.Decimal;
     assigned: Prisma.Decimal;
   } | null;
-  /** The adopted full-year expenditure budget — the divisor for days-cash and reserve %. */
+  /**
+   * The adopted full-year expenditure budget, narrowed by the WHOLE filter — cost centre
+   * included. What the utilisation and pace figures measure against.
+   */
   adoptedExpenditureBudget: Prisma.Decimal;
   adoptedRevenueBudget: Prisma.Decimal;
+  /**
+   * The same budget, narrowed by FUND ONLY — the divisor for days-cash.
+   *
+   * A separate figure because days-cash is a ratio between two families that do not filter
+   * alike: the numerator is ending cash, which has no cost centre, and dividing fund-level
+   * cash by one department's budget reports a district with three months of cash as having
+   * five years of it. Identical to `adoptedExpenditureBudget` — the same object, no second
+   * query — whenever no cost-centre filter is applied, which is the ordinary case.
+   */
+  cashBasisExpenditureBudget: Prisma.Decimal;
+  /**
+   * True when a cost-centre filter is applied, so the cash and fund-balance figures on
+   * these points are FUND-level while the revenue and expenditure figures are not.
+   *
+   * The page reads this to badge those cards. It is not a warning that something is wrong —
+   * the figures are each correct — it is a warning that two of them are answers to
+   * different questions, which is exactly the thing a dashboard must never leave a reader
+   * to discover for themselves.
+   */
+  fundLevelBalances: boolean;
 }
 
 // The year-wide version lookup moved to lib/finance/versions.ts, where the per-period
@@ -116,22 +147,33 @@ function periodOf(byPeriod: Map<number | null, string> | undefined): Map<string,
  */
 export const yearSeries = memo(
   "yearSeries",
-  (db: TenantDb, args: { fiscalYear: string; fundId?: string; throughPeriod?: number }) => {
+  (db: TenantDb, args: { fiscalYear: string; filter?: FinanceFilter; throughPeriod?: number }) => {
     const k = dbKey(db);
     return k === null
       ? null
-      : `${k}|${args.fiscalYear}|${args.fundId ?? ""}|${args.throughPeriod ?? ""}`;
+      : `${k}|${args.fiscalYear}|${filterKey(args.filter)}|${args.throughPeriod ?? ""}`;
   },
   buildYearSeries,
 );
 
 async function buildYearSeries(
   db: TenantDb,
-  args: { fiscalYear: string; fundId?: string; throughPeriod?: number },
+  args: { fiscalYear: string; filter?: FinanceFilter; throughPeriod?: number },
 ): Promise<YearSeries> {
-  const { fiscalYear, fundId } = args;
+  const { fiscalYear, filter } = args;
   const through = Math.max(1, Math.min(12, args.throughPeriod ?? 12));
-  const fund = fundId ? { fundId } : {};
+
+  /**
+   * TWO SLICES, BECAUSE TWO FAMILIES OF TABLE.
+   *
+   * `slice` narrows revenue and expenditure by fund AND cost centre. `funds` narrows cash
+   * and opening balances by fund alone, because those tables have no cost-centre column
+   * (see lib/finance/filter.ts). When no cost-centre filter is applied the two are the same
+   * narrowing and nothing below costs anything extra.
+   */
+  const slice = detailWhere(filter);
+  const funds = fundWhere(filter);
+  const splitFamilies = narrowsCostCenter(filter);
 
   const versions = await currentVersionsForYear(db, fiscalYear);
 
@@ -142,58 +184,77 @@ async function buildYearSeries(
 
   const ids = (m: Map<string, number>) => [...m.keys()];
 
-  const [revenue, spending, cash, opening, expBudget, revBudget] = await Promise.all([
-    revenueByPeriod.size
-      ? db.revenueActual.groupBy({
-          by: ["versionId"],
-          where: { versionId: { in: ids(revenueByPeriod) }, ...fund },
-          _sum: { budget: true, actualMtd: true, actualYtd: true },
-        })
-      : Promise.resolve([]),
+  const [revenue, spending, cash, opening, expBudget, revBudget, fundExpBudget, fundActivity] =
+    await Promise.all([
+      revenueByPeriod.size
+        ? db.revenueActual.groupBy({
+            by: ["versionId"],
+            where: { versionId: { in: ids(revenueByPeriod) }, ...slice },
+            _sum: { budget: true, actualMtd: true, actualYtd: true },
+          })
+        : Promise.resolve([]),
 
-    spendByPeriod.size
-      ? db.expenditureActual.groupBy({
-          by: ["versionId"],
-          where: { versionId: { in: ids(spendByPeriod) }, ...fund },
-          _sum: { budget: true, actualMtd: true, actualYtd: true, encumbrances: true },
-        })
-      : Promise.resolve([]),
+      spendByPeriod.size
+        ? db.expenditureActual.groupBy({
+            by: ["versionId"],
+            where: { versionId: { in: ids(spendByPeriod) }, ...slice },
+            _sum: { budget: true, actualMtd: true, actualYtd: true, encumbrances: true },
+          })
+        : Promise.resolve([]),
 
-    cashByPeriod.size
-      ? db.cashPosition.groupBy({
-          by: ["versionId"],
-          where: { versionId: { in: ids(cashByPeriod) }, ...fund },
-          _sum: {
-            beginningCash: true,
-            receiptsMtd: true,
-            disbursementsMtd: true,
-            endingCash: true,
-            investmentBalance: true,
-            restrictedCash: true,
-            unrestrictedCash: true,
-          },
-        })
-      : Promise.resolve([]),
+      cashByPeriod.size
+        ? db.cashPosition.groupBy({
+            by: ["versionId"],
+            where: { versionId: { in: ids(cashByPeriod) }, ...funds },
+            _sum: {
+              beginningCash: true,
+              receiptsMtd: true,
+              disbursementsMtd: true,
+              endingCash: true,
+              investmentBalance: true,
+              restrictedCash: true,
+              unrestrictedCash: true,
+            },
+          })
+        : Promise.resolve([]),
 
-    openingVersion
-      ? db.openingFundBalance.aggregate({
-          where: { versionId: openingVersion, ...fund },
-          _sum: {
-            begTotal: true,
-            begUnassigned: true,
-            begNonspendable: true,
-            begRestricted: true,
-            begCommitted: true,
-            begAssigned: true,
-          },
-        })
-      : Promise.resolve(null),
+      openingVersion
+        ? db.openingFundBalance.aggregate({
+            where: { versionId: openingVersion, ...funds },
+            _sum: {
+              begTotal: true,
+              begUnassigned: true,
+              begNonspendable: true,
+              begRestricted: true,
+              begCommitted: true,
+              begAssigned: true,
+            },
+          })
+        : Promise.resolve(null),
 
-    // Shared with days-cash, the reserve percentage and the forecast, all of which want
-    // this exact figure and used to run their own SUM for it.
-    adoptedBudget(db, { fiscalYear, kind: "EXPENDITURE", fundId }),
-    adoptedBudget(db, { fiscalYear, kind: "REVENUE", fundId }),
-  ]);
+      // Shared with days-cash, the reserve percentage and the forecast, all of which want
+      // this exact figure and used to run their own SUM for it.
+      adoptedBudget(db, { fiscalYear, kind: "EXPENDITURE", filter }),
+      adoptedBudget(db, { fiscalYear, kind: "REVENUE", filter }),
+
+      // The days-cash divisor. Memoised on the filter key, so with no cost-centre filter
+      // this is the very same promise as the line above it and issues no query.
+      adoptedBudget(db, { fiscalYear, kind: "EXPENDITURE", filter: fundOnly(filter) }),
+
+      /**
+       * The fund-level revenue and expenditure the FUND BALANCE line is built from.
+       *
+       * Only when a cost-centre filter is applied, and it is the whole reason the balance
+       * stays trustworthy under one. Fund balance is `opening + revenue − expenditure`, and
+       * `opening` cannot be narrowed below a fund. Subtracting one department's spending
+       * from the district's opening balance produces a number that is not the department's
+       * balance, is not the fund's, and is not anything — the kind of plausible figure a
+       * board acts on. So the balance is computed fund-level throughout and badged as such.
+       */
+      splitFamilies && (revenueByPeriod.size || spendByPeriod.size)
+        ? fundLevelActivity(db, funds, revenueByPeriod, spendByPeriod)
+        : Promise.resolve(null),
+    ]);
 
   const index = <T extends { versionId: string }>(rows: T[], map: Map<string, number>) => {
     const out = new Map<number, T>();
@@ -230,13 +291,18 @@ async function buildYearSeries(
     const expenditureYtd = e?._sum.actualYtd ?? ZERO;
     const hasData = Boolean(r || e || c);
 
+    // The balance's own revenue and expenditure — fund-level when a cost-centre filter
+    // makes those differ from the figures above, and literally the same values otherwise.
+    const balanceRevenue = fundActivity ? (fundActivity.revenue.get(period) ?? ZERO) : revenueYtd;
+    const balanceSpend = fundActivity ? (fundActivity.spending.get(period) ?? ZERO) : expenditureYtd;
+
     // Beginning + all revenue − all expenditure. The transfer classification cancels out
     // of this line entirely — see the derivation in lib/finance/fund-balance.ts.
     const fundBalance = openingTotals
-      ? openingTotals.total.plus(revenueYtd).minus(expenditureYtd)
+      ? openingTotals.total.plus(balanceRevenue).minus(balanceSpend)
       : null;
     const unassignedFundBalance = openingTotals
-      ? openingTotals.unassigned.plus(revenueYtd).minus(expenditureYtd)
+      ? openingTotals.unassigned.plus(balanceRevenue).minus(balanceSpend)
       : null;
 
     points.push({
@@ -270,7 +336,54 @@ async function buildYearSeries(
     opening: openingTotals,
     adoptedExpenditureBudget: expBudget?.total ?? ZERO,
     adoptedRevenueBudget: revBudget?.total ?? ZERO,
+    cashBasisExpenditureBudget: fundExpBudget?.total ?? ZERO,
+    fundLevelBalances: splitFamilies,
   };
+}
+
+/**
+ * Revenue and expenditure YTD per period at FUND grain, ignoring any cost-centre filter.
+ *
+ * Two grouped aggregates, issued only when a cost-centre filter is applied — see the note
+ * at the call site for why the fund-balance line cannot be built from the narrowed figures.
+ * Same versionId rule as everything else here: filter by version, never by period.
+ */
+async function fundLevelActivity(
+  db: TenantDb,
+  funds: { fundId?: Prisma.StringFilter },
+  revenueByPeriod: Map<string, number>,
+  spendByPeriod: Map<string, number>,
+): Promise<{ revenue: Map<number, Prisma.Decimal>; spending: Map<number, Prisma.Decimal> }> {
+  const [revRows, expRows] = await Promise.all([
+    revenueByPeriod.size
+      ? db.revenueActual.groupBy({
+          by: ["versionId"],
+          where: { versionId: { in: [...revenueByPeriod.keys()] }, ...funds },
+          _sum: { actualYtd: true },
+        })
+      : Promise.resolve([]),
+    spendByPeriod.size
+      ? db.expenditureActual.groupBy({
+          by: ["versionId"],
+          where: { versionId: { in: [...spendByPeriod.keys()] }, ...funds },
+          _sum: { actualYtd: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const fold = (
+    rows: { versionId: string; _sum: { actualYtd: Prisma.Decimal | null } }[],
+    byPeriod: Map<string, number>,
+  ) => {
+    const out = new Map<number, Prisma.Decimal>();
+    for (const r of rows) {
+      const p = byPeriod.get(r.versionId);
+      if (p !== undefined) out.set(p, r._sum.actualYtd ?? ZERO);
+    }
+    return out;
+  };
+
+  return { revenue: fold(revRows, revenueByPeriod), spending: fold(expRows, spendByPeriod) };
 }
 
 /** The point for one period, or null when that period reported nothing. */

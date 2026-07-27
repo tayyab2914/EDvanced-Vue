@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons";
 import { useShell } from "@/components/sidebar-shell";
+import { withScope } from "@/lib/dashboard/filter-params";
 
 export interface NavItem {
   label: string;
@@ -20,6 +21,19 @@ export interface NavGroup {
 
 export function SidebarNav({ groups }: { groups: NavGroup[] }) {
   const pathname = usePathname();
+  /**
+   * The dashboards' scope, carried between them.
+   *
+   * "Applied filters remaining in place when the user moves between dashboards" — and this
+   * is the whole implementation, because the URL is the only copy of the filter (see
+   * lib/dashboard/filter-params.ts). There is no store to keep in step and nothing to clear
+   * on logout; a nav link just points at the same slice on the next screen.
+   *
+   * `withScope` leaves every non-dashboard route alone, and the ACTIVE test still runs on
+   * the bare pathname — a link that now carries a query string must not stop looking
+   * selected because of it.
+   */
+  const params = useSearchParams();
   // Navigating to the current route fires no pathname change, so the drawer
   // has to be dismissed on the click itself.
   const { closeSidebar } = useShell();
@@ -40,7 +54,7 @@ export function SidebarNav({ groups }: { groups: NavGroup[] }) {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={withScope(item.href, params)}
                 onClick={closeSidebar}
                 className={cn(
                   "mb-0.5 flex items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-[13.5px] font-medium transition-colors",

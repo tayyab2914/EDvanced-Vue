@@ -2,7 +2,16 @@ import { redirect } from "next/navigation";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
 import { loadCore, revenueVarianceThresholds, periodAxisLabels } from "@/lib/dashboard/load";
-import { revenueBySource, revenueByType, topMovers, foldTail } from "@/lib/finance/breakdown";
+import {
+  revenueBySource,
+  revenueBySourceAndFund,
+  revenueByType,
+  revenueByProject,
+  topMovers,
+  foldTail,
+  type Breakdown,
+  type BreakdownRow,
+} from "@/lib/finance/breakdown";
 import { ladder } from "@/lib/dashboard/status";
 import { revenuePace } from "@/lib/dashboard/pace";
 import { daysIntoFiscalYear } from "@/lib/finance/variance";
@@ -23,12 +32,51 @@ import { DataTable, MoverList } from "@/components/dashboard/data-table";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { EmptyState, SubstitutionNotice, Row, PolicyEchoCard } from "@/components/dashboard/shared";
-import { ScopeBar } from "@/components/dashboard/scope-bar";
+import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
+import { ViewBy } from "@/components/dashboard/view-by";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { ColumnChart } from "@/components/dashboard/charts/column-chart";
 import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
-import { scopeOptions } from "@/lib/dashboard/options";
+import { scopeOptions, moverFund, alertFunds, scopeDescription } from "@/lib/dashboard/options";
 import { SERIES_SLOTS } from "@/lib/dashboard/palette";
+import { codeName } from "@/lib/text";
+import { REVENUE_VIEWS, resolveView, type RevenueView } from "@/lib/dashboard/view";
+
+/**
+ * How the "view by" card presents each perspective — "Revenue Type, Revenue Code & Name,
+ * Grant", per the client.
+ *
+ * All three fold their tail into "Other" at six rows, unlike the Expenditures card, which
+ * folds only its unbounded dimensions. Revenue types number four or five, so the fold never
+ * fires there; sources and projects run to dozens, and this card is the SHARE card. The
+ * complete source list is the table in the row above, untouched.
+ */
+const VIEW_META: Record<
+  RevenueView,
+  { title: string; subtitle: string; info: string; noun: string; label: (r: BreakdownRow) => string }
+> = {
+  type: {
+    title: "Revenue by category (YTD)",
+    subtitle: "Share of collections by revenue type",
+    info: "The same categories the forecast projects by, so a forecast and an actual compare without a translation table between them.",
+    noun: "Revenue types",
+    label: (r) => r.name,
+  },
+  source: {
+    title: "Revenue by code and name (YTD)",
+    subtitle: "Share of collections by revenue source",
+    info: "The district's own revenue source codes, largest first. The full list with variance and status is in the table above.",
+    noun: "Revenue sources",
+    label: (r) => codeName(r.code, r.name),
+  },
+  grant: {
+    title: "Revenue by project / grant (YTD)",
+    subtitle: "The Project / Grant column on the revenue detail",
+    info: "Grant revenue reaches the platform tagged in the required Project / Grant column, against the district's unified project master. That is what this groups by — the Grants Activity module itself is a V2 addition.",
+    noun: "Projects",
+    label: (r) => codeName(r.code, r.name),
+  },
+};
 
 /**
  * The Revenue dashboard (Spec §4) — performance against budget.
@@ -52,13 +100,15 @@ import { SERIES_SLOTS } from "@/lib/dashboard/palette";
 export default async function RevenueDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; period?: string; fund?: string }>;
+  searchParams: Promise<{ fy?: string; period?: string; fund?: string; groupBy?: string }>;
 }) {
   const { db, user, districtId } = await getTenantDb();
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
   const scope = await resolveScope(db, districtId, sp);
+  const view = resolveView(REVENUE_VIEWS, sp.groupBy);
+  const meta = VIEW_META[view];
 
   if (scope.empty) {
     return (
@@ -88,13 +138,32 @@ export default async function RevenueDashboard({
     );
   }
 
-  const args = { versionId: version, fundId: scope.fundId, periodsElapsed: scope.period };
-  const [bySource, byType] = await Promise.all([
+  const args = { versionId: version, filter: scope.filter, periodsElapsed: scope.period };
+  const [bySource, regrouped, bySourceAndFund] = await Promise.all([
     revenueBySource(db, args),
-    revenueByType(db, args),
+    // The "view by" card's aggregate. `source` is absent because `bySource` beside it IS
+    // that aggregate — it is already loaded for the KPI tiles and the by-source table, and
+    // asking the database for it twice would buy nothing.
+    view === "type"
+      ? revenueByType(db, args)
+      : view === "grant"
+        ? revenueByProject(db, args)
+        : Promise.resolve<Breakdown | null>(null),
+    /**
+     * The movers' own aggregate, at fund × source grain — and only on the All Funds view.
+     *
+     * `bySource` sums a source across every fund, so a mover row built from it named a
+     * variance without naming anywhere to go, and netted two funds moving in opposite
+     * directions down to one number. With a single fund selected it already IS this grain,
+     * so nothing is asked for. See lib/finance/breakdown.ts for the whole argument.
+     */
+    scope.fundId ? Promise.resolve(null) : revenueBySourceAndFund(db, args),
   ]);
-  const movers = topMovers(bySource, 4);
-  const categories = foldTail(byType, scope.period, 5);
+  const movers = topMovers(bySourceAndFund ?? bySource, 4);
+
+  // All three sources are already ranked biggest-first, so the fold takes the small tail.
+  const regroupedSource = regrouped ?? bySource;
+  const categories = foldTail(regroupedSource, scope.period, 5);
 
   const revT = revenueVarianceThresholds(policy);
   const varPct = toNumber(facts?.revenueVariancePercent);
@@ -125,17 +194,14 @@ export default async function RevenueDashboard({
         title="Revenue Dashboard"
         description="Track revenue performance against budget."
         actions={
-          <ScopeBar
-            periods={options.periods}
-            period={options.period}
-            funds={options.funds}
-            fund={scope.fundId ?? ""}
+          <DashboardFilters
+            scope={scope}
             exportHref={options.exportHref("/revenues/export")}
           />
         }
       />
       {scope.substituted && <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />}
-      <DataAsOf date={scope.dataAsOf} note={scope.fund ? scope.fund.name : "All funds"} />
+      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
       {/* ---------- KPI CARDS ---------- */}
       <KpiRow count={6}>
@@ -331,7 +397,7 @@ export default async function RevenueDashboard({
                 id: r.id,
                 flag: pace.label === "Critical" ? ("negative" as const) : undefined,
                 cells: {
-                  source: { value: `${r.code} — ${r.name}`, strong: true },
+                  source: { value: codeName(r.code, r.name), strong: true },
                   budget: compactMoney(r.budget),
                   actual: compactMoney(r.actualYtd),
                   pctBudget: percent(r.consumption.percent),
@@ -410,7 +476,8 @@ export default async function RevenueDashboard({
             <MoverList
               items={movers.positive.map((r) => ({
                 id: r.id,
-                name: r.name,
+                name: codeName(r.code, r.name),
+                fund: moverFund(scope, "/revenues", r.fund),
                 value: accounting(r.pace.amount, { compact: true }),
                 percent: signedPercent(r.pace.percent),
                 tone: "positive" as const,
@@ -457,31 +524,50 @@ export default async function RevenueDashboard({
           />
         </SectionCard>
 
+        {/*
+          THE "VIEW BY" CARD — "Revenue Type, Revenue Code & Name, Grant".
+
+          One card, three perspectives, per the client's M5 note: a district asking "which
+          grants brought this in?" should not need a second report to find out. All three
+          are dimensions on the revenue detail grain, so each is one grouped aggregate into
+          the same shape.
+
+          The KPI row and the variance trend above are deliberately NOT re-grouped — total
+          revenue and its variance are the same figures however the detail is sliced.
+        */}
         <SectionCard
-          title="Revenue by category (YTD)"
-          subtitle="Share of collections by revenue type"
+          title={meta.title}
+          subtitle={meta.subtitle}
+          info={meta.info}
+          control={<ViewBy options={REVENUE_VIEWS} value={view} />}
           footer="View full breakdown"
           footerHref={`/data/revenue-detail?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
           <ShareBars
-            title="Revenue by category"
-            summary="Share of year-to-date collections by revenue type."
+            title={meta.title}
+            summary={`Share of year-to-date collections by ${meta.noun.toLowerCase().replace(/s$/, "")}.`}
             rows={categories.rows.map((r, i) => ({
               id: r.id,
-              label: r.name,
+              label: meta.label(r),
               value: toNumber(r.actualYtd) ?? 0,
               display: compactMoney(r.actualYtd),
-              share: percent(sharePercent(r.actualYtd, byType.total.actualYtd), 1),
+              share: percent(sharePercent(r.actualYtd, categories.total.actualYtd), 1),
               color: SERIES_SLOTS[i % SERIES_SLOTS.length],
             }))}
           />
           <div className="mt-4">
+            {/*
+              The totals come from the UNFOLDED breakdown — `foldTail` keeps `total` intact
+              precisely so a card that hides its tail still agrees with the KPI tile above
+              it. The count is the real one too: "Projects 84" after folding to six bars is
+              the honest statement, and "6" would not be.
+            */}
             <MetricStrip
               cols={3}
               items={[
-                { label: "Total actual (YTD)", value: compactMoney(byType.total.actualYtd) },
-                { label: "Total budget", value: compactMoney(byType.total.budget) },
-                { label: "Categories", value: String(byType.rows.length) },
+                { label: "Total actual (YTD)", value: compactMoney(categories.total.actualYtd) },
+                { label: "Total budget", value: compactMoney(categories.total.budget) },
+                { label: meta.noun, value: String(regroupedSource.rows.length) },
               ]}
             />
           </div>
@@ -492,7 +578,8 @@ export default async function RevenueDashboard({
             <MoverList
               items={movers.negative.map((r) => ({
                 id: r.id,
-                name: r.name,
+                name: codeName(r.code, r.name),
+                fund: moverFund(scope, "/revenues", r.fund),
                 value: accounting(r.pace.amount, { compact: true }),
                 percent: signedPercent(r.pace.percent),
                 tone: "negative" as const,
@@ -520,6 +607,9 @@ export default async function RevenueDashboard({
                 severity: a.severity,
                 title: a.title,
                 message: a.message,
+                // Which fund is under- or over-collected. The alert itself is a district
+                // figure; these say where to look, and link back to this page scoped there.
+                funds: alertFunds(scope, "/revenues", a.funds),
               }))}
               href="/alerts"
               empty="No revenue thresholds have been crossed this period."

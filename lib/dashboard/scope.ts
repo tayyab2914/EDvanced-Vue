@@ -2,6 +2,19 @@ import type { TenantDb } from "@/lib/tenant-db";
 import { listFunds, generalFund, type FundRef } from "@/lib/finance/funds";
 import { periodLabel, periodToMonth, MONTH_NAMES, parseFiscalYear } from "@/lib/periods/fiscal";
 import { PeriodType } from "@/lib/enums";
+import { ALL, soleFundId, narrowsCostCenter, type FinanceFilter } from "@/lib/finance/filter";
+import {
+  parseFilterParams,
+  writeFilterParams,
+  EMPTY_SELECTION,
+  type FilterSearchParams,
+} from "@/lib/dashboard/filter-params";
+import {
+  loadFilterMasterData,
+  dataPresence,
+  resolveFilters,
+  type ResolvedFilters,
+} from "@/lib/dashboard/filter-options";
 
 /**
  * What fiscal year, period and fund a dashboard is looking at.
@@ -17,11 +30,14 @@ import { PeriodType } from "@/lib/enums";
  * `substituted` and the page says so.
  */
 
-export interface ScopeParams {
-  fy?: string;
-  period?: string;
-  fund?: string;
-}
+/**
+ * The URL, as the resolver reads it.
+ *
+ * `fy` and `period` name the reporting period; everything else is a filter and is parsed by
+ * lib/dashboard/filter-params.ts. `fund` (singular) is the pre-multi-select parameter, still
+ * read so existing bookmarks and export links resolve to the same slice they always did.
+ */
+export type ScopeParams = FilterSearchParams;
 
 export interface AvailablePeriod {
   fiscalYear: string;
@@ -35,9 +51,33 @@ export interface AvailablePeriod {
 export interface DashboardScope {
   fiscalYear: string;
   period: number;
-  /** Undefined means All Funds. */
+  /**
+   * The one selected fund, when EXACTLY one is selected. Undefined for All Funds and
+   * undefined for several — see `soleFundId` in lib/finance/filter.ts for why "several" must
+   * not fall through to the single-fund path.
+   *
+   * Kept because a page legitimately reads it for prose ("General Fund only") and for the
+   * per-fund controls that have no meaning across a set: the fund-balance override corrects
+   * one fund's figure, and the forecast projects one fund's balance.
+   */
   fundId?: string;
   fund?: FundRef;
+  /**
+   * The slice every figure on the page is computed over. Hand this to the engines.
+   */
+  filter: FinanceFilter;
+  /** The filter bar's state: option lists, what is applied, and the cascade already run. */
+  filters: ResolvedFilters;
+  /**
+   * True when a cost-centre filter is applied, which the cash and fund-balance tables cannot
+   * honour — they carry no cost centre (see lib/finance/filter.ts).
+   *
+   * The page must SAY so beside those figures rather than let a reader assume the whole
+   * screen moved together. `<FundLevelOnly>` in components/dashboard/shared.tsx is the badge;
+   * this is the flag that turns it on. Same principle as `substituted` below: the platform
+   * does not quietly show one thing while the controls claim another.
+   */
+  fundLevelOnly: boolean;
   /** The district's General Fund, for the reserve figures that are General-Fund-only. */
   generalFund: FundRef | null;
 
@@ -69,7 +109,7 @@ export async function resolveScope(
   districtId: string,
   params: ScopeParams,
 ): Promise<DashboardScope> {
-  const [district, versions, funds, general] = await Promise.all([
+  const [district, versions, funds, general, master] = await Promise.all([
     db.district.findFirst({
       where: { id: districtId },
       select: { fiscalYearStartMonth: true },
@@ -83,6 +123,10 @@ export async function resolveScope(
     }),
     listFunds(db),
     generalFund(db),
+    // The filter bar's option lists. In this wave rather than after the period is
+    // resolved, because none of them depends on the period — only their `hasData` marks
+    // do, and those come from `dataPresence` below.
+    loadFilterMasterData(db),
   ]);
 
   const startMonth = district?.fiscalYearStartMonth ?? 7;
@@ -105,17 +149,27 @@ export async function resolveScope(
   }
 
   const fiscalYears = [...new Set(available.map((a) => a.fiscalYear))];
-
-  const fund = params.fund ? funds.find((f) => f.id === params.fund) : undefined;
+  const raw = parseFilterParams(params);
 
   if (available.length === 0) {
     // Nothing committed. The page shows an empty state pointing at the upload screen —
     // never a grid of zeros, which reads as "your district has no money".
+    //
+    // The filter bar still resolves, against empty presence sets: with no data every option
+    // is greyed, which is a truer empty state than a bar with no controls in it.
+    const filters = resolveFilters(
+      master,
+      { funds: new Set<string>(), costCenters: new Set<string>() },
+      EMPTY_SELECTION,
+    );
     return {
-      fiscalYear: params.fy ?? "",
+      fiscalYear: params.fy ? String(params.fy) : "",
       period: 0,
-      fundId: fund?.id,
-      fund,
+      fundId: undefined,
+      fund: undefined,
+      filter: ALL,
+      filters,
+      fundLevelOnly: false,
       generalFund: general,
       startMonth,
       label: "No data",
@@ -129,7 +183,7 @@ export async function resolveScope(
   }
 
   // What the URL asked for, if anything.
-  const askedFy = params.fy;
+  const askedFy = params.fy ? String(params.fy) : undefined;
   const askedPeriod = params.period ? Number(params.period) : undefined;
 
   const exact =
@@ -154,11 +208,31 @@ export async function resolveScope(
         }
       : null;
 
+  /**
+   * The filter resolves against the period that was CHOSEN, not the one that was asked for.
+   *
+   * It has to be this way round: `hasData` marks which funds the period on screen actually
+   * reported, and marking them against a period the user was silently moved off would grey
+   * the wrong half of the list. It costs one extra round trip after the period is settled,
+   * which is why `dataPresence` answers both dimensions in three queries rather than five.
+   */
+  const presence = await dataPresence(db, chosen.fiscalYear, chosen.period);
+  const filters = resolveFilters(master, presence, raw);
+
+  const sole = soleFundId(filters.filter);
+  const fund = sole ? funds.find((f) => f.id === sole) : undefined;
+
   return {
     fiscalYear: chosen.fiscalYear,
     period: chosen.period,
+    // Only when the selection resolves to one fund AND that fund is one the district has.
+    // A URL naming another district's fund id resolves to nothing here rather than to a
+    // fund-scoped page with no fund behind it.
     fundId: fund?.id,
     fund,
+    filter: filters.filter,
+    filters,
+    fundLevelOnly: narrowsCostCenter(filters.filter),
     generalFund: general,
     startMonth,
     label: `${chosen.label} (FY ${chosen.fiscalYear})`,
@@ -195,7 +269,19 @@ function endOfPeriod(fiscalYear: string, period: number, startMonth: number): Da
   return new Date(Date.UTC(year, month, 0));
 }
 
-/** Rebuilds the query string for a scope change, preserving what the user did not touch. */
+/**
+ * Rebuilds the query string for a scope change, preserving what the user did not touch.
+ *
+ * WHAT A FUND DRILL-DOWN CLEARS, AND WHY. Passing `{ fund: id }` sets the fund selection to
+ * that one fund AND clears the Fund Type selection. It has to clear it: drilling from a
+ * mover row into fund 1000 while "Special Revenue" is ticked would hand the cascade a fund
+ * its own type filter excludes, and the cascade — correctly — would prune the drill-down
+ * away and land the reader back on the list they clicked out of.
+ *
+ * Cost-centre selections are kept. Narrowing to one fund inside a department is a narrowing
+ * a reader asked for twice, and dropping half of it on a drill-down would be answering a
+ * question they did not ask.
+ */
 export function scopeHref(
   base: string,
   scope: DashboardScope,
@@ -204,11 +290,19 @@ export function scopeHref(
   const p = new URLSearchParams();
   const fy = change.fy ?? scope.fiscalYear;
   const period = change.period ?? scope.period;
-  const fund = change.fund === null ? undefined : (change.fund ?? scope.fundId);
 
   if (fy) p.set("fy", fy);
   if (period) p.set("period", String(period));
-  if (fund) p.set("fund", fund);
+
+  const selection = scope.filters.selection;
+  const drilled = change.fund !== undefined;
+  const drilledTo = change.fund ? [change.fund] : [];
+
+  writeFilterParams(p, {
+    ...selection,
+    fundTypeIds: drilled ? [] : selection.fundTypeIds,
+    fundIds: drilled ? drilledTo : selection.fundIds,
+  });
 
   const qs = p.toString();
   return qs ? `${base}?${qs}` : base;

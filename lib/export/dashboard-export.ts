@@ -76,7 +76,7 @@ export async function buildDashboardSheets(
   const core = await loadCore(db, districtId, scope);
   const revVersion = core.versions.get("REVENUE_DETAIL");
   const expVersion = core.versions.get("EXPENDITURE_DETAIL");
-  const args = { fundId: scope.fundId, periodsElapsed: scope.period };
+  const args = { filter: scope.filter, periodsElapsed: scope.period };
   const sheets: Sheet[] = [];
 
   // Every export leads with the trend, because it is the part a spreadsheet genuinely

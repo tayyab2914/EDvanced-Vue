@@ -2,6 +2,8 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import { FundTag } from "@/components/dashboard/shared";
+import { codeName } from "@/lib/text";
 import type { AlertSeverity } from "@/lib/alerts/catalog";
 import type { StatusRung } from "@/lib/dashboard/status";
 
@@ -51,6 +53,16 @@ export interface AlertRow {
   severity: DisplaySeverity;
   title: string;
   message: string;
+  /**
+   * WHERE TO GO — the funds carrying most of what this alert is about.
+   *
+   * The client's note: "The Alerts doesn't tell me which fund is under collected or
+   * overspent so I do not know where to go." An alert is evaluated on district-wide totals
+   * (see lib/alerts/attribution.ts for why it stays that way), so the sentence names a
+   * condition and these name the place. Empty on a single-fund page, where the scope
+   * selector has already answered it.
+   */
+  funds?: { id: string; code: string; name: string; detail: string; href?: string }[];
 }
 
 export function AlertList({
@@ -113,6 +125,8 @@ export function AlertList({
           </>
         );
 
+        const funds = a.funds ?? [];
+
         return (
           <li
             key={a.id}
@@ -121,12 +135,45 @@ export function AlertList({
             {href ? (
               <Link
                 href={href}
-                className="-mx-1.5 flex items-start gap-2.5 rounded-lg px-1.5 py-3 transition-colors hover:bg-panel"
+                className={cn(
+                  "-mx-1.5 flex items-start gap-2.5 rounded-lg px-1.5 transition-colors hover:bg-panel",
+                  funds.length ? "pt-3 pb-1.5" : "py-3",
+                )}
               >
                 {body}
               </Link>
             ) : (
-              <span className="flex items-start gap-2.5 py-3">{body}</span>
+              <span
+                className={cn(
+                  "flex items-start gap-2.5",
+                  funds.length ? "pt-3 pb-1.5" : "py-3",
+                )}
+              >
+                {body}
+              </span>
+            )}
+
+            {/*
+              OUTSIDE the row link, not inside it.
+              Each fund tag is itself an anchor, and an anchor inside an anchor is invalid
+              HTML that browsers resolve by dropping one of them — which would silently cost
+              the reader either the alert link or the drill-down the client asked for. Placed
+              here, both work, and the tags line up under the message rather than the glyph.
+            */}
+            {funds.length > 0 && (
+              <span className="flex flex-wrap items-center gap-1.5 pb-3 pl-9">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2">
+                  Where
+                </span>
+                {funds.map((f) => (
+                  <FundTag
+                    key={f.id}
+                    label={codeName(f.code, f.name)}
+                    detail={f.detail}
+                    href={f.href}
+                  />
+                ))}
+              </span>
             )}
           </li>
         );

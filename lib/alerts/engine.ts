@@ -8,6 +8,14 @@ import { computeFundBalance, reservePercent } from "@/lib/finance/fund-balance";
 import { projectYearEnd } from "@/lib/forecast/engine";
 import { loadPolicy } from "@/lib/policies/load";
 import { memo, dbKey } from "@/lib/request-cache";
+import {
+  detailWhere,
+  fundWhere,
+  fundOnly,
+  soleFundId,
+  filterKey,
+  type FinanceFilter,
+} from "@/lib/finance/filter";
 import type { PolicyValues } from "@/lib/policies/registry";
 import { money as fmtMoney } from "@/lib/dashboard/format";
 import {
@@ -18,6 +26,12 @@ import {
   type AlertSeverity,
   type ReserveStatus,
 } from "@/lib/alerts/catalog";
+import {
+  attributeAlerts,
+  ALERT_LENS,
+  type AlertAttribution,
+  type FundContribution,
+} from "@/lib/alerts/attribution";
 
 /**
  * Gathers the figures, then walks the catalogue.
@@ -40,6 +54,14 @@ export interface Alert {
   severity: AlertSeverity;
   title: string;
   message: string;
+  /**
+   * WHERE to go — the funds carrying most of what this alert is about, biggest first.
+   *
+   * Empty on a single-fund page, where the scope selector already answers the question, and
+   * empty for the reserve alerts, which lib/alerts/attribution.ts deliberately declines to
+   * attribute rather than guess at. See that module's header for the whole argument.
+   */
+  funds: FundContribution[];
 }
 
 /**
@@ -66,6 +88,13 @@ export interface AlertReport {
   facts: AlertFacts;
   policy: PolicyValues;
   reserveStatus: ReserveStatus | null;
+  /**
+   * The per-fund breakdown behind `Alert.funds`, or null on a single-fund page.
+   *
+   * Exposed as well as applied so a screen that groups alerts its own way — the §3.3c
+   * summary, say — can reach the same figures without re-deriving them.
+   */
+  attribution: AlertAttribution | null;
   /** Critical first — a district reads the top of the list. */
   criticalCount: number;
   warningCount: number;
@@ -76,37 +105,62 @@ export const evaluateAlerts = memo(
   "evaluateAlerts",
   (
     db: TenantDb,
-    scope: { districtId: string; fiscalYear: string; period: number; fundId?: string },
+    scope: { districtId: string; fiscalYear: string; period: number; filter?: FinanceFilter },
     codes: ActivityCodes,
   ) => {
     const k = dbKey(db);
     return k === null
       ? null
-      : `${k}|${scope.districtId}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}|${codesKey(codes)}`;
+      : `${k}|${scope.districtId}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}|${codesKey(codes)}`;
   },
   buildAlertReport,
 );
 
 async function buildAlertReport(
   db: TenantDb,
-  scope: { districtId: string; fiscalYear: string; period: number; fundId?: string },
+  scope: { districtId: string; fiscalYear: string; period: number; filter?: FinanceFilter },
   codes: ActivityCodes,
 ): Promise<AlertReport> {
   const policy = await loadPolicy(db, scope.districtId);
-  const facts = await gatherFacts(db, scope, codes, {
-    ignoreSalaryObjectsMom: policy.expenditure.ignoreSalaryObjectsMom === true,
-  });
+
+  /**
+   * The facts and the per-fund attribution, together.
+   *
+   * The attribution reads none of the facts — it is three grouped aggregates over the same
+   * period — so making it wait for the most query-hungry call in the app would add a whole
+   * round of database time for nothing.
+   *
+   * It is skipped entirely when the page is scoped to one fund: the alert already names its
+   * own scope there, so a "where to look" line would just repeat the fund selector. That is
+   * the client's "this behaviour should automatically adjust when a single fund is
+   * selected", and it means the single-fund case pays no queries for the feature at all.
+   */
+  const [facts, attribution] = await Promise.all([
+    gatherFacts(db, scope, codes, {
+      ignoreSalaryObjectsMom: policy.expenditure.ignoreSalaryObjectsMom === true,
+    }),
+    // Skipped on a ONE-fund page only. With several funds selected the "where to look"
+    // line is doing more work than it ever did on All Funds — it is the only thing on
+    // screen that says which of the three the movement came from.
+    soleFundId(scope.filter)
+      ? Promise.resolve(null)
+      : attributeAlerts(db, { fiscalYear: scope.fiscalYear, period: scope.period }).catch(
+          () => null,
+        ),
+  ]);
 
   const alerts: Alert[] = [];
   for (const def of ALERTS) {
     const hit = def.evaluate(facts, policy);
     if (!hit) continue;
+    const lens = ALERT_LENS[def.id];
     alerts.push({
       id: def.id,
       group: def.group,
       title: def.title,
       severity: hit.severity,
       message: hit.message,
+      funds: attribution && lens ? attribution[lens] : [],
     });
   }
 
@@ -120,6 +174,7 @@ async function buildAlertReport(
     facts,
     policy,
     reserveStatus: reserveStatus(facts.reservePercent, policy),
+    attribution,
     criticalCount: alerts.filter((a) => a.severity === "CRITICAL").length,
     warningCount: alerts.filter((a) => a.severity === "WARNING").length,
     informationalCount: observations.length,
@@ -175,14 +230,14 @@ export const gatherFacts = memo(
   "gatherFacts",
   (
     db: TenantDb,
-    scope: { fiscalYear: string; period: number; fundId?: string },
+    scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
     codes: ActivityCodes,
     opts: { ignoreSalaryObjectsMom?: boolean } = {},
   ) => {
     const k = dbKey(db);
     return k === null
       ? null
-      : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}|${codesKey(codes)}|${
+      : `${k}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}|${codesKey(codes)}|${
           opts.ignoreSalaryObjectsMom === true
         }`;
   },
@@ -191,7 +246,7 @@ export const gatherFacts = memo(
 
 async function buildFacts(
   db: TenantDb,
-  scope: { fiscalYear: string; period: number; fundId?: string },
+  scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
   codes: ActivityCodes,
   opts: { ignoreSalaryObjectsMom?: boolean } = {},
 ): Promise<AlertFacts> {
@@ -372,14 +427,14 @@ async function buildFacts(
  */
 async function designatedComponents(
   db: TenantDb,
-  scope: { fiscalYear: string; fundId?: string },
+  scope: { fiscalYear: string; filter?: FinanceFilter },
 ): Promise<Prisma.Decimal | null> {
   const versions = await currentVersionIds(db, { fiscalYear: scope.fiscalYear, period: null });
   const versionId = versions.get("OPENING_FUND_BALANCE");
   if (!versionId) return null;
 
   const agg = await db.openingFundBalance.aggregate({
-    where: { versionId, ...(scope.fundId ? { fundId: scope.fundId } : {}) },
+    where: { versionId, ...fundWhere(scope.filter) },
     _sum: {
       begNonspendable: true,
       begRestricted: true,
@@ -402,22 +457,22 @@ async function designatedComponents(
 /** Budget and encumbrances for the period, from the current versions. */
 const currentBudgets = memo(
   "currentBudgets",
-  (db: TenantDb, scope: { fiscalYear: string; period: number; fundId?: string }) => {
+  (db: TenantDb, scope: { fiscalYear: string; period: number; filter?: FinanceFilter }) => {
     const k = dbKey(db);
-    return k === null ? null : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}`;
+    return k === null ? null : `${k}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}`;
   },
   buildCurrentBudgets,
 );
 
 async function buildCurrentBudgets(
   db: TenantDb,
-  scope: { fiscalYear: string; period: number; fundId?: string },
+  scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
 ): Promise<{ revenue: Prisma.Decimal; expenditure: Prisma.Decimal; encumbrances: Prisma.Decimal }> {
   const versions = await currentVersionIds(db, {
     fiscalYear: scope.fiscalYear,
     period: scope.period,
   });
-  const fund = scope.fundId ? { fundId: scope.fundId } : {};
+  const slice = detailWhere(scope.filter);
 
   const revVersion = versions.get("REVENUE_DETAIL");
   const expVersion = versions.get("EXPENDITURE_DETAIL");
@@ -425,13 +480,13 @@ async function buildCurrentBudgets(
   const [rev, exp] = await Promise.all([
     revVersion
       ? db.revenueActual.aggregate({
-          where: { versionId: revVersion, ...fund },
+          where: { versionId: revVersion, ...slice },
           _sum: { budget: true },
         })
       : null,
     expVersion
       ? db.expenditureActual.aggregate({
-          where: { versionId: expVersion, ...fund },
+          where: { versionId: expVersion, ...slice },
           _sum: { budget: true, encumbrances: true },
         })
       : null,
@@ -454,14 +509,17 @@ async function buildCurrentBudgets(
  */
 async function daysCash(
   db: TenantDb,
-  scope: { fiscalYear: string; fundId?: string },
+  scope: { fiscalYear: string; filter?: FinanceFilter },
   cash: Prisma.Decimal,
 ): Promise<Prisma.Decimal | null> {
-  // The same adopted budget the reserve percentage and the trend series divide by.
+  // The same adopted budget the reserve percentage and the trend series divide by, and
+  // FUND-level to match the numerator. `cash` comes from CashPosition, which carries no
+  // cost centre, so narrowing only the divisor would divide district-wide cash by one
+  // department's budget and report years of runway. See lib/finance/filter.ts.
   const adopted = await adoptedBudget(db, {
     fiscalYear: scope.fiscalYear,
     kind: "EXPENDITURE",
-    fundId: scope.fundId,
+    filter: fundOnly(scope.filter),
   });
   if (!adopted) return null;
 
@@ -482,7 +540,7 @@ async function daysCash(
  */
 async function salaryExpenditureMtd(
   db: TenantDb,
-  scope: { fiscalYear: string; period: number; fundId?: string },
+  scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
 ): Promise<Prisma.Decimal> {
   const salaryType = await db.objectType.findFirst({
     where: { name: "Salaries" },
@@ -500,7 +558,7 @@ async function salaryExpenditureMtd(
   const r = await db.expenditureActual.aggregate({
     where: {
       versionId,
-      ...(scope.fundId ? { fundId: scope.fundId } : {}),
+      ...detailWhere(scope.filter),
       object: { objectTypeId: salaryType.id },
     },
     _sum: { actualMtd: true },
@@ -511,7 +569,7 @@ async function salaryExpenditureMtd(
 /** How far cash fell against last month, as a positive percentage. Null if it rose. */
 async function monthOverMonthCashDrop(
   db: TenantDb,
-  scope: { fiscalYear: string; period: number; fundId?: string },
+  scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
 ): Promise<Prisma.Decimal | null> {
   if (scope.period <= 1) return null;
   const [now, before] = await Promise.all([

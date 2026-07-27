@@ -4,6 +4,12 @@ import type { ActivityCodes } from "@/lib/finance/transfers";
 import { matches, codesKey } from "@/lib/finance/transfers";
 import { currentVersionIds, currentVersionsForYear, adoptedBudget } from "@/lib/finance/versions";
 import { memo, dbKey } from "@/lib/request-cache";
+import {
+  detailWhere,
+  fundWhere,
+  filterKey,
+  type FinanceFilter,
+} from "@/lib/finance/filter";
 
 /**
  * The Financial Activity Engine: the numbers the platform works out rather than asking a
@@ -73,8 +79,15 @@ export async function transferIds(
 export interface PeriodScope {
   fiscalYear: string;
   period: number;
-  /** Omit for every fund. */
-  fundId?: string;
+  /**
+   * What slice of the ledger to sum. Omit for the whole district.
+   *
+   * Was `fundId?: string` — one fund or all of them. A finance officer comparing three
+   * special revenue funds needs a SET, and a single id cannot express one. See
+   * lib/finance/filter.ts, particularly on why an empty selection is not the same as no
+   * selection.
+   */
+  filter?: FinanceFilter;
 }
 
 export interface ActivityTotals {
@@ -112,7 +125,7 @@ export const activityTotals = memo(
     const k = dbKey(db);
     return k === null
       ? null
-      : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}|${codesKey(codes)}`;
+      : `${k}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}|${codesKey(codes)}`;
   },
   async (db: TenantDb, scope: PeriodScope, codes: ActivityCodes): Promise<ActivityTotals> => {
     const [versions, ids] = await Promise.all([
@@ -122,7 +135,7 @@ export const activityTotals = memo(
     const revVersion = versions.get("REVENUE_DETAIL");
     const expVersion = versions.get("EXPENDITURE_DETAIL");
 
-    const fund = scope.fundId ? { fundId: scope.fundId } : {};
+    const slice = detailWhere(scope.filter);
 
     /**
      * ONE grouped aggregate per file, split in memory — not five filtered SUMs.
@@ -137,7 +150,7 @@ export const activityTotals = memo(
       revVersion
         ? db.revenueActual.groupBy({
             by: ["revenueSourceId"],
-            where: { versionId: revVersion, ...fund },
+            where: { versionId: revVersion, ...slice },
             _sum: { actualYtd: true, actualMtd: true },
           })
         : Promise.resolve([]),
@@ -145,7 +158,7 @@ export const activityTotals = memo(
       expVersion
         ? db.expenditureActual.groupBy({
             by: ["objectId"],
-            where: { versionId: expVersion, ...fund },
+            where: { versionId: expVersion, ...slice },
             _sum: { actualYtd: true, actualMtd: true },
           })
         : Promise.resolve([]),
@@ -207,13 +220,13 @@ export function netOperatingSurplus(t: ActivityTotals): Prisma.Decimal {
 /** Beginning fund balance for the year — the annual Opening Fund Balance import. */
 export const beginningFundBalance = memo(
   "beginningFundBalance",
-  (db: TenantDb, args: { fiscalYear: string; fundId?: string }) => {
+  (db: TenantDb, args: { fiscalYear: string; filter?: FinanceFilter }) => {
     const k = dbKey(db);
-    return k === null ? null : `${k}|${args.fiscalYear}|${args.fundId ?? ""}`;
+    return k === null ? null : `${k}|${args.fiscalYear}|${filterKey(args.filter)}`;
   },
   async (
     db: TenantDb,
-    args: { fiscalYear: string; fundId?: string },
+    args: { fiscalYear: string; filter?: FinanceFilter },
   ): Promise<{ total: Prisma.Decimal; unassigned: Prisma.Decimal; found: boolean }> => {
     const versions = await currentVersionIds(db, {
       fiscalYear: args.fiscalYear,
@@ -223,7 +236,8 @@ export const beginningFundBalance = memo(
     if (!versionId) return { total: ZERO, unassigned: ZERO, found: false };
 
     const r = await db.openingFundBalance.aggregate({
-      where: { versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+      // Fund grain only — an opening fund balance has no cost centre to narrow by.
+      where: { versionId, ...fundWhere(args.filter) },
       _sum: { begTotal: true, begUnassigned: true },
     });
 
@@ -249,13 +263,13 @@ export const beginningFundBalance = memo(
  */
 export const beginningComponents = memo(
   "beginningComponents",
-  (db: TenantDb, args: { fiscalYear: string; fundId?: string }) => {
+  (db: TenantDb, args: { fiscalYear: string; filter?: FinanceFilter }) => {
     const k = dbKey(db);
-    return k === null ? null : `${k}|${args.fiscalYear}|${args.fundId ?? ""}`;
+    return k === null ? null : `${k}|${args.fiscalYear}|${filterKey(args.filter)}`;
   },
   async (
     db: TenantDb,
-    args: { fiscalYear: string; fundId?: string },
+    args: { fiscalYear: string; filter?: FinanceFilter },
   ): Promise<{
     nonspendable: Prisma.Decimal;
     restricted: Prisma.Decimal;
@@ -279,7 +293,7 @@ export const beginningComponents = memo(
     if (!versionId) return empty;
 
     const r = await db.openingFundBalance.aggregate({
-      where: { versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+      where: { versionId, ...fundWhere(args.filter) },
       _sum: {
         begNonspendable: true,
         begRestricted: true,
@@ -309,7 +323,7 @@ export const endingCash = memo(
   "endingCash",
   (db: TenantDb, scope: PeriodScope) => {
     const k = dbKey(db);
-    return k === null ? null : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}`;
+    return k === null ? null : `${k}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}`;
   },
   async (db: TenantDb, scope: PeriodScope): Promise<{ total: Prisma.Decimal; found: boolean }> => {
     const versions = await currentVersionIds(db, {
@@ -320,7 +334,9 @@ export const endingCash = memo(
     if (!versionId) return { total: ZERO, found: false };
 
     const r = await db.cashPosition.aggregate({
-      where: { versionId, ...(scope.fundId ? { fundId: scope.fundId } : {}) },
+      // Cash is tracked per fund and nothing finer; a cost-centre narrowing is dropped
+      // here and the page says so with <FundLevelOnly>.
+      where: { versionId, ...fundWhere(scope.filter) },
       _sum: { endingCash: true },
     });
     return { total: r._sum.endingCash ?? ZERO, found: r._sum.endingCash !== null };

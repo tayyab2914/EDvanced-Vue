@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { FundTag } from "@/components/dashboard/shared";
 
 /**
  * The dashboard table: right-aligned money, sign-coloured variance, and an emphasised
@@ -156,6 +157,14 @@ export function DataTable({
  * out more" and "add additional statuses where appropriate". The dollar figure ranks the
  * rows (a tiny line 400% over budget is noise; a large one 3% over is the one to see) and
  * the percentage says how far off pace that dollar figure actually is.
+ *
+ * M5 added the FUND TAG, and it is the reason the card is worth reading on the All Funds
+ * view at all. The client's question — "are these showing the top district-wide items
+ * across all funds, or are they aggregated by account/object?" — had the unhappy answer
+ * "aggregated", so a row named a variance and named nowhere to go. Each row is now one fund's
+ * account (lib/finance/breakdown.ts `revenueBySourceAndFund`), the tag says which, and the
+ * tag is a link to this same dashboard scoped to that fund. It is absent on a single-fund
+ * page, where it would repeat the scope selector on every row.
  */
 export function MoverList({
   items,
@@ -169,6 +178,8 @@ export function MoverList({
     /** The same variance as a percentage — context for the amount. */
     percent?: string;
     note?: string;
+    /** Where the variance originated. Set only when the page is scoped to All Funds. */
+    fund?: { label: string; href?: string };
     status?: ReactNode;
   }[];
   empty?: string;
@@ -190,7 +201,12 @@ export function MoverList({
             <span className="block truncate text-[12.5px] text-ink-muted" title={i.name}>
               {i.name}
             </span>
-            {i.note && <span className="block truncate text-[11px] text-muted-2">{i.note}</span>}
+            {(i.fund || i.note) && (
+              <span className="mt-1 flex min-w-0 items-center gap-1.5">
+                {i.fund && <FundTag {...i.fund} />}
+                {i.note && <span className="truncate text-[11px] text-muted-2">{i.note}</span>}
+              </span>
+            )}
           </span>
           <span className="flex flex-none items-center gap-2">
             <span className="text-right">

@@ -4,6 +4,7 @@ import { resolveScope } from "@/lib/dashboard/scope";
 import { loadCore } from "@/lib/dashboard/load";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { AlertList } from "@/components/dashboard/alert-list";
+import { alertFunds } from "@/lib/dashboard/options";
 import { FundBalanceShell } from "../shell";
 
 /** Fund Balance — Alerts (Spec §6.4). */
@@ -31,8 +32,20 @@ export default async function FundBalanceAlertsTab({
         footer="Review your thresholds"
         footerHref="/policies"
       >
+        {/*
+          Most of these carry no "where" line, and that is deliberate rather than an
+          omission: a reserve percentage has no honest per-fund analogue that three grouped
+          aggregates can produce. The falling-balance alert does, and gets one. See the
+          header of lib/alerts/attribution.ts.
+        */}
         <AlertList
-          alerts={current.map((a) => ({ id: a.id, severity: a.severity, title: a.title, message: a.message }))}
+          alerts={current.map((a) => ({
+            id: a.id,
+            severity: a.severity,
+            title: a.title,
+            message: a.message,
+            funds: alertFunds(scope, "/fund-balance/alerts", a.funds),
+          }))}
           empty="The reserve is within every threshold you have set."
         />
       </SectionCard>

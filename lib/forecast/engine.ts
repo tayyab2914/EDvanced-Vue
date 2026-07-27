@@ -2,8 +2,10 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import type { TenantDb } from "@/lib/tenant-db";
 import type { ActivityCodes } from "@/lib/finance/transfers";
 import { activityTotals, currentVersionIds, beginningComponents } from "@/lib/finance/engine";
+import { oneFund } from "@/lib/finance/filter";
 import { computeUnassigned } from "@/lib/finance/fund-balance";
 import { parseFiscalYear, formatFiscalYear } from "@/lib/periods/fiscal";
+import { displayName } from "@/lib/text";
 import {
   FUND_BALANCE_COMPONENT_VALUES,
   isForecastMethod,
@@ -146,7 +148,7 @@ export async function projectRevenueByCategory(
       const a = assumptionOf.get(t.id);
       return {
         categoryId: t.id,
-        categoryName: t.name,
+        categoryName: displayName(t.name),
         monitored: a?.monitored ?? true,
         ...projectYearEnd({
           actualYtd: totals.ytd,
@@ -210,7 +212,7 @@ export async function projectExpenditureByCategory(
       });
 
       if (a?.projectedYearEnd == null) {
-        return { categoryId: t.id, categoryName: t.name, monitored: a?.monitored ?? true, ...straight };
+        return { categoryId: t.id, categoryName: displayName(t.name), monitored: a?.monitored ?? true, ...straight };
       }
 
       // The district typed a figure. Use it, and recompute the variance against it.
@@ -218,7 +220,7 @@ export async function projectExpenditureByCategory(
       const variance = projected.minus(totals.budget);
       return {
         categoryId: t.id,
-        categoryName: t.name,
+        categoryName: displayName(t.name),
         monitored: a.monitored,
         actualYtd: totals.ytd,
         projected,
@@ -356,7 +358,7 @@ export async function componentAssumptions(
     db.fundBalanceComponentAssumption.findMany({
       where: { fiscalYear: args.fiscalYear, fundId: args.fundId },
     }),
-    beginningComponents(db, { fiscalYear: args.fiscalYear, fundId: args.fundId }),
+    beginningComponents(db, { fiscalYear: args.fiscalYear, filter: oneFund(args.fundId) }),
   ]);
 
   const byComponent = new Map(stored.map((s) => [s.component, s]));
@@ -459,7 +461,7 @@ export async function projectFundBalance(
   codes: ActivityCodes,
 ): Promise<FundBalanceForecast[]> {
   const years = args.years ?? 3;
-  const scope = { fiscalYear: args.fiscalYear, period: args.period, fundId: args.fundId };
+  const scope = { fiscalYear: args.fiscalYear, period: args.period, filter: oneFund(args.fundId) };
 
   const [current, totals, projections, stored, componentRules] = await Promise.all([
     computeUnassigned(db, scope, codes),

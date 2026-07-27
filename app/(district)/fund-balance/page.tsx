@@ -25,9 +25,12 @@ import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
 import { WaterfallChart, waterfallFoots } from "@/components/dashboard/charts/waterfall-chart";
 import { BenchmarkBand } from "@/components/dashboard/charts/benchmark-band";
+import { ViewBy } from "@/components/dashboard/view-by";
 import { FundBalanceShell } from "./shell";
-import { COMPONENT_COLORS } from "@/lib/dashboard/palette";
+import { COMPONENT_COLORS, SERIES_SLOTS } from "@/lib/dashboard/palette";
+import { codeName } from "@/lib/text";
 import { PageHeader } from "@/components/page-header";
+import { FUND_BALANCE_VIEWS, resolveView } from "@/lib/dashboard/view";
 
 /**
  * Fund Balance — Current Position (Spec §6.1), rebuilt to the client's M4 layout.
@@ -46,13 +49,14 @@ import { PageHeader } from "@/components/page-header";
 export default async function FundBalancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; period?: string; fund?: string }>;
+  searchParams: Promise<{ fy?: string; period?: string; fund?: string; groupBy?: string }>;
 }) {
   const { db, user, districtId } = await getTenantDb();
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
   const scope = await resolveScope(db, districtId, sp);
+  const view = resolveView(FUND_BALANCE_VIEWS, sp.groupBy);
 
   if (scope.empty) {
     return (
@@ -93,7 +97,7 @@ export default async function FundBalancePage({
     // The waterfall's movements, taken from the engine rather than assembled by hand.
     activityTotals(
       db,
-      { fiscalYear: scope.fiscalYear, period: scope.period, fundId: scope.fundId },
+      { fiscalYear: scope.fiscalYear, period: scope.period, filter: scope.filter },
       codes,
     ),
     byFund(db, {
@@ -101,6 +105,7 @@ export default async function FundBalancePage({
       expenditureVersionId: core.versions.get("EXPENDITURE_DETAIL"),
       cashVersionId: core.versions.get("CASH_POSITION"),
       openingVersionId: core.versions.get("OPENING_FUND_BALANCE"),
+      filter: scope.filter,
     }),
   ]);
 
@@ -151,6 +156,41 @@ export default async function FundBalancePage({
       ].filter((c) => c.value > 0)
     : [];
   const componentTotal = components.reduce((a, c) => a + c.value, 0);
+
+  /**
+   * The composition card's "view by fund" rows — the client's "Fund Balance Composition is
+   * View By → Fund".
+   *
+   * Scoped like the classification view it replaces, and unlike the by-fund TABLE in the row
+   * above. That table is a directory: a district reading it while scoped to the General Fund
+   * still wants to see every fund's ending balance. This is a COMPOSITION of the total
+   * printed beneath it, so its slices have to come from the same slice of the district.
+   *
+   * Positive balances only, because a share bar cannot draw a negative slice and a deficit
+   * fund would otherwise take a bar as though it held money. A fund in deficit is named in
+   * the by-fund table above with a Deficit badge and a tinted row, which is where that fact
+   * belongs.
+   *
+   * No extra query: `byFund` is already loaded.
+   */
+  const fundSlices = withBalance
+    .filter((f) => !scope.fundId || f.fundId === scope.fundId)
+    .map((f) => ({ id: f.fundId, label: codeName(f.code, f.name), value: toNumber(f.fundBalance) ?? 0 }))
+    .filter((f) => f.value > 0)
+    .sort((a, b) => b.value - a.value);
+  // Six categorical slots; a seventh fund folds rather than taking a generated hue.
+  const foldedFundSlices =
+    fundSlices.length > 6
+      ? [
+          ...fundSlices.slice(0, 5),
+          {
+            id: "__other",
+            label: `Other (${fundSlices.length - 5})`,
+            value: fundSlices.slice(5).reduce((a, f) => a + f.value, 0),
+          },
+        ]
+      : fundSlices;
+  const fundSliceTotal = fundSlices.reduce((a, f) => a + f.value, 0);
 
   return (
     <FundBalanceShell scope={scope} active="/fund-balance" alertCount={fbAlerts.length}>
@@ -274,7 +314,7 @@ export default async function FundBalancePage({
                 id: f.fundId,
                 flag: balance !== null && balance < 0 ? ("negative" as const) : undefined,
                 cells: {
-                  fund: { value: `${f.code} — ${f.name}`, strong: true },
+                  fund: { value: codeName(f.code, f.name), strong: true },
                   balance: { value: compactMoney(f.fundBalance), strong: true },
                   class: isGeneral ? (
                     <span>
@@ -433,11 +473,63 @@ export default async function FundBalancePage({
           )}
         </SectionCard>
 
+        {/*
+          THE "VIEW BY" CARD — the client's "Fund Balance Composition is View By → Fund".
+
+          Two perspectives on one total: the GASB 54 classification split this card has
+          always drawn, and the same balance split by fund. Neither costs a query — the
+          components come from the opening balance the series already loaded, and the fund
+          rows from the `byFund` call the table above it already made.
+
+          The KPI row is not re-grouped. Total fund balance, the unassigned reserve and its
+          percentage are the same figures either way.
+        */}
         <SectionCard
           title="Fund balance composition"
-          info="Components are as reported on the opening fund balance; unassigned moves with the year's activity."
+          subtitle={
+            view === "fund"
+              ? `By fund · ${scope.fund ? scope.fund.name : "all funds"}`
+              : "By classification"
+          }
+          info={
+            view === "fund"
+              ? "Each fund's ending balance as a share of the total. Funds in deficit are listed in the table above rather than drawn here — a share bar cannot show a negative slice."
+              : "Components are as reported on the opening fund balance; unassigned moves with the year's activity."
+          }
+          control={<ViewBy options={FUND_BALANCE_VIEWS} value={view} />}
         >
-          {components.length > 0 ? (
+          {view === "fund" ? (
+            foldedFundSlices.length > 0 ? (
+              <>
+                <ShareBars
+                  title="Fund balance composition by fund"
+                  summary="How the district's total fund balance splits across its funds."
+                  rows={foldedFundSlices.map((f, i) => ({
+                    id: f.id,
+                    label: f.label,
+                    value: f.value,
+                    display: compactMoney(f.value),
+                    share: percent(sharePercent(f.value, fundSliceTotal), 1),
+                    color: SERIES_SLOTS[i % SERIES_SLOTS.length],
+                  }))}
+                />
+                <div className="mt-4">
+                  <MetricStrip
+                    cols={3}
+                    items={[
+                      { label: "Total fund balance", value: compactMoney(totalNow) },
+                      { label: "Unassigned", value: compactMoney(unassignedNow) },
+                      { label: "Funds", value: String(fundSlices.length) },
+                    ]}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="py-8 text-center text-[12.5px] text-muted-2">
+                No fund has a positive ending balance for this period.
+              </p>
+            )
+          ) : components.length > 0 ? (
             <>
               <ShareBars
                 title="Fund balance composition"

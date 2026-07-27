@@ -1,6 +1,7 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { TenantDb } from "@/lib/tenant-db";
 import { memo, dbKey } from "@/lib/request-cache";
+import { detailWhere, filterKey, type FinanceFilter } from "@/lib/finance/filter";
 import type { DatasetKind, BudgetKind } from "@/lib/enums";
 
 /**
@@ -98,13 +99,13 @@ export interface AdoptedBudget {
  */
 export const adoptedBudget = memo(
   "adoptedBudget",
-  (db: TenantDb, args: { fiscalYear: string; kind: BudgetKind; fundId?: string }) => {
+  (db: TenantDb, args: { fiscalYear: string; kind: BudgetKind; filter?: FinanceFilter }) => {
     const k = dbKey(db);
-    return k === null ? null : `${k}|${args.fiscalYear}|${args.kind}|${args.fundId ?? ""}`;
+    return k === null ? null : `${k}|${args.fiscalYear}|${args.kind}|${filterKey(args.filter)}`;
   },
   async (
     db: TenantDb,
-    args: { fiscalYear: string; kind: BudgetKind; fundId?: string },
+    args: { fiscalYear: string; kind: BudgetKind; filter?: FinanceFilter },
   ): Promise<AdoptedBudget | null> => {
     const versions = await currentVersionsForYear(db, args.fiscalYear);
     const dataset: DatasetKind =
@@ -112,12 +113,12 @@ export const adoptedBudget = memo(
     const versionId = versions.get(dataset)?.get(null);
     if (!versionId) return null;
 
+    // `detailWhere`, not `fundWhere`: a budget line carries a cost centre, so a budget
+    // filtered to one department is a real figure. The callers that must NOT narrow it —
+    // days-cash and the reserve percentage, whose numerators are fund-grain — pass
+    // `fundOnly(...)` and get the fund-level divisor those ratios need.
     const agg = await db.budgetLine.aggregate({
-      where: {
-        versionId,
-        kind: args.kind,
-        ...(args.fundId ? { fundId: args.fundId } : {}),
-      },
+      where: { versionId, kind: args.kind, ...detailWhere(args.filter) },
       _sum: { amount: true },
     });
 

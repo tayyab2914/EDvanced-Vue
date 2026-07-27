@@ -220,6 +220,46 @@ model District {
   fundBalanceProjections FundBalanceProjection[]
 
   fundBalanceComponentAssumptions FundBalanceComponentAssumption[]
+  savedViews                      SavedView[]
+}
+
+/// A named dashboard filter — "Special Revenue funds", "Title I schools".
+///
+/// DISTRICT-WIDE, not per user. A saved view is a shared vocabulary: when the CFO says
+/// "look at the capital projects view" in a board meeting, everyone opens the same slice.
+/// Per-user views would make that sentence mean a different thing to each listener.
+///
+/// The payload is the dashboard's own QUERY STRING (`ftype=…&funds=…`) rather than columns
+/// per dimension. Two reasons, and the second is the load-bearing one:
+///
+///   1. Applying a view is `router.push(pathname + "?" + filters)` — no translation layer
+///      between what is stored and what the pages already parse.
+///   2. Adding a filter dimension later needs no migration and, more importantly, cannot
+///      leave old rows in a shape the parser silently mis-reads. An unknown parameter is
+///      ignored by `parseFilterParams`; a dropped COLUMN would have been a lost filter that
+///      still displayed a name.
+///
+/// It stores no period. A view is "which funds", not "which month" — pinning May 2026 into
+/// a saved view would quietly send a user back in time every time they applied it.
+///
+/// `createdByUserId` is not an FK, for the same reason as `AuditLog.actorUserId`: deleting a
+/// user must not delete the views their district has been working from.
+model SavedView {
+  id              String   @id @default(cuid())
+  districtId      String
+  name            String
+  /// URL-encoded filter parameters, e.g. `ftype=abc&funds=def,ghi`.
+  filters         String
+  createdByUserId String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  district District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+  /// One name per district. Two "Capital Projects" views is the ambiguity this whole model
+  /// exists to remove.
+  @@unique([districtId, name])
+  @@index([districtId])
 }
 
 /// districtId is NULL for Platform Admins (cross-district) and for External Users (whose

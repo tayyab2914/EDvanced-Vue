@@ -14,6 +14,7 @@ import {
 } from "@/lib/finance/transfers";
 import { activityTotals, netOperatingSurplus, endingCash } from "@/lib/finance/engine";
 import { computeFundBalance, computeUnassigned, reservePercent } from "@/lib/finance/fund-balance";
+import { oneFund } from "@/lib/finance/filter";
 import { DATASET_DEFS } from "@/lib/datasets/registry";
 import { parseFile } from "@/lib/import/parse/rows";
 import { stageRows } from "@/lib/import/stage";
@@ -152,7 +153,7 @@ async function main() {
     ]);
 
     const live = await loadActivityCodes(prisma);
-    const scope = { fiscalYear: FY, period: PERIOD, fundId: made.fundId };
+    const scope = { fiscalYear: FY, period: PERIOD, filter: oneFund(made.fundId) };
 
     const totals = await activityTotals(db, scope, live);
     assert(totals.totalRevenueYtd.equals(new D("6500000")), "total revenue YTD is $6.5M");
@@ -206,7 +207,7 @@ async function main() {
 
     // ---- missing opening balance ----
     console.log("\nAn incomplete year says so");
-    const otherFund = await computeFundBalance(db, { ...scope, fundId: made.fund2Id }, live);
+    const otherFund = await computeFundBalance(db, { ...scope, filter: oneFund(made.fund2Id) }, live);
     assert(
       otherFund.missingOpeningBalance,
       "a fund with no opening balance is flagged — without a starting point the 'balance' is only the year's net change",
@@ -231,7 +232,7 @@ async function main() {
       `reserve is 13.1% of the budget (got ${reserve.percent?.toFixed(2)}%)`,
     );
 
-    const noBudget = await reservePercent(db, { ...scope, fundId: made.fund2Id }, live);
+    const noBudget = await reservePercent(db, { ...scope, filter: oneFund(made.fund2Id) }, live);
     assert(
       noBudget.percent === null,
       "a fund with no budget returns null, not 0% — 'we can't work this out' is not 'your reserve is zero'",

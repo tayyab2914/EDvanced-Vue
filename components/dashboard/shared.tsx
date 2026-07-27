@@ -118,6 +118,63 @@ export function SubstitutionNotice({ asked, showing }: { asked: string; showing:
 }
 
 /**
+ * "This figure is fund-level. The cost-centre filter above does not reach it."
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS BADGE HAS TO EXIST
+ *
+ * Cash and fund balances are stored PER FUND and nothing finer — `CashPosition` and
+ * `OpeningFundBalance` have no cost-centre column, because a district closes its books at
+ * the fund grain. Revenue and expenditure detail do carry one.
+ *
+ * So when someone filters to a department, half the screen narrows and half cannot. Three
+ * options existed and only one of them is honest:
+ *
+ *   - Hide the cash cards. The reader loses context and assumes the data is missing.
+ *   - Show them narrowed anyway. Impossible — there is no column to narrow on — and every
+ *     attempt to fake it (subtract department spending from district opening balance)
+ *     produces a plausible number that is not any real quantity.
+ *   - Show them fund-level and SAY SO. This.
+ *
+ * Same principle as `SubstitutionNotice` above: the platform never quietly shows one thing
+ * while the controls claim another. See lib/finance/filter.ts for the enforcement, which is
+ * a matter of which where-builder each query uses.
+ * ---------------------------------------------------------------------------
+ */
+export function FundLevelOnly({ what = "This figure is" }: { what?: string }) {
+  return (
+    <span
+      title={`${what} tracked per fund. Cost centre filters do not apply to it.`}
+      className="inline-flex items-center gap-1 rounded-full border border-line bg-panel px-2 py-0.5 text-[10.5px] font-medium text-muted-2"
+    >
+      <Icon name="building" size={10} />
+      Fund level
+    </span>
+  );
+}
+
+/**
+ * The page-wide version, for the top of a dashboard whose whole subject is fund-grain.
+ *
+ * The Cash and Fund Balance dashboards are entirely cash and balances, so badging every
+ * card would be noise where one sentence at the top is the whole story.
+ */
+export function FundLevelNotice({ subject }: { subject: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-line bg-panel px-3.5 py-2.5 text-[12.5px] text-ink-muted">
+      <span aria-hidden className="mt-px flex-none text-muted-2">
+        <Icon name="building" size={14} />
+      </span>
+      <span>
+        <strong className="font-semibold">Cost centre filters do not apply here.</strong>{" "}
+        {subject} is tracked per fund, so these figures honour the Fund Type and Fund Code
+        filters in full and are shown at fund level regardless of the cost centre selection.
+      </span>
+    </div>
+  );
+}
+
+/**
  * A read-only echo of the district's own thresholds, beside the figures they judge.
  *
  * §5.16's argument for showing these to Viewers is that someone being measured should be
@@ -162,6 +219,51 @@ export function PolicyEchoCard({
         </Link>
       )}
     </div>
+  );
+}
+
+/**
+ * "1000 — General Fund" — the small tag that says WHERE a figure came from.
+ *
+ * Rendered by the mover cards and the alert lists, and only on the All Funds view. The
+ * client's note on both: a district-wide variance or an overspend alert that does not name
+ * a fund "does not tell me where to go". The tag names it, and links to the same screen
+ * with the fund selector moved — the drill-down a reader expects is this page, narrowed.
+ *
+ * A LINK, not a filter chip with an ✕. Nothing here holds selection state; the fund scope
+ * is a URL parameter (lib/dashboard/scope.ts), so the tag is an anchor and the back button
+ * undoes it.
+ */
+export function FundTag({
+  label,
+  detail,
+  href,
+}: {
+  label: string;
+  /** "$1.24M behind pace" — why this fund is being named. */
+  detail?: string;
+  href?: string;
+}) {
+  const body = (
+    <>
+      <span className="truncate font-medium">{label}</span>
+      {detail && (
+        <span className="flex-none border-l border-line-soft pl-1.5 tabular-nums opacity-80">
+          {detail}
+        </span>
+      )}
+    </>
+  );
+
+  const shape =
+    "inline-flex max-w-full items-center gap-1.5 rounded-[5px] border border-line-soft bg-panel px-1.5 py-[2px] text-[10.5px] text-muted";
+
+  return href ? (
+    <Link href={href} className={cn(shape, "transition-colors hover:border-brand hover:text-brand")}>
+      {body}
+    </Link>
+  ) : (
+    <span className={shape}>{body}</span>
   );
 }
 

@@ -9,6 +9,7 @@ import { yearSeries, pointAt, previousPoint, type YearSeries, type PeriodPoint }
 import { currentVersionsForYear } from "@/lib/finance/versions";
 import { evaluateAlerts, type AlertReport } from "@/lib/alerts/engine";
 import { generalFund, type FundRef } from "@/lib/finance/funds";
+import { oneFund } from "@/lib/finance/filter";
 import { reservePercent } from "@/lib/finance/fund-balance";
 import type { DashboardScope } from "@/lib/dashboard/scope";
 import type { DatasetKind } from "@/lib/enums";
@@ -37,7 +38,10 @@ import type { DatasetKind } from "@/lib/enums";
  * key from the primitives instead — see lib/request-cache.ts.
  *
  * With that in place the core threading still earns its keep (it is what lets a page reuse
- * the series and the alerts without asking for them), and the measured count is 27.
+ * the series and the alerts without asking for them), and the measured count is 33 — 27,
+ * plus the per-fund alert attribution added in M5, which runs on the All Funds view only
+ * and rides inside a round trip the core was already paying for. `npm run verify:queries`
+ * is what holds the number down; it is not a comment anybody has to trust.
  * ---------------------------------------------------------------------------
  */
 
@@ -90,6 +94,8 @@ export async function loadCore(
         opening: null,
         adoptedExpenditureBudget: ZERO,
         adoptedRevenueBudget: ZERO,
+        cashBasisExpenditureBudget: ZERO,
+        fundLevelBalances: false,
       },
       point: null,
       previous: null,
@@ -107,7 +113,7 @@ export async function loadCore(
   const [series, policy, codes, gf, versionsForYear] = await Promise.all([
     yearSeries(db, {
       fiscalYear: scope.fiscalYear,
-      fundId: scope.fundId,
+      filter: scope.filter,
       throughPeriod: scope.period,
     }),
     loadPolicy(db, districtId),
@@ -140,13 +146,15 @@ export async function loadCore(
   const [alerts, reserve] = await Promise.all([
     evaluateAlerts(
       db,
-      { districtId, fiscalYear: scope.fiscalYear, period: scope.period, fundId: scope.fundId },
+      { districtId, fiscalYear: scope.fiscalYear, period: scope.period, filter: scope.filter },
       codes,
     ).catch(() => null),
     gf
       ? reservePercent(
           db,
-          { fiscalYear: scope.fiscalYear, period: scope.period, fundId: gf.id },
+          // `oneFund`, not the page's filter — the reserve is the General Fund's, and a
+          // page filtered to three special revenue funds must not silently redefine it.
+          { fiscalYear: scope.fiscalYear, period: scope.period, filter: oneFund(gf.id) },
           codes,
         )
       : Promise.resolve(null),

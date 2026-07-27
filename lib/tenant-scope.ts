@@ -49,6 +49,8 @@ const TENANT_MODELS = new Set([
   "ForecastAssumption",
   "FundBalanceProjection",
   "FundBalanceComponentAssumption",
+  // M5 — the dashboards' saved filter views, shared within a district
+  "SavedView",
 ]);
 
 /** Exposed for the verification script, which compares it against schema.prisma. */

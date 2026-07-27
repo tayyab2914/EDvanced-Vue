@@ -1,5 +1,7 @@
 import type { TenantDb } from "@/lib/tenant-db";
+import { masterLists, fundTypeNames } from "@/lib/master-data/lists";
 import { memo, dbKey } from "@/lib/request-cache";
+import { codeName } from "@/lib/text";
 
 /**
  * Which fund is THE General Fund, and which funds a district actually reports on.
@@ -55,27 +57,38 @@ export async function generalFundAmbiguous(db: TenantDb): Promise<boolean> {
   return (await generalFundCandidates(db)).length > 1;
 }
 
+/**
+ * Resolved in memory from the shared master-data read, NOT by its own query.
+ *
+ * It was `db.fund.findMany({ where: { fundType: { code } } })`, which Prisma answers with
+ * TWO statements — the funds, then the related types — and both of those tables had already
+ * been read by `listFunds` in the same render. Measured, one `resolveScope` read Fund three
+ * times and FundType three times. See lib/master-data/lists.ts.
+ *
+ * The predicate is unchanged: ACTIVE funds whose Fund Type matches, `code` checked first
+ * because it is the stable key, with the name as the fallback for a list seeded before codes
+ * were filled in. Lower code wins, so the caller can carry on when a district has somehow
+ * typed two funds as General.
+ */
 const generalFundCandidates = memo("generalFundCandidates", dbKey, async (
   db: TenantDb,
 ): Promise<FundRef[]> => {
-  const rows = await db.fund.findMany({
-    where: {
-      active: true,
-      OR: [
-        { fundType: { code: GENERAL_FUND_TYPE_CODE } },
-        { fundType: { name: GENERAL_FUND_TYPE_NAME } },
-      ],
-    },
-    select: { id: true, code: true, name: true, fundType: { select: { name: true } } },
-    orderBy: { code: "asc" },
-  });
+  const lists = await masterLists(db);
+  const typeById = new Map(lists.fundTypes.map((t) => [t.id, t]));
 
-  return rows.map((f) => ({
-    id: f.id,
-    code: f.code,
-    name: f.name,
-    typeName: f.fundType?.name ?? null,
-  }));
+  return lists.funds
+    .filter((f) => {
+      if (!f.active || !f.fundTypeId) return false;
+      const type = typeById.get(f.fundTypeId);
+      return type?.code === GENERAL_FUND_TYPE_CODE || type?.name === GENERAL_FUND_TYPE_NAME;
+    })
+    .map((f) => ({
+      id: f.id,
+      code: f.code,
+      name: f.name,
+      typeName: (f.fundTypeId ? typeById.get(f.fundTypeId)?.name : undefined) ?? null,
+    }))
+    .sort((a, b) => a.code.localeCompare(b.code, "en"));
 });
 
 /**
@@ -87,20 +100,26 @@ const generalFundCandidates = memo("generalFundCandidates", dbKey, async (
  * so this stays possible (§5.14).
  */
 export const listFunds = memo("listFunds", dbKey, async (db: TenantDb): Promise<FundRef[]> => {
-  const rows = await db.fund.findMany({
-    select: { id: true, code: true, name: true, fundType: { select: { name: true } } },
-    orderBy: [{ sortOrder: "asc" }, { code: "asc" }],
-  });
+  const lists = await masterLists(db);
+  const names = fundTypeNames(lists);
 
-  return rows.map((f) => ({
+  // Already ordered by (sortOrder, code) — the shared read applies the same order this
+  // function always used, so the by-fund tables are unchanged row for row.
+  return lists.funds.map((f) => ({
     id: f.id,
     code: f.code,
     name: f.name,
-    typeName: f.fundType?.name ?? null,
+    typeName: names.get(f.id) ?? null,
   }));
 });
 
-/** "1000 — General Fund". Codes are shown with their names resolved everywhere (§5.19). */
+/**
+ * "1000 — General Fund". Codes are shown with their names resolved everywhere (§5.19).
+ *
+ * The name arrives already title-cased from the shared master-data read; `codeName` formats
+ * it again anyway because the operation is idempotent and a caller handing this a fund from
+ * somewhere else should still get a label that matches the rest of the screen.
+ */
 export function fundLabel(f: Pick<FundRef, "code" | "name">): string {
-  return `${f.code} — ${f.name}`;
+  return codeName(f.code, f.name);
 }

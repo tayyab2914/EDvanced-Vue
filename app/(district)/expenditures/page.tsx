@@ -9,8 +9,15 @@ import {
 } from "@/lib/dashboard/load";
 import {
   expenditureByFunction,
+  expenditureByFunctionAndFund,
   expenditureByObjectType,
+  expenditureByCostCenterType,
+  expenditureByProject,
   topMovers,
+  foldTail,
+  rankBySize,
+  type Breakdown,
+  type BreakdownRow,
 } from "@/lib/finance/breakdown";
 import { ladder } from "@/lib/dashboard/status";
 import { expenditurePace, approachingCeiling } from "@/lib/dashboard/pace";
@@ -32,12 +39,73 @@ import { DataTable, MoverList } from "@/components/dashboard/data-table";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { EmptyState, SubstitutionNotice, Row, PolicyEchoCard } from "@/components/dashboard/shared";
-import { ScopeBar } from "@/components/dashboard/scope-bar";
+import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
+import { ViewBy } from "@/components/dashboard/view-by";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { ColumnChart } from "@/components/dashboard/charts/column-chart";
 import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
-import { scopeOptions } from "@/lib/dashboard/options";
+import { scopeOptions, moverFund, alertFunds, scopeDescription } from "@/lib/dashboard/options";
 import { SERIES_SLOTS } from "@/lib/dashboard/palette";
+import { codeName } from "@/lib/text";
+import { EXPENDITURE_VIEWS, resolveView, type ExpenditureView } from "@/lib/dashboard/view";
+
+/**
+ * How the "view by" card presents each perspective.
+ *
+ * `ranked` is the only entry doing real work. Object types and cost centre types are BOUNDED
+ * classification lookups — seven and a couple of dozen at most — so they read best in their
+ * own chart order, complete, exactly as this card has always drawn object types. Functions
+ * and projects are UNBOUNDED: a district can carry thirty of one and hundreds of the other,
+ * and a composition card is not a reference table. Those two rank biggest-first and fold
+ * their tail into "Other", which is also what keeps the six categorical colour slots honest.
+ *
+ * The full function list is untouched and still sits two rows down, in Function Type Code
+ * order, because that is the reference table the client asked for and this is not it.
+ */
+const VIEW_META: Record<
+  ExpenditureView,
+  {
+    title: string;
+    subtitle: string;
+    info: string;
+    column: string;
+    ranked: boolean;
+    label: (r: BreakdownRow) => string;
+  }
+> = {
+  object: {
+    title: "Expenditures by object (YTD)",
+    subtitle: "Salaries, benefits, services, supplies and capital",
+    info: "Object types in chart-of-accounts order, not by size, so the list reads the same every month.",
+    column: "Object",
+    ranked: false,
+    label: (r) => r.name,
+  },
+  function: {
+    title: "Expenditures by function (YTD)",
+    subtitle: "Largest first — the full list, in code order, is below",
+    info: "The biggest spending functions by budget, with the remainder folded into Other. The complete table follows in Function Type Code order.",
+    column: "Function",
+    ranked: true,
+    label: (r) => codeName(r.code, r.name),
+  },
+  costCenterType: {
+    title: "Expenditures by cost center type (YTD)",
+    subtitle: "Schools, departments and operations",
+    info: "Cost centre types in their configured order. Rows whose cost centre column was left blank are shown as No Cost Center Type rather than dropped.",
+    column: "Cost center type",
+    ranked: false,
+    label: (r) => r.name,
+  },
+  project: {
+    title: "Expenditures by project (YTD)",
+    subtitle: "The Project / Grant column on the expenditure detail",
+    info: "The largest projects by budget, with the remainder folded into Other. Grant-funded spending arrives tagged here.",
+    column: "Project",
+    ranked: true,
+    label: (r) => codeName(r.code, r.name),
+  },
+};
 
 /**
  * The Expenditures dashboard (Spec §5) — spending against budget.
@@ -60,13 +128,15 @@ import { SERIES_SLOTS } from "@/lib/dashboard/palette";
 export default async function ExpenditureDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; period?: string; fund?: string }>;
+  searchParams: Promise<{ fy?: string; period?: string; fund?: string; groupBy?: string }>;
 }) {
   const { db, user, districtId } = await getTenantDb();
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
   const scope = await resolveScope(db, districtId, sp);
+  const view = resolveView(EXPENDITURE_VIEWS, sp.groupBy);
+  const meta = VIEW_META[view];
 
   if (scope.empty) {
     return (
@@ -96,15 +166,38 @@ export default async function ExpenditureDashboard({
     );
   }
 
-  const args = { versionId: version, fundId: scope.fundId, periodsElapsed: scope.period };
-  const [byFunction, byObjectType] = await Promise.all([
+  const args = { versionId: version, filter: scope.filter, periodsElapsed: scope.period };
+  const [byFunction, regrouped, byFunctionAndFund] = await Promise.all([
     // Chart-of-accounts order, at the client's request.
     expenditureByFunction(db, { ...args, order: "chart" }),
-    expenditureByObjectType(db, { ...args, order: "chart" }),
+    // The "view by" card's aggregate. `function` is deliberately absent: the by-function
+    // breakdown is already being loaded beside this for the KPIs and the reference table,
+    // and issuing it a second time to re-sort it in the database would be a query bought
+    // with a district's latency budget for nothing.
+    view === "object"
+      ? expenditureByObjectType(db, { ...args, order: "chart" })
+      : view === "costCenterType"
+        ? expenditureByCostCenterType(db, { ...args, order: "chart" })
+        : view === "project"
+          ? expenditureByProject(db, args)
+          : Promise.resolve<Breakdown | null>(null),
+    /**
+     * The movers' own aggregate, at fund × function grain — and only on the All Funds view.
+     *
+     * `byFunction` sums a function across every fund, so "2500 — Central Services, over by
+     * $1.2M" was true of the district and silent about which fund to open. With a single
+     * fund selected it already IS this grain, so nothing is asked for. The argument in full
+     * is on `expenditureByFunctionAndFund` in lib/finance/breakdown.ts.
+     */
+    scope.fundId ? Promise.resolve(null) : expenditureByFunctionAndFund(db, args),
   ]);
+
+  // Rank-then-fold, never fold-then-rank — see `rankBySize` in lib/finance/breakdown.ts.
+  const source = regrouped ?? byFunction;
+  const grouped = meta.ranked ? foldTail(rankBySize(source), scope.period, 5) : source;
   // Movers still rank by size — that card exists to answer "what moved most", and chart
   // order would answer "what comes first in the ledger", which nobody asked.
-  const movers = topMovers(byFunction, 4);
+  const movers = topMovers(byFunctionAndFund ?? byFunction, 4);
 
   const utilT = utilisationThresholds(policy);
   const fcT = expenditureForecastThresholds(policy);
@@ -127,17 +220,14 @@ export default async function ExpenditureDashboard({
         title="Expenditures Dashboard"
         description="Track spending performance against budget."
         actions={
-          <ScopeBar
-            periods={options.periods}
-            period={options.period}
-            funds={options.funds}
-            fund={scope.fundId ?? ""}
+          <DashboardFilters
+            scope={scope}
             exportHref={options.exportHref("/expenditures/export")}
           />
         }
       />
       {scope.substituted && <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />}
-      <DataAsOf date={scope.dataAsOf} note={scope.fund ? scope.fund.name : "All funds"} />
+      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
       {/* ---------- KPI CARDS ---------- */}
       <KpiRow count={6}>
@@ -292,20 +382,37 @@ export default async function ExpenditureDashboard({
           </div>
         </SectionCard>
 
+        {/*
+          THE "VIEW BY" CARD — one visualization, four perspectives.
+
+          The client's M5 instruction was to stop answering "by what?" with another card:
+          "instead of building multiple dashboards or charts, every major visualization
+          should have a small View By or Group By selector … without requiring a separate
+          report". Object, Function, Cost Center Type and Project are all columns on the
+          expenditure detail grain, so each is one grouped aggregate into the same shape —
+          the card below does not know which dimension it was handed, and a fifth would cost
+          a list entry rather than a card.
+
+          The KPI row above is deliberately NOT re-grouped. Total spending, utilisation and
+          available budget are the same figures whichever way the detail is sliced, and a
+          district must be able to change perspective without wondering whether the headline
+          moved underneath them.
+        */}
         <SectionCard
-          title="Expenditures by object (YTD)"
-          subtitle="Salaries, benefits, services, supplies and capital"
-          info="Object types in chart-of-accounts order, not by size, so the list reads the same every month."
+          title={meta.title}
+          subtitle={meta.subtitle}
+          info={meta.info}
+          control={<ViewBy options={EXPENDITURE_VIEWS} value={view} />}
         >
           <ShareBars
-            title="Expenditures by object type"
-            summary="Share of year-to-date spending by object type."
-            rows={byObjectType.rows.map((r, i) => ({
+            title={meta.title}
+            summary={`Share of year-to-date spending by ${meta.column.toLowerCase()}.`}
+            rows={grouped.rows.map((r, i) => ({
               id: r.id,
-              label: r.name,
+              label: meta.label(r),
               value: toNumber(r.actualYtd) ?? 0,
               display: compactMoney(r.actualYtd),
-              share: percent(sharePercent(r.actualYtd, byObjectType.total.actualYtd), 1),
+              share: percent(sharePercent(r.actualYtd, grouped.total.actualYtd), 1),
               color: SERIES_SLOTS[i % SERIES_SLOTS.length],
             }))}
           />
@@ -313,13 +420,13 @@ export default async function ExpenditureDashboard({
             <DataTable
               dense
               columns={[
-                { key: "object", label: "Object" },
+                { key: "group", label: meta.column },
                 { key: "budget", label: "Budget", align: "right" },
                 { key: "actual", label: "Actual (YTD)", align: "right" },
                 { key: "util", label: "Utilised", align: "right" },
                 { key: "status", label: "Status", align: "right" },
               ]}
-              rows={byObjectType.rows.map((r) => {
+              rows={grouped.rows.map((r) => {
                 const pace = expenditurePace(toNumber(r.pace.percent), fcT);
                 const rowUtil = toNumber(r.utilisation.percent);
                 return {
@@ -331,7 +438,7 @@ export default async function ExpenditureDashboard({
                         ? ("warning" as const)
                         : undefined,
                   cells: {
-                    object: { value: r.name, strong: true },
+                    group: { value: meta.label(r), strong: true },
                     budget: compactMoney(r.budget),
                     actual: compactMoney(r.actualYtd),
                     util: {
@@ -349,17 +456,24 @@ export default async function ExpenditureDashboard({
                   },
                 };
               })}
+              /*
+               * The total comes from the UNFOLDED breakdown, which is the whole point of
+               * `foldTail` keeping `total` intact: fold five hundred projects into "Other"
+               * and the total still equals the KPI tile above, so the reader can check the
+               * card against the headline and find them agreeing.
+               */
               total={{
                 id: "total",
                 total: true,
                 cells: {
-                  object: "Total expenditures",
-                  budget: compactMoney(byObjectType.total.budget),
-                  actual: compactMoney(byObjectType.total.actualYtd),
-                  util: percent(byObjectType.total.utilisation.percent),
+                  group: "Total expenditures",
+                  budget: compactMoney(grouped.total.budget),
+                  actual: compactMoney(grouped.total.actualYtd),
+                  util: percent(grouped.total.utilisation.percent),
                   status: null,
                 },
               }}
+              empty={`No spending is tagged by ${meta.column.toLowerCase()} for this period.`}
             />
           </div>
         </SectionCard>
@@ -392,7 +506,8 @@ export default async function ExpenditureDashboard({
             <MoverList
               items={movers.positive.map((r) => ({
                 id: r.id,
-                name: r.name,
+                name: codeName(r.code, r.name),
+                fund: moverFund(scope, "/expenditures", r.fund),
                 note: r.group?.name,
                 value: accounting(r.pace.amount, { compact: true }),
                 percent: signedPercent(r.pace.percent),
@@ -471,7 +586,7 @@ export default async function ExpenditureDashboard({
                 flag: overspent ? ("negative" as const) : nearing ? ("warning" as const) : undefined,
                 cells: {
                   fn: {
-                    value: `${r.code} — ${r.name}`,
+                    value: codeName(r.code, r.name),
                     strong: true,
                     title: r.group?.name ? `${r.group.name} (${r.group.code ?? "—"})` : undefined,
                   },
@@ -540,7 +655,8 @@ export default async function ExpenditureDashboard({
             <MoverList
               items={movers.negative.map((r) => ({
                 id: r.id,
-                name: r.name,
+                name: codeName(r.code, r.name),
+                fund: moverFund(scope, "/expenditures", r.fund),
                 note: r.group?.name,
                 value: accounting(r.pace.amount, { compact: true }),
                 percent: signedPercent(r.pace.percent),
@@ -569,6 +685,9 @@ export default async function ExpenditureDashboard({
                 severity: a.severity,
                 title: a.title,
                 message: a.message,
+                // Which fund is overspent. The threshold is a district figure; these say
+                // where to look, and link back to this page scoped to that fund.
+                funds: alertFunds(scope, "/expenditures", a.funds),
               }))}
               href="/alerts"
               empty="No expenditure thresholds have been crossed this period."

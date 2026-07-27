@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 import { PageHeader } from "@/components/page-header";
-import { LinkTabs } from "@/components/dashboard/shared";
-import { ScopeBar } from "@/components/dashboard/scope-bar";
+import { LinkTabs, FundLevelNotice } from "@/components/dashboard/shared";
+import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { DataAsOf } from "@/components/dashboard/section-card";
 import { SubstitutionNotice } from "@/components/dashboard/shared";
-import { scopeOptions } from "@/lib/dashboard/options";
+import { scopeOptions, scopeDescription } from "@/lib/dashboard/options";
 import type { DashboardScope } from "@/lib/dashboard/scope";
 
 /**
@@ -34,11 +34,8 @@ export function FundBalanceShell({
         title="Fund Balance"
         description="Track fund balance, reserve levels, and plan for the future."
         actions={
-          <ScopeBar
-            periods={options.periods}
-            period={options.period}
-            funds={options.funds}
-            fund={scope.fundId ?? ""}
+          <DashboardFilters
+            scope={scope}
             exportHref={options.exportHref("/fund-balance/export")}
           />
         }
@@ -59,7 +56,8 @@ export function FundBalanceShell({
       {scope.substituted && (
         <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />
       )}
-      <DataAsOf date={scope.dataAsOf} note={scope.fund ? scope.fund.name : "All funds"} />
+      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
+      {scope.fundLevelOnly && <FundLevelNotice subject="Fund balance" />}
 
       {children}
     </div>

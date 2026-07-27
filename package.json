@@ -18,6 +18,7 @@
     "verify:m1": "tsx scripts/verify-m1.mts",
     "verify:external": "tsx scripts/verify-external.mts",
     "verify:sort": "tsx scripts/verify-sort.mts",
+    "verify:text": "tsx scripts/verify-text.mts",
     "verify:export": "tsx scripts/verify-export.mts",
     "verify:periods": "tsx scripts/verify-periods.mts",
     "verify:datasets": "tsx scripts/verify-datasets.mts",
@@ -33,7 +34,7 @@
     "verify:sample": "tsx scripts/verify-sample-data.mts",
     "test:smtp": "tsx scripts/test-smtp.mts",
     "postinstall": "prisma generate",
-    "verify:dashboard": "tsx scripts/verify-dashboard.mts",
+    "verify:dashboard": "tsx --conditions=react-server scripts/verify-dashboard.mts",
     "verify:queries": "tsx --conditions=react-server scripts/verify-queries.mts"
   },
   "dependencies": {

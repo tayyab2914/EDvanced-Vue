@@ -13,6 +13,7 @@ import { validateBatch } from "@/lib/validation/import/engine";
 import { commitBatch } from "@/lib/import/commit";
 import { structureFindings } from "@/lib/validation/import/layers/structure";
 import { loadActivityCodes } from "@/lib/finance/transfers";
+import { oneFund } from "@/lib/finance/filter";
 import { computeFundBalance, reservePercent } from "@/lib/finance/fund-balance";
 import { activityTotals, netOperatingSurplus, endingCash } from "@/lib/finance/engine";
 import { evaluateAlerts } from "@/lib/alerts/engine";
@@ -76,7 +77,7 @@ async function main() {
   const codes = await loadActivityCodes(prisma);
   const fund = await db.fund.findFirst({ where: { code: "1000" } });
   // Read back at the LAST period, which is where the year's story has actually happened.
-  const scope = { fiscalYear: FY, period: 12, fundId: fund!.id };
+  const scope = { fiscalYear: FY, period: 12, filter: oneFund(fund!.id) };
 
   const [fb, reserve, totals, cash] = await Promise.all([
     computeFundBalance(db, scope, codes),

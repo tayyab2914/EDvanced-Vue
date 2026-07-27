@@ -1,6 +1,9 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { TenantDb } from "@/lib/tenant-db";
 import { consumption, pace, utilisation, availableBudget, type Variance } from "@/lib/finance/variance";
+import { listFunds } from "@/lib/finance/funds";
+import { detailWhere, fundWhere, fundOnly, type FinanceFilter } from "@/lib/finance/filter";
+import { displayName } from "@/lib/text";
 
 /**
  * The by-something tables and donuts: revenue by source, spending by function, spending by
@@ -41,6 +44,15 @@ export interface BreakdownRow {
    * eventually re-sort away.
    */
   group?: { code: string | null; name: string; sortOrder: number } | null;
+  /**
+   * The fund these figures came from — set ONLY by the fund-grain breakdowns near the
+   * bottom of this file, and null on every other row, which is already a district-wide
+   * roll-up across funds.
+   *
+   * A card reads this to decide whether it can name a place: a row with a fund is somewhere
+   * to go and look, a row without one is a total.
+   */
+  fund?: { id: string; code: string; name: string } | null;
   budget: Prisma.Decimal;
   actualYtd: Prisma.Decimal;
   actualMtd: Prisma.Decimal;
@@ -92,6 +104,18 @@ function totalOf(rows: BreakdownRow[], periodsElapsed: number, label = "Total"):
   };
 }
 
+/**
+ * THE ONE PLACE a dimension name becomes display text.
+ *
+ * Every table row, donut slice, bar label, mover row and exported cell in the application is
+ * a `BreakdownRow` built here, so title-casing the name on the way in standardises all of
+ * them at once — `PURCHASED SERVICES` from one district's import and `purchased services`
+ * from another's both read `Purchased Services`. See lib/text.ts.
+ *
+ * The classification carried in `group` is formatted too: it labels the section headers the
+ * client asked the function table to be ordered by, and a header in a different case to the
+ * rows beneath it is the inconsistency this was meant to remove.
+ */
 function makeRow(
   id: string,
   code: string,
@@ -113,8 +137,8 @@ function makeRow(
   return {
     id,
     code,
-    name,
-    group: group ?? null,
+    name: displayName(name),
+    group: group ? { ...group, name: displayName(group.name) } : null,
     budget,
     actualYtd,
     actualMtd,
@@ -164,7 +188,12 @@ export type BreakdownOrder = "size" | "chart";
 export interface BreakdownArgs {
   /** The CURRENT version of the relevant monthly dataset. */
   versionId: string;
-  fundId?: string;
+  /**
+   * The slice to break down. Every table below groups a detail table, so the WHOLE filter
+   * applies — fund and cost centre both — and these rows narrow with the KPI tiles above
+   * them rather than drifting away from a total the reader can see.
+   */
+  filter?: FinanceFilter;
   /** Drives the pro-rated `pace` figures. */
   periodsElapsed: number;
   /**
@@ -183,7 +212,7 @@ function sorter(order: BreakdownOrder | undefined) {
 export async function revenueBySource(db: TenantDb, args: BreakdownArgs): Promise<Breakdown> {
   const grouped = await db.revenueActual.groupBy({
     by: ["revenueSourceId"],
-    where: { versionId: args.versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+    where: { versionId: args.versionId, ...detailWhere(args.filter) },
     _sum: { budget: true, actualYtd: true, actualMtd: true },
   });
 
@@ -199,7 +228,7 @@ export async function revenueBySource(db: TenantDb, args: BreakdownArgs): Promis
       return makeRow(
         g.revenueSourceId,
         s?.code ?? "",
-        s?.name ?? "Unknown source",
+        s?.name ?? "Unknown Source",
         g._sum,
         args.periodsElapsed,
       );
@@ -220,7 +249,7 @@ export async function revenueByType(db: TenantDb, args: BreakdownArgs): Promise<
   const [grouped, types] = await Promise.all([
     db.revenueActual.groupBy({
       by: ["revenueSourceId"],
-      where: { versionId: args.versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+      where: { versionId: args.versionId, ...detailWhere(args.filter) },
       _sum: { budget: true, actualYtd: true, actualMtd: true },
     }),
     db.revenueType.findMany({ select: { id: true, code: true, name: true } }),
@@ -265,7 +294,7 @@ export async function revenueByType(db: TenantDb, args: BreakdownArgs): Promise<
 export async function expenditureByFunction(db: TenantDb, args: BreakdownArgs): Promise<Breakdown> {
   const grouped = await db.expenditureActual.groupBy({
     by: ["functionId"],
-    where: { versionId: args.versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+    where: { versionId: args.versionId, ...detailWhere(args.filter) },
     _sum: { budget: true, actualYtd: true, actualMtd: true, encumbrances: true },
   });
 
@@ -288,7 +317,7 @@ export async function expenditureByFunction(db: TenantDb, args: BreakdownArgs): 
       return makeRow(
         g.functionId,
         f?.code ?? "",
-        f?.name ?? "Unknown function",
+        f?.name ?? "Unknown Function",
         g._sum,
         args.periodsElapsed,
         f?.functionType ?? null,
@@ -302,7 +331,7 @@ export async function expenditureByFunction(db: TenantDb, args: BreakdownArgs): 
 export async function expenditureByObject(db: TenantDb, args: BreakdownArgs): Promise<Breakdown> {
   const grouped = await db.expenditureActual.groupBy({
     by: ["objectId"],
-    where: { versionId: args.versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+    where: { versionId: args.versionId, ...detailWhere(args.filter) },
     _sum: { budget: true, actualYtd: true, actualMtd: true, encumbrances: true },
   });
 
@@ -323,7 +352,7 @@ export async function expenditureByObject(db: TenantDb, args: BreakdownArgs): Pr
       return makeRow(
         g.objectId,
         o?.code ?? "",
-        o?.name ?? "Unknown object",
+        o?.name ?? "Unknown Object",
         g._sum,
         args.periodsElapsed,
         o?.objectType ?? null,
@@ -339,7 +368,7 @@ export async function expenditureByObjectType(db: TenantDb, args: BreakdownArgs)
   const [grouped, types] = await Promise.all([
     db.expenditureActual.groupBy({
       by: ["objectId"],
-      where: { versionId: args.versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+      where: { versionId: args.versionId, ...detailWhere(args.filter) },
       _sum: { budget: true, actualYtd: true, actualMtd: true, encumbrances: true },
     }),
     db.objectType.findMany({ select: { id: true, code: true, name: true, sortOrder: true } }),
@@ -385,6 +414,207 @@ export async function expenditureByObjectType(db: TenantDb, args: BreakdownArgs)
     .sort(sorter(args.order));
 
   return { rows, total: totalOf(rows, args.periodsElapsed, "Total expenditures") };
+}
+
+// ===================== "view by" perspectives =====================
+
+/**
+ * The client's M5 request: "every major visualization should have a small View By or Group
+ * By selector … the user could switch between Object, Function, Cost Center Type, or
+ * Project without requiring a separate report".
+ *
+ * Every function below returns the SAME `Breakdown` shape the four above return, which is
+ * the point — a card that can render `expenditureByObjectType` renders any of them without
+ * knowing which it was handed, so a new perspective costs a list entry rather than a card.
+ *
+ * The two-hop ones (cost centre → cost centre type) fold in Node against a lookup rather
+ * than joining, for the reason at the top of this file: `groupBy.by` takes scalar columns
+ * only, and the alternative — pulling detail rows to fold them — is what §8.3 forbids.
+ */
+
+/** The key a row with no cost centre / no project folds into. */
+const UNASSIGNED = "__unassigned";
+
+interface FoldedSums {
+  budget: Prisma.Decimal;
+  actualYtd: Prisma.Decimal;
+  actualMtd: Prisma.Decimal;
+  encumbrances: Prisma.Decimal;
+}
+
+/**
+ * Sums a grouped aggregate into buckets.
+ *
+ * `keyOf` returns UNASSIGNED for a null dimension rather than dropping the group. Cost
+ * centre is an optional column on the expenditure import and project is optional on the
+ * budget files, so dropping unkeyed rows would make a re-grouped card total less than the
+ * KPI tiles above it — the one failure a "view by" must not have, because the reader
+ * changed perspective, not scope.
+ */
+function foldSums<G>(
+  grouped: G[],
+  keyOf: (g: G) => string,
+  sumsOf: (g: G) => {
+    budget?: Prisma.Decimal | null;
+    actualYtd?: Prisma.Decimal | null;
+    actualMtd?: Prisma.Decimal | null;
+    encumbrances?: Prisma.Decimal | null;
+  },
+): Map<string, FoldedSums> {
+  const out = new Map<string, FoldedSums>();
+  for (const g of grouped) {
+    const key = keyOf(g);
+    const acc =
+      out.get(key) ?? { budget: ZERO, actualYtd: ZERO, actualMtd: ZERO, encumbrances: ZERO };
+    const s = sumsOf(g);
+    out.set(key, {
+      budget: acc.budget.plus(s.budget ?? ZERO),
+      actualYtd: acc.actualYtd.plus(s.actualYtd ?? ZERO),
+      actualMtd: acc.actualMtd.plus(s.actualMtd ?? ZERO),
+      encumbrances: acc.encumbrances.plus(s.encumbrances ?? ZERO),
+    });
+  }
+  return out;
+}
+
+/**
+ * Spending folded up to Cost Center Type — School / Department / Operations and the
+ * district's own types beneath them.
+ *
+ * Two hops, both cheap: the fact table groups by `costCenterId`, a cost centre (School)
+ * carries `typeId`, and CostCenterType is a shared lookup of a few dozen rows. No query is
+ * issued at all when nothing on the page has a cost centre.
+ */
+export async function expenditureByCostCenterType(
+  db: TenantDb,
+  args: BreakdownArgs,
+): Promise<Breakdown> {
+  const [grouped, types] = await Promise.all([
+    db.expenditureActual.groupBy({
+      by: ["costCenterId"],
+      where: { versionId: args.versionId, ...detailWhere(args.filter) },
+      _sum: { budget: true, actualYtd: true, actualMtd: true, encumbrances: true },
+    }),
+    db.costCenterType.findMany({ select: { id: true, code: true, name: true, sortOrder: true } }),
+  ]);
+
+  const centreIds = grouped
+    .map((g) => g.costCenterId)
+    .filter((id): id is string => id !== null);
+  const centres = centreIds.length
+    ? await db.school.findMany({
+        where: { id: { in: centreIds } },
+        select: { id: true, typeId: true },
+      })
+    : [];
+
+  const typeOfCentre = new Map(centres.map((c) => [c.id, c.typeId]));
+  const typeById = new Map(types.map((t) => [t.id, t]));
+
+  const folded = foldSums(
+    grouped,
+    (g) => (g.costCenterId ? (typeOfCentre.get(g.costCenterId) ?? UNASSIGNED) : UNASSIGNED),
+    (g) => g._sum,
+  );
+
+  const rows = [...folded.entries()]
+    .map(([id, s]) => {
+      const t = typeById.get(id);
+      return makeRow(
+        id,
+        t?.code ?? "",
+        t?.name ?? "No Cost Center Type",
+        s,
+        args.periodsElapsed,
+        // Like an object TYPE, a cost centre type is its own classification, so `order:
+        // "chart"` sorts by the type's own sortOrder rather than reshuffling by size.
+        t ? { code: t.code, name: t.name, sortOrder: t.sortOrder } : null,
+      );
+    })
+    .sort(sorter(args.order));
+
+  return { rows, total: totalOf(rows, args.periodsElapsed, "Total expenditures") };
+}
+
+/**
+ * Spending by Project — the expenditure detail's "Project / Grant" column.
+ *
+ * Ranked by size, always. A project list has no chart-of-accounts order to follow: project
+ * numbers are district-assigned and carry no hierarchy, so `order: "chart"` would fall
+ * through to a plain code sort that means nothing to a reader. Size does.
+ */
+export async function expenditureByProject(db: TenantDb, args: BreakdownArgs): Promise<Breakdown> {
+  const grouped = await db.expenditureActual.groupBy({
+    by: ["projectId"],
+    where: { versionId: args.versionId, ...detailWhere(args.filter) },
+    _sum: { budget: true, actualYtd: true, actualMtd: true, encumbrances: true },
+  });
+
+  const projectIds = grouped.map((g) => g.projectId).filter((id): id is string => id !== null);
+  const projects = projectIds.length
+    ? await db.project.findMany({
+        where: { id: { in: projectIds } },
+        select: { id: true, projectNumber: true, name: true },
+      })
+    : [];
+  const byId = new Map(projects.map((p) => [p.id, p]));
+
+  const rows = grouped
+    .map((g) => {
+      const p = g.projectId ? byId.get(g.projectId) : undefined;
+      return makeRow(
+        g.projectId ?? UNASSIGNED,
+        p?.projectNumber ?? "",
+        p?.name ?? (g.projectId ? "Unknown Project" : "No Project"),
+        g._sum,
+        args.periodsElapsed,
+      );
+    })
+    .sort(bySize);
+
+  return { rows, total: totalOf(rows, args.periodsElapsed, "Total expenditures") };
+}
+
+/**
+ * Revenue by Project — the client's "View By → Grant" on the Revenue dashboard.
+ *
+ * The Grants Activity module is dormant until V2, and this is not a stand-in for it: grant
+ * revenue genuinely arrives here. "Project / Grant" is a REQUIRED column on the revenue
+ * detail import (lib/datasets/registry.ts), every row resolves to one Project in the
+ * district's unified master, and that is where a district's grant revenue is recorded
+ * today. Grouping on it answers the question. Calling the result "Grant" without saying so
+ * would not, which is why the page labels it "Project / Grant".
+ */
+export async function revenueByProject(db: TenantDb, args: BreakdownArgs): Promise<Breakdown> {
+  const grouped = await db.revenueActual.groupBy({
+    by: ["projectId"],
+    where: { versionId: args.versionId, ...detailWhere(args.filter) },
+    _sum: { budget: true, actualYtd: true, actualMtd: true },
+  });
+
+  const projectIds = grouped.map((g) => g.projectId).filter((id): id is string => id !== null);
+  const projects = projectIds.length
+    ? await db.project.findMany({
+        where: { id: { in: projectIds } },
+        select: { id: true, projectNumber: true, name: true },
+      })
+    : [];
+  const byId = new Map(projects.map((p) => [p.id, p]));
+
+  const rows = grouped
+    .map((g) => {
+      const p = g.projectId ? byId.get(g.projectId) : undefined;
+      return makeRow(
+        g.projectId ?? UNASSIGNED,
+        p?.projectNumber ?? "",
+        p?.name ?? (g.projectId ? "Unknown Project" : "No Project"),
+        g._sum,
+        args.periodsElapsed,
+      );
+    })
+    .sort(bySize);
+
+  return { rows, total: totalOf(rows, args.periodsElapsed, "Total revenues") };
 }
 
 // ===================== by fund =====================
@@ -467,34 +697,47 @@ export async function byFund(
     expenditureVersionId?: string;
     cashVersionId?: string;
     openingVersionId?: string;
+    filter?: FinanceFilter;
   },
 ): Promise<FundBreakdownRow[]> {
+  /**
+   * FUND-LEVEL THROUGHOUT, cost-centre half of the filter dropped.
+   *
+   * This table's whole purpose is that its rows are funds and its `fundBalance` column adds
+   * up — `opening + revenue − expenditure` per fund. Narrowing revenue and expenditure by
+   * cost centre while `opening` and `endingCash` physically cannot be narrowed would make
+   * every balance in the column wrong in the same invisible way. The fund filter is honoured
+   * in full; the page badges the rest. Same argument as lib/finance/fund-balance.ts.
+   */
+  const slice = fundOnly(args.filter);
+  const funds_ = fundWhere(slice);
+
   const [revenue, spending, cash, opening, funds] = await Promise.all([
     args.revenueVersionId
       ? db.revenueActual.groupBy({
           by: ["fundId"],
-          where: { versionId: args.revenueVersionId },
+          where: { versionId: args.revenueVersionId, ...funds_ },
           _sum: { actualYtd: true },
         })
       : Promise.resolve([]),
     args.expenditureVersionId
       ? db.expenditureActual.groupBy({
           by: ["fundId"],
-          where: { versionId: args.expenditureVersionId },
+          where: { versionId: args.expenditureVersionId, ...funds_ },
           _sum: { actualYtd: true },
         })
       : Promise.resolve([]),
     args.cashVersionId
       ? db.cashPosition.groupBy({
           by: ["fundId"],
-          where: { versionId: args.cashVersionId },
+          where: { versionId: args.cashVersionId, ...funds_ },
           _sum: { endingCash: true },
         })
       : Promise.resolve([]),
     args.openingVersionId
       ? db.openingFundBalance.groupBy({
           by: ["fundId"],
-          where: { versionId: args.openingVersionId },
+          where: { versionId: args.openingVersionId, ...funds_ },
           _sum: {
             begTotal: true,
             begNonspendable: true,
@@ -506,6 +749,7 @@ export async function byFund(
         })
       : Promise.resolve([]),
     db.fund.findMany({
+      where: slice.fundIds === undefined ? {} : { id: { in: slice.fundIds } },
       select: { id: true, code: true, name: true, fundType: { select: { name: true } } },
       orderBy: [{ sortOrder: "asc" }, { code: "asc" }],
     }),
@@ -542,8 +786,11 @@ export async function byFund(
     out.push({
       fundId: f.id,
       code: f.code,
-      name: f.name,
-      typeName: f.fundType?.name ?? null,
+      // Its own query rather than the shared master-data read (it carries the fund filter as
+      // a `where`), so the names are raw here and formatted on the way out — same convention
+      // as `makeRow`, so §6.1's by-fund table matches the tables above it.
+      name: displayName(f.name),
+      typeName: f.fundType ? displayName(f.fundType.name) : null,
       revenueYtd,
       expenditureYtd,
       fundBalance: openingTotal === null ? null : openingTotal.plus(revenueYtd).minus(expenditureYtd),
@@ -552,6 +799,129 @@ export async function byFund(
     });
   }
   return out;
+}
+
+// ===================== fund × account, for the mover cards =====================
+
+/**
+ * The same breakdowns, one row per FUND × account instead of one row per account.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS EXISTS
+ *
+ * The client's question about Top Positive / Negative Variances: "how are these widgets
+ * intended to work when the dashboard is displaying All Funds — are they showing the top
+ * district-wide items across all funds, or are they aggregated by account/object?"
+ *
+ * They were aggregated by account. `revenueBySource` and `expenditureByFunction` group by
+ * the account alone, so with All Funds selected a mover row reading "3200 — State
+ * Categorical · ($1.2M)" was that source summed across every fund the district runs. The
+ * card named a variance and named nowhere to go and look at it — and if two funds moved in
+ * opposite directions it netted them off and showed neither.
+ *
+ * Ranking at fund × account grain instead makes every row a PLACE: "3200 — State
+ * Categorical", tagged General Fund, linking to this dashboard scoped to that fund.
+ *
+ * WHEN IT RUNS
+ *
+ * On All Funds only. With a single fund selected the account-grain breakdown the page has
+ * already loaded IS this, with a column that would repeat the same fund on every row — so
+ * the page reuses it and this issues no query. That is the client's "this behavior should
+ * automatically adjust when a single fund is selected through the global filters", and it
+ * costs the single-fund case nothing.
+ *
+ * The funds come from `listFunds`, which the scope resolver has already read and memoised
+ * for this render, so naming the fund is free rather than a second lookup.
+ * ---------------------------------------------------------------------------
+ */
+
+/** Fund-grain rows are keyed by both halves — one source appears once per fund it moved in. */
+const fundRowId = (fundId: string, accountId: string) => `${fundId}:${accountId}`;
+
+export async function revenueBySourceAndFund(
+  db: TenantDb,
+  args: BreakdownArgs,
+): Promise<Breakdown> {
+  const [grouped, funds] = await Promise.all([
+    db.revenueActual.groupBy({
+      by: ["revenueSourceId", "fundId"],
+      where: { versionId: args.versionId, ...detailWhere(args.filter) },
+      _sum: { budget: true, actualYtd: true, actualMtd: true },
+    }),
+    listFunds(db),
+  ]);
+
+  const sources = await db.revenueSource.findMany({
+    where: { id: { in: [...new Set(grouped.map((g) => g.revenueSourceId))] } },
+    select: { id: true, code: true, name: true },
+  });
+  const byId = new Map(sources.map((s) => [s.id, s]));
+  const fundById = new Map(funds.map((f) => [f.id, f]));
+
+  const rows = grouped
+    .map((g) => {
+      const s = byId.get(g.revenueSourceId);
+      const f = fundById.get(g.fundId);
+      return {
+        ...makeRow(
+          fundRowId(g.fundId, g.revenueSourceId),
+          s?.code ?? "",
+          s?.name ?? "Unknown Source",
+          g._sum,
+          args.periodsElapsed,
+        ),
+        fund: f ? { id: f.id, code: f.code, name: f.name } : null,
+      };
+    })
+    .sort(bySize);
+
+  return { rows, total: totalOf(rows, args.periodsElapsed, "Total revenues") };
+}
+
+export async function expenditureByFunctionAndFund(
+  db: TenantDb,
+  args: BreakdownArgs,
+): Promise<Breakdown> {
+  const [grouped, funds] = await Promise.all([
+    db.expenditureActual.groupBy({
+      by: ["functionId", "fundId"],
+      where: { versionId: args.versionId, ...detailWhere(args.filter) },
+      _sum: { budget: true, actualYtd: true, actualMtd: true, encumbrances: true },
+    }),
+    listFunds(db),
+  ]);
+
+  const functions = await db.accountFunction.findMany({
+    where: { id: { in: [...new Set(grouped.map((g) => g.functionId))] } },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      functionType: { select: { code: true, name: true, sortOrder: true } },
+    },
+  });
+  const byId = new Map(functions.map((f) => [f.id, f]));
+  const fundById = new Map(funds.map((f) => [f.id, f]));
+
+  const rows = grouped
+    .map((g) => {
+      const fn = byId.get(g.functionId);
+      const f = fundById.get(g.fundId);
+      return {
+        ...makeRow(
+          fundRowId(g.fundId, g.functionId),
+          fn?.code ?? "",
+          fn?.name ?? "Unknown Function",
+          g._sum,
+          args.periodsElapsed,
+          fn?.functionType ?? null,
+        ),
+        fund: f ? { id: f.id, code: f.code, name: f.name } : null,
+      };
+    })
+    .sort(bySize);
+
+  return { rows, total: totalOf(rows, args.periodsElapsed, "Total expenditures") };
 }
 
 // ===================== top movers =====================
@@ -583,6 +953,20 @@ export function topMovers(
     .slice(0, n);
 
   return { positive, negative };
+}
+
+/**
+ * Re-ranks a breakdown biggest-first without re-querying it.
+ *
+ * The one thing a page cannot do for itself, because `bySize` is private and a page that
+ * re-sorted by hand would be a second definition of "biggest" to keep in step with this one.
+ *
+ * It exists for `foldTail`'s sake. Folding the tail of a CHART-ORDERED breakdown folds
+ * whatever the chart of accounts happens to list last — General Support, say — which is not
+ * "the small ones" and would put a large category into "Other". Rank first, then fold.
+ */
+export function rankBySize(breakdown: Breakdown): Breakdown {
+  return { rows: [...breakdown.rows].sort(bySize), total: breakdown.total };
 }
 
 /**

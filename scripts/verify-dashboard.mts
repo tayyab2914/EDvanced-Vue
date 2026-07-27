@@ -20,14 +20,18 @@ import {
   expenditureByFunction,
   expenditureByObject,
   expenditureByObjectType,
+  revenueBySourceAndFund,
+  expenditureByFunctionAndFund,
   byFund,
   topMovers,
   foldTail,
 } from "@/lib/finance/breakdown";
+import { attributeAlerts } from "@/lib/alerts/attribution";
 import { consumption, pace, utilisation, daysIntoFiscalYear } from "@/lib/finance/variance";
 import { cashSummary, cashComposition, cashStats, thirtyDayForecast, daysCashOnHand } from "@/lib/finance/cash";
 import { generalFund, generalFundAmbiguous, listFunds } from "@/lib/finance/funds";
 import { resolveScope } from "@/lib/dashboard/scope";
+import { oneFund } from "@/lib/finance/filter";
 import { niceTicks, linear, bands, barWidth } from "@/lib/dashboard/scale";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
 
@@ -272,6 +276,81 @@ async function main() {
       "and no row is counted twice",
     );
 
+    /**
+     * ---------- 4b. the movers name their fund ----------
+     *
+     * The client's question about these cards on All Funds — "are they showing the top
+     * district-wide items across all funds, or are they aggregated by account/object?" The
+     * answer used to be "aggregated", so a row named a variance and named nowhere to go.
+     *
+     * The property that has to hold when the grain changes is that the TOTAL does not.
+     * A card re-grained to fund × source must still agree with the KPI tile above it,
+     * because the reader changed perspective, not scope.
+     */
+    console.log("\nMovers name the fund they came from");
+    const bySourceAndFund = await revenueBySourceAndFund(db, { versionId: revVersion, ...args });
+    assert(
+      bySourceAndFund.total.actualYtd.equals(bySource.total.actualYtd),
+      "re-graining revenue to fund × source leaves the total untouched",
+    );
+    assert(
+      bySourceAndFund.rows.every((r) => r.fund !== null && r.fund !== undefined),
+      "and every row names the fund it came from",
+    );
+    assert(
+      bySource.rows.every((r) => !r.fund),
+      "while the account-grain breakdown names none — it is a roll-up across funds, and saying otherwise would be a lie about what the row is",
+    );
+
+    const byFunctionAndFund = await expenditureByFunctionAndFund(db, {
+      versionId: expVersion,
+      ...args,
+    });
+    assert(
+      byFunctionAndFund.total.actualYtd.equals(byFunction.total.actualYtd),
+      "and the same holds for spending re-grained to fund × function",
+    );
+    assert(
+      byFunctionAndFund.total.encumbrances.equals(byFunction.total.encumbrances),
+      "encumbrances included — the column a re-grain most easily drops",
+    );
+
+    /**
+     * ---------- 4c. alerts say WHICH FUND ----------
+     *
+     * "The Alerts doesn't tell me which fund is under collected or overspent so I do not
+     * know where to go." The alert stays a district-level statement; the attribution says
+     * where to look. See lib/alerts/attribution.ts for why it is not evaluated per fund.
+     *
+     * The days-cash assertion is the important one. It is the only lens that restates a
+     * figure the district also shows at the top level, and it is computed here from the
+     * ADOPTED budget precisely so the two agree — a "where to look" list that quietly
+     * disagreed with the alert above it would be worse than none.
+     */
+    console.log("\nAlerts say which fund");
+    const where = await attributeAlerts(db, { fiscalYear: FY, period: P3 });
+
+    assert(
+      where.revenueAhead.length === 1 && where.revenueAhead[0].code === "DSH-F1",
+      "the fund running ahead on collections is named",
+    );
+    assert(
+      where.revenueAhead[0]?.detail === "$300.00K ahead of pace",
+      `and by how much: 3.3M collected against 3.0M expected by month 3 (got "${where.revenueAhead[0]?.detail}")`,
+    );
+    assert(
+      where.revenueBehind.length === 0,
+      "a fund ahead of pace is not also listed as behind it",
+    );
+    assert(
+      where.cashThin[0]?.detail.startsWith("33 days"),
+      `days cash per fund agrees with the district's own 33.5 (got "${where.cashThin[0]?.detail}")`,
+    );
+    assert(
+      where.spendOverBudget.length === 0,
+      "and nothing is attributed to a lens whose condition no fund meets",
+    );
+
     // ---------- 5. gaps: the skipped period ----------
     console.log("\nA month nobody reported");
     assert(pointAt(series, 2) === null, "period 2 has no data and says so");
@@ -451,7 +530,7 @@ async function main() {
     console.log("\nThe four alerts that could never fire");
     // Scoped to the FIXTURE's fund, not to `generalFund()` — the district already owns a
     // real fund typed General, and it has no data in this sentinel year.
-    const facts = await gatherFacts(db, { fiscalYear: FY, period: P3, fundId: made.fundId }, codes);
+    const facts = await gatherFacts(db, { fiscalYear: FY, period: P3, filter: oneFund(made.fundId) }, codes);
     assert(
       facts.forecastReservePercent !== null,
       "forecastReservePercent is computed — it was hardcoded null, silencing THREE alerts",
@@ -484,7 +563,7 @@ async function main() {
     // decision with consequences rather than a detail.
     const gfOnly = await reservePercent(
       db,
-      { fiscalYear: FY, period: P3, fundId: made.fundId },
+      { fiscalYear: FY, period: P3, filter: oneFund(made.fundId) },
       codes,
     );
     const allFundsBlended = await reservePercent(db, { fiscalYear: FY, period: P3 }, codes);

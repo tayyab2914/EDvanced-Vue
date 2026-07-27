@@ -30,13 +30,16 @@ import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/sec
 import { DataTable } from "@/components/dashboard/data-table";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { EmptyState, SubstitutionNotice, KeyInsightBar } from "@/components/dashboard/shared";
-import { ScopeBar } from "@/components/dashboard/scope-bar";
+import { EmptyState, SubstitutionNotice, KeyInsightBar, FundLevelNotice } from "@/components/dashboard/shared";
+import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
+import { ViewBy } from "@/components/dashboard/view-by";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { Gauge } from "@/components/dashboard/charts/gauge";
 import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
-import { scopeOptions } from "@/lib/dashboard/options";
-import { CASH_COLORS } from "@/lib/dashboard/palette";
+import { scopeOptions, alertFunds, scopeDescription } from "@/lib/dashboard/options";
+import { CASH_COLORS, SERIES_SLOTS } from "@/lib/dashboard/palette";
+import { codeName } from "@/lib/text";
+import { CASH_VIEWS, resolveView } from "@/lib/dashboard/view";
 
 /**
  * The Cash Position dashboard (Spec §7) — availability, liquidity and flow.
@@ -67,13 +70,14 @@ import { CASH_COLORS } from "@/lib/dashboard/palette";
 export default async function CashDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; period?: string; fund?: string }>;
+  searchParams: Promise<{ fy?: string; period?: string; fund?: string; groupBy?: string }>;
 }) {
   const { db, user, districtId } = await getTenantDb();
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
   const scope = await resolveScope(db, districtId, sp);
+  const view = resolveView(CASH_VIEWS, sp.groupBy);
 
   if (scope.empty) {
     return (
@@ -111,9 +115,38 @@ export default async function CashDashboard({
   const daysVsTarget = daysCash === null ? null : daysCash - cashT.warning;
 
   const fundRows = core.versions.get("CASH_POSITION")
-    ? await byFund(db, { cashVersionId: core.versions.get("CASH_POSITION") })
+    ? await byFund(db, { cashVersionId: core.versions.get("CASH_POSITION"), filter: scope.filter })
     : [];
   const totalCash = toNumber(point?.endingCash);
+
+  /**
+   * The composition card's "view by fund" rows.
+   *
+   * Filtered to the scoped fund when there is one, unlike the by-fund TABLE beside it. The
+   * table is a directory — a district that has scoped to the General Fund still wants to see
+   * where the rest of its cash sits. This is a COMPOSITION, and a composition whose slices
+   * came from a wider set than the total printed above them would not add up.
+   *
+   * No extra query: `byFund` is already loaded for that table.
+   */
+  const fundCash = fundRows
+    .filter((f) => f.endingCash !== null && (!scope.fundId || f.fundId === scope.fundId))
+    .map((f) => ({ id: f.fundId, label: codeName(f.code, f.name), value: toNumber(f.endingCash) ?? 0 }))
+    .sort((a, b) => b.value - a.value);
+  // Six categorical slots, so five funds and a fold — the same rule `foldTail` applies to
+  // the breakdowns (lib/finance/breakdown.ts). A seventh fund does not get a generated hue.
+  const fundSlices =
+    fundCash.length > 6
+      ? [
+          ...fundCash.slice(0, 5),
+          {
+            id: "__other",
+            label: `Other (${fundCash.length - 5})`,
+            value: fundCash.slice(5).reduce((a, f) => a + f.value, 0),
+          },
+        ]
+      : fundCash;
+  const fundCashTotal = fundCash.reduce((a, f) => a + f.value, 0);
 
   const trend = series.points.map((p) => ({
     value: toNumber(p.endingCash),
@@ -134,6 +167,8 @@ export default async function CashDashboard({
         severity: a.severity as "WARNING" | "CRITICAL",
         title: a.title,
         message: a.message,
+        // Which funds are thin or draining, on the All Funds view.
+        funds: alertFunds(scope, "/cash", a.funds),
       })),
     ...(run && run.negative > 1
       ? [
@@ -168,17 +203,15 @@ export default async function CashDashboard({
         title="Cash Position"
         description="Monitor cash availability, liquidity and cash flow."
         actions={
-          <ScopeBar
-            periods={options.periods}
-            period={options.period}
-            funds={options.funds}
-            fund={scope.fundId ?? ""}
+          <DashboardFilters
+            scope={scope}
             exportHref={options.exportHref("/cash/export")}
           />
         }
       />
       {scope.substituted && <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />}
-      <DataAsOf date={scope.dataAsOf} note={scope.fund ? scope.fund.name : "All funds"} />
+      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
+      {scope.fundLevelOnly && <FundLevelNotice subject="Cash position" />}
 
       {/* ---------- KPI CARDS ---------- */}
       <KpiRow count={6}>
@@ -346,7 +379,7 @@ export default async function CashDashboard({
                 id: f.fundId,
                 flag: f.endingCash!.isNegative() ? ("negative" as const) : undefined,
                 cells: {
-                  fund: { value: `${f.code} — ${f.name}`, strong: true },
+                  fund: { value: codeName(f.code, f.name), strong: true },
                   cash: {
                     value: compactMoney(f.endingCash),
                     strong: true,
@@ -502,16 +535,69 @@ export default async function CashDashboard({
           />
         </SectionCard>
 
+        {/*
+          THE "VIEW BY" CARD — "Cash Composition … View By → Fund, Bank Account, Cash
+          Category", per the client's M5 note.
+
+          TWO OF THE THREE ARE REAL, AND THE THIRD SAYS SO. The cash position import is one
+          row per FUND carrying beginning, receipts, disbursements and ending, plus optional
+          investment / restricted / unrestricted balances. So Cash Category is that optional
+          split (the card's original view) and Fund is the file's own grain.
+
+          There is no bank account anywhere — not on the file, not on `CashPosition`, not in
+          the schema. The option is offered because the client asked for it and it states
+          plainly what a district would have to start uploading to get it, which is more
+          useful than the option silently not existing. What it does NOT do is relabel
+          Operating / Investment / Restricted as three bank accounts: that would put three
+          accounts on a board's screen that no district ever reported.
+        */}
         <SectionCard
           title="Cash composition"
-          subtitle={scope.fund ? scope.fund.name : "All funds"}
+          subtitle={
+            view === "fund"
+              ? `By fund · ${scope.fund ? scope.fund.name : "all funds"}`
+              : view === "bankAccount"
+                ? "By bank account"
+                : `By cash category · ${scope.fund ? scope.fund.name : "all funds"}`
+          }
           info="Where the balance is held, as reported on the cash file."
+          control={<ViewBy options={CASH_VIEWS} value={view} />}
           footer="View account details"
           footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
-          {composition ? (
+          {view === "bankAccount" ? (
+            <div className="py-6 text-center">
+              <p className="text-[12.5px] text-muted-2">
+                The cash position file does not carry a bank account. It reports one row per
+                fund, so the platform has no account-level balance to break down.
+              </p>
+              <p className="mt-2 text-[11.5px] text-faint">
+                Switch to Fund or Cash Category for the splits this period&apos;s file does
+                support.
+              </p>
+            </div>
+          ) : view === "fund" ? (
+            fundSlices.length > 0 ? (
+              <ShareBars
+                title="Cash composition by fund"
+                summary="How the ending cash balance is split across the district's funds."
+                rows={fundSlices.map((slice, i) => ({
+                  id: slice.id,
+                  label: slice.label,
+                  value: slice.value,
+                  display: compactMoney(slice.value),
+                  share: percent(sharePercent(slice.value, fundCashTotal), 1),
+                  color: SERIES_SLOTS[i % SERIES_SLOTS.length],
+                }))}
+              />
+            ) : (
+              <p className="py-8 text-center text-[12.5px] text-muted-2">
+                No cash position was committed for this period.
+              </p>
+            )
+          ) : composition ? (
             <ShareBars
-              title="Cash composition"
+              title="Cash composition by category"
               summary="How the ending cash balance is split between operating, investment and restricted accounts."
               rows={[
                 { id: "operating", label: "Operating accounts", amount: composition.operating },
