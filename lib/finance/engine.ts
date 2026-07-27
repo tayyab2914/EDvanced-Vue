@@ -1,8 +1,9 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { TenantDb } from "@/lib/tenant-db";
 import type { ActivityCodes } from "@/lib/finance/transfers";
-import { matches } from "@/lib/finance/transfers";
-import type { DatasetKind } from "@/lib/enums";
+import { matches, codesKey } from "@/lib/finance/transfers";
+import { currentVersionIds, currentVersionsForYear, adoptedBudget } from "@/lib/finance/versions";
+import { memo, dbKey } from "@/lib/request-cache";
 
 /**
  * The Financial Activity Engine: the numbers the platform works out rather than asking a
@@ -12,6 +13,11 @@ import type { DatasetKind } from "@/lib/enums";
  * output is a few hundred figures per district-year at the fund grain — cheap enough that
  * a cache would only be a second place for the truth to live.
  *
+ * Read-through memoisation is a different thing and this module does use it: within ONE
+ * render the same district's same period is asked for five or six times by five or six
+ * callers, and repeating the round trip is not "not caching", it is just slow. See
+ * lib/request-cache.ts for why the answer cannot go stale.
+ *
  * Decimal throughout. 0.1 + 0.2 in a reserve calculation is how a district stops trusting
  * the platform.
  */
@@ -19,38 +25,41 @@ import type { DatasetKind } from "@/lib/enums";
 const D = Prisma.Decimal;
 const ZERO = new D(0);
 
-/**
- * Only the CURRENT version of each dataset feeds a figure. "Exactly one version per
- * period is marked current and drives the dashboards" (Spec §5.9) — everything else is
- * history, and summing it would double-count every re-upload a district ever made.
- */
-export async function currentVersionIds(
-  db: TenantDb,
-  args: { fiscalYear: string; period: number | null },
-): Promise<Map<DatasetKind, string>> {
-  const rows = await db.datasetVersion.findMany({
-    where: { fiscalYear: args.fiscalYear, period: args.period, isCurrent: true },
-    select: { id: true, dataset: true },
-  });
-  return new Map(rows.map((r) => [r.dataset as DatasetKind, r.id]));
-}
+// Re-exported from their own module so the engine and the trend series can share one
+// lookup instead of issuing two queries for the same fact. See lib/finance/versions.ts.
+export { currentVersionIds, currentVersionsForYear, adoptedBudget };
 
 /**
- * Which revenue sources / objects carry transfers, as ids.
+ * Every revenue source / object code the district has, by id.
  *
  * The classification is by CODE, but the periodic rows reference master data by id — so
- * the codes are turned into ids once, here, rather than joining and range-matching per
- * row. A district has tens of revenue sources and hundreds of objects; this is two small
- * queries.
+ * the codes are turned into ids once rather than joining and range-matching per row. A
+ * district has tens of revenue sources and hundreds of objects; this is two small queries,
+ * and memoised because five callers per render want the same two lists.
  */
+const masterCodes = memo(
+  "masterCodes",
+  (db: TenantDb) => dbKey(db),
+  async (
+    db: TenantDb,
+  ): Promise<{
+    sources: { id: string; code: string }[];
+    objects: { id: string; code: string }[];
+  }> => {
+    const [sources, objects] = await Promise.all([
+      db.revenueSource.findMany({ select: { id: true, code: true } }),
+      db.accountObject.findMany({ select: { id: true, code: true } }),
+    ]);
+    return { sources, objects };
+  },
+);
+
+/** Which revenue sources / objects carry transfers, as ids. */
 export async function transferIds(
   db: TenantDb,
   codes: ActivityCodes,
 ): Promise<{ transfersIn: string[]; otherFinancing: string[]; transfersOut: string[] }> {
-  const [sources, objects] = await Promise.all([
-    db.revenueSource.findMany({ select: { id: true, code: true } }),
-    db.accountObject.findMany({ select: { id: true, code: true } }),
-  ]);
+  const { sources, objects } = await masterCodes(db);
 
   return {
     transfersIn: sources.filter((s) => matches(codes.transfersIn, s.code)).map((s) => s.id),
@@ -97,57 +106,92 @@ export interface ActivityTotals {
  * The split only affects the OPERATING figures — see the note on computeFundBalance about
  * why the balance itself does not care.
  */
-export async function activityTotals(
-  db: TenantDb,
-  scope: PeriodScope,
-  codes: ActivityCodes,
-): Promise<ActivityTotals> {
-  const versions = await currentVersionIds(db, {
-    fiscalYear: scope.fiscalYear,
-    period: scope.period,
-  });
-  const revVersion = versions.get("REVENUE_DETAIL");
-  const expVersion = versions.get("EXPENDITURE_DETAIL");
-  const ids = await transferIds(db, codes);
+export const activityTotals = memo(
+  "activityTotals",
+  (db: TenantDb, scope: PeriodScope, codes: ActivityCodes) => {
+    const k = dbKey(db);
+    return k === null
+      ? null
+      : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}|${codesKey(codes)}`;
+  },
+  async (db: TenantDb, scope: PeriodScope, codes: ActivityCodes): Promise<ActivityTotals> => {
+    const [versions, ids] = await Promise.all([
+      currentVersionIds(db, { fiscalYear: scope.fiscalYear, period: scope.period }),
+      transferIds(db, codes),
+    ]);
+    const revVersion = versions.get("REVENUE_DETAIL");
+    const expVersion = versions.get("EXPENDITURE_DETAIL");
 
-  const fund = scope.fundId ? { fundId: scope.fundId } : {};
+    const fund = scope.fundId ? { fundId: scope.fundId } : {};
 
-  const sum = async (
-    model: "revenueActual" | "expenditureActual",
-    versionId: string | undefined,
-    where: Record<string, unknown>,
-  ): Promise<{ ytd: Prisma.Decimal; mtd: Prisma.Decimal }> => {
-    if (!versionId) return { ytd: ZERO, mtd: ZERO };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r = await (db as any)[model].aggregate({
-      where: { versionId, ...fund, ...where },
-      _sum: { actualYtd: true, actualMtd: true },
-    });
-    return { ytd: r._sum.actualYtd ?? ZERO, mtd: r._sum.actualMtd ?? ZERO };
-  };
+    /**
+     * ONE grouped aggregate per file, split in memory — not five filtered SUMs.
+     *
+     * The totals and the transfer subsets are the same rows read twice, and asking the
+     * database to add them up again per class cost three extra round trips for arithmetic
+     * that is free here. A version has tens of revenue sources and a few hundred objects,
+     * so the grouped result is a small payload, and Decimal addition is exact — the split
+     * cannot disagree with the total because the total is the sum of the same rows.
+     */
+    const [revRows, expRows] = await Promise.all([
+      revVersion
+        ? db.revenueActual.groupBy({
+            by: ["revenueSourceId"],
+            where: { versionId: revVersion, ...fund },
+            _sum: { actualYtd: true, actualMtd: true },
+          })
+        : Promise.resolve([]),
 
-  const [revenue, transfersIn, otherFinancing, expenditure, transfersOut] = await Promise.all([
-    sum("revenueActual", revVersion, {}),
-    sum("revenueActual", revVersion, { revenueSourceId: { in: ids.transfersIn } }),
-    sum("revenueActual", revVersion, { revenueSourceId: { in: ids.otherFinancing } }),
-    sum("expenditureActual", expVersion, {}),
-    sum("expenditureActual", expVersion, { objectId: { in: ids.transfersOut } }),
-  ]);
+      expVersion
+        ? db.expenditureActual.groupBy({
+            by: ["objectId"],
+            where: { versionId: expVersion, ...fund },
+            _sum: { actualYtd: true, actualMtd: true },
+          })
+        : Promise.resolve([]),
+    ]);
 
-  return {
-    totalRevenueYtd: revenue.ytd,
-    transfersInYtd: transfersIn.ytd,
-    otherFinancingYtd: otherFinancing.ytd,
-    // Subtracted rather than queried with NOT IN: same answer, two fewer round trips, and
-    // it cannot drift from the totals above.
-    operatingRevenueYtd: revenue.ytd.minus(transfersIn.ytd).minus(otherFinancing.ytd),
-    totalExpenditureYtd: expenditure.ytd,
-    transfersOutYtd: transfersOut.ytd,
-    operatingExpenditureYtd: expenditure.ytd.minus(transfersOut.ytd),
-    totalRevenueMtd: revenue.mtd,
-    totalExpenditureMtd: expenditure.mtd,
-  };
-}
+    const transfersInIds = new Set(ids.transfersIn);
+    const otherFinancingIds = new Set(ids.otherFinancing);
+    const transfersOutIds = new Set(ids.transfersOut);
+
+    let revenueYtd = ZERO;
+    let revenueMtd = ZERO;
+    let transfersInYtd = ZERO;
+    let otherFinancingYtd = ZERO;
+    for (const r of revRows) {
+      const ytd = r._sum.actualYtd ?? ZERO;
+      revenueYtd = revenueYtd.plus(ytd);
+      revenueMtd = revenueMtd.plus(r._sum.actualMtd ?? ZERO);
+      if (transfersInIds.has(r.revenueSourceId)) transfersInYtd = transfersInYtd.plus(ytd);
+      if (otherFinancingIds.has(r.revenueSourceId)) otherFinancingYtd = otherFinancingYtd.plus(ytd);
+    }
+
+    let expenditureYtd = ZERO;
+    let expenditureMtd = ZERO;
+    let transfersOutYtd = ZERO;
+    for (const e of expRows) {
+      const ytd = e._sum.actualYtd ?? ZERO;
+      expenditureYtd = expenditureYtd.plus(ytd);
+      expenditureMtd = expenditureMtd.plus(e._sum.actualMtd ?? ZERO);
+      if (transfersOutIds.has(e.objectId)) transfersOutYtd = transfersOutYtd.plus(ytd);
+    }
+
+    return {
+      totalRevenueYtd: revenueYtd,
+      transfersInYtd,
+      otherFinancingYtd,
+      // Subtracted rather than filtered with NOT IN: same answer, and it cannot drift from
+      // the totals above.
+      operatingRevenueYtd: revenueYtd.minus(transfersInYtd).minus(otherFinancingYtd),
+      totalExpenditureYtd: expenditureYtd,
+      transfersOutYtd,
+      operatingExpenditureYtd: expenditureYtd.minus(transfersOutYtd),
+      totalRevenueMtd: revenueMtd,
+      totalExpenditureMtd: expenditureMtd,
+    };
+  },
+);
 
 /**
  * Net Operating Surplus (Deficit) = Revenue YTD − Expenditure YTD, EXCLUDING transfers.
@@ -161,28 +205,35 @@ export function netOperatingSurplus(t: ActivityTotals): Prisma.Decimal {
 }
 
 /** Beginning fund balance for the year — the annual Opening Fund Balance import. */
-export async function beginningFundBalance(
-  db: TenantDb,
-  args: { fiscalYear: string; fundId?: string },
-): Promise<{ total: Prisma.Decimal; unassigned: Prisma.Decimal; found: boolean }> {
-  const versions = await currentVersionIds(db, {
-    fiscalYear: args.fiscalYear,
-    period: null, // annual
-  });
-  const versionId = versions.get("OPENING_FUND_BALANCE");
-  if (!versionId) return { total: ZERO, unassigned: ZERO, found: false };
+export const beginningFundBalance = memo(
+  "beginningFundBalance",
+  (db: TenantDb, args: { fiscalYear: string; fundId?: string }) => {
+    const k = dbKey(db);
+    return k === null ? null : `${k}|${args.fiscalYear}|${args.fundId ?? ""}`;
+  },
+  async (
+    db: TenantDb,
+    args: { fiscalYear: string; fundId?: string },
+  ): Promise<{ total: Prisma.Decimal; unassigned: Prisma.Decimal; found: boolean }> => {
+    const versions = await currentVersionIds(db, {
+      fiscalYear: args.fiscalYear,
+      period: null, // annual
+    });
+    const versionId = versions.get("OPENING_FUND_BALANCE");
+    if (!versionId) return { total: ZERO, unassigned: ZERO, found: false };
 
-  const r = await db.openingFundBalance.aggregate({
-    where: { versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
-    _sum: { begTotal: true, begUnassigned: true },
-  });
+    const r = await db.openingFundBalance.aggregate({
+      where: { versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+      _sum: { begTotal: true, begUnassigned: true },
+    });
 
-  return {
-    total: r._sum.begTotal ?? ZERO,
-    unassigned: r._sum.begUnassigned ?? ZERO,
-    found: r._sum.begTotal !== null,
-  };
-}
+    return {
+      total: r._sum.begTotal ?? ZERO,
+      unassigned: r._sum.begUnassigned ?? ZERO,
+      found: r._sum.begTotal !== null,
+    };
+  },
+);
 
 /**
  * The year's opening fund balance broken into its four designated components.
@@ -196,71 +247,82 @@ export async function beginningFundBalance(
  * are optional on the file precisely because many districts report only unassigned, and a
  * blank column there means "nothing designated", not "unknown".
  */
-export async function beginningComponents(
-  db: TenantDb,
-  args: { fiscalYear: string; fundId?: string },
-): Promise<{
-  nonspendable: Prisma.Decimal;
-  restricted: Prisma.Decimal;
-  committed: Prisma.Decimal;
-  assigned: Prisma.Decimal;
-  unassigned: Prisma.Decimal;
-  total: Prisma.Decimal;
-  found: boolean;
-}> {
-  const versions = await currentVersionIds(db, { fiscalYear: args.fiscalYear, period: null });
-  const versionId = versions.get("OPENING_FUND_BALANCE");
-  const empty = {
-    nonspendable: ZERO,
-    restricted: ZERO,
-    committed: ZERO,
-    assigned: ZERO,
-    unassigned: ZERO,
-    total: ZERO,
-    found: false,
-  };
-  if (!versionId) return empty;
+export const beginningComponents = memo(
+  "beginningComponents",
+  (db: TenantDb, args: { fiscalYear: string; fundId?: string }) => {
+    const k = dbKey(db);
+    return k === null ? null : `${k}|${args.fiscalYear}|${args.fundId ?? ""}`;
+  },
+  async (
+    db: TenantDb,
+    args: { fiscalYear: string; fundId?: string },
+  ): Promise<{
+    nonspendable: Prisma.Decimal;
+    restricted: Prisma.Decimal;
+    committed: Prisma.Decimal;
+    assigned: Prisma.Decimal;
+    unassigned: Prisma.Decimal;
+    total: Prisma.Decimal;
+    found: boolean;
+  }> => {
+    const versions = await currentVersionIds(db, { fiscalYear: args.fiscalYear, period: null });
+    const versionId = versions.get("OPENING_FUND_BALANCE");
+    const empty = {
+      nonspendable: ZERO,
+      restricted: ZERO,
+      committed: ZERO,
+      assigned: ZERO,
+      unassigned: ZERO,
+      total: ZERO,
+      found: false,
+    };
+    if (!versionId) return empty;
 
-  const r = await db.openingFundBalance.aggregate({
-    where: { versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
-    _sum: {
-      begNonspendable: true,
-      begRestricted: true,
-      begCommitted: true,
-      begAssigned: true,
-      begUnassigned: true,
-      begTotal: true,
-    },
-  });
+    const r = await db.openingFundBalance.aggregate({
+      where: { versionId, ...(args.fundId ? { fundId: args.fundId } : {}) },
+      _sum: {
+        begNonspendable: true,
+        begRestricted: true,
+        begCommitted: true,
+        begAssigned: true,
+        begUnassigned: true,
+        begTotal: true,
+      },
+    });
 
-  if (r._sum.begTotal === null) return empty;
+    if (r._sum.begTotal === null) return empty;
 
-  return {
-    nonspendable: r._sum.begNonspendable ?? ZERO,
-    restricted: r._sum.begRestricted ?? ZERO,
-    committed: r._sum.begCommitted ?? ZERO,
-    assigned: r._sum.begAssigned ?? ZERO,
-    unassigned: r._sum.begUnassigned ?? ZERO,
-    total: r._sum.begTotal,
-    found: true,
-  };
-}
+    return {
+      nonspendable: r._sum.begNonspendable ?? ZERO,
+      restricted: r._sum.begRestricted ?? ZERO,
+      committed: r._sum.begCommitted ?? ZERO,
+      assigned: r._sum.begAssigned ?? ZERO,
+      unassigned: r._sum.begUnassigned ?? ZERO,
+      total: r._sum.begTotal,
+      found: true,
+    };
+  },
+);
 
 /** Ending cash for the period, from the Cash Position import. */
-export async function endingCash(
-  db: TenantDb,
-  scope: PeriodScope,
-): Promise<{ total: Prisma.Decimal; found: boolean }> {
-  const versions = await currentVersionIds(db, {
-    fiscalYear: scope.fiscalYear,
-    period: scope.period,
-  });
-  const versionId = versions.get("CASH_POSITION");
-  if (!versionId) return { total: ZERO, found: false };
+export const endingCash = memo(
+  "endingCash",
+  (db: TenantDb, scope: PeriodScope) => {
+    const k = dbKey(db);
+    return k === null ? null : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}`;
+  },
+  async (db: TenantDb, scope: PeriodScope): Promise<{ total: Prisma.Decimal; found: boolean }> => {
+    const versions = await currentVersionIds(db, {
+      fiscalYear: scope.fiscalYear,
+      period: scope.period,
+    });
+    const versionId = versions.get("CASH_POSITION");
+    if (!versionId) return { total: ZERO, found: false };
 
-  const r = await db.cashPosition.aggregate({
-    where: { versionId, ...(scope.fundId ? { fundId: scope.fundId } : {}) },
-    _sum: { endingCash: true },
-  });
-  return { total: r._sum.endingCash ?? ZERO, found: r._sum.endingCash !== null };
-}
+    const r = await db.cashPosition.aggregate({
+      where: { versionId, ...(scope.fundId ? { fundId: scope.fundId } : {}) },
+      _sum: { endingCash: true },
+    });
+    return { total: r._sum.endingCash ?? ZERO, found: r._sum.endingCash !== null };
+  },
+);

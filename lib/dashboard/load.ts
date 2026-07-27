@@ -6,6 +6,7 @@ import { loadActivityCodes, type ActivityCodes } from "@/lib/finance/transfers";
 import { loadPolicy } from "@/lib/policies/load";
 import type { PolicyValues } from "@/lib/policies/registry";
 import { yearSeries, pointAt, previousPoint, type YearSeries, type PeriodPoint } from "@/lib/finance/series";
+import { currentVersionsForYear } from "@/lib/finance/versions";
 import { evaluateAlerts, type AlertReport } from "@/lib/alerts/engine";
 import { generalFund, type FundRef } from "@/lib/finance/funds";
 import { reservePercent } from "@/lib/finance/fund-balance";
@@ -17,13 +18,27 @@ import type { DatasetKind } from "@/lib/enums";
  *
  * Each page is a Server Component issuing parallel queries, and without a shared core the
  * Executive dashboard alone re-resolves the same version ids and re-reads the same policy a
- * dozen times. Composed naively it issues 80–100 queries; this brings it under twenty, and
- * almost all of them run concurrently.
+ * dozen times.
  *
- * React's `cache()` is NOT the mechanism, deliberately. `tenantDb()` builds a NEW extended
- * client on every call, so a cache keyed on the db argument never hits — the standard
- * Next.js request-dedup trick silently does nothing here. The core is threaded explicitly
- * instead, which is more typing and actually works.
+ * ---------------------------------------------------------------------------
+ * THE CLAIM THIS COMMENT USED TO MAKE, AND WHY IT WAS WRONG
+ *
+ * It said threading the core explicitly brought the dashboards "under twenty" queries.
+ * Measured, `loadCore` issued 82 — and 54 of them were a query it had already run in the
+ * same call. Threading the core deduped what `loadCore` itself asks for; it did nothing
+ * about the engines underneath, where `activityTotals`, `endingCash`, `reservePercent`,
+ * `currentBudgets` and `daysCash` each open by resolving the current versions again and
+ * summing the same actuals again. Five callers, five sets of round trips, to a database
+ * on another continent.
+ *
+ * The comment was also right about one thing: plain `React.cache()` cannot fix it, because
+ * `tenantDb()` builds a NEW client per call and the engines take option objects, so a
+ * cache keyed on argument identity never hits. The fix keeps React's store and builds the
+ * key from the primitives instead — see lib/request-cache.ts.
+ *
+ * With that in place the core threading still earns its keep (it is what lets a page reuse
+ * the series and the alerts without asking for them), and the measured count is 27.
+ * ---------------------------------------------------------------------------
  */
 
 const D = Prisma.Decimal;
@@ -89,7 +104,7 @@ export async function loadCore(
     };
   }
 
-  const [series, policy, codes, gf, versionRows] = await Promise.all([
+  const [series, policy, codes, gf, versionsForYear] = await Promise.all([
     yearSeries(db, {
       fiscalYear: scope.fiscalYear,
       fundId: scope.fundId,
@@ -98,36 +113,44 @@ export async function loadCore(
     loadPolicy(db, districtId),
     loadActivityCodes(prisma),
     generalFund(db),
-    db.datasetVersion.findMany({
-      where: { fiscalYear: scope.fiscalYear, isCurrent: true },
-      select: { id: true, dataset: true, period: true },
-    }),
+    // The same lookup `yearSeries` and every engine underneath resolve from, so this is
+    // free rather than a fifth copy of the same query.
+    currentVersionsForYear(db, scope.fiscalYear),
   ]);
 
   const versions = new Map<DatasetKind, string>();
-  for (const v of versionRows) {
+  for (const [dataset, byPeriod] of versionsForYear) {
     // Monthly datasets take the scoped period; annual ones carry no period at all.
-    if (v.period === scope.period || v.period === null) {
-      versions.set(v.dataset as DatasetKind, v.id);
-    }
+    const id = byPeriod.get(scope.period) ?? byPeriod.get(null);
+    if (id !== undefined) versions.set(dataset, id);
   }
 
-  // Alerts are evaluated last: they need the policy, and they are the one part of the core
-  // a page can legitimately do without if it never shows one.
-  const alerts = await evaluateAlerts(
-    db,
-    { districtId, fiscalYear: scope.fiscalYear, period: scope.period, fundId: scope.fundId },
-    codes,
-  ).catch(() => null);
-
-  // General Fund only, whatever the page is scoped to. See the note on `reserve` above.
-  const reserve = gf
-    ? await reservePercent(
-        db,
-        { fiscalYear: scope.fiscalYear, period: scope.period, fundId: gf.id },
-        codes,
-      )
-    : null;
+  /**
+   * Alerts and the reserve, together.
+   *
+   * Both need only the policy and the codes, which the round above resolved, and neither
+   * needs the other — they simply used to be written as two `await`s in sequence, which
+   * cost a whole second round of database time for no reason. The alerts are still the one
+   * part of the core a page can legitimately do without if it never shows one, hence the
+   * `catch`.
+   *
+   * The reserve is General Fund only, whatever the page is scoped to. See the note on
+   * `reserve` above.
+   */
+  const [alerts, reserve] = await Promise.all([
+    evaluateAlerts(
+      db,
+      { districtId, fiscalYear: scope.fiscalYear, period: scope.period, fundId: scope.fundId },
+      codes,
+    ).catch(() => null),
+    gf
+      ? reservePercent(
+          db,
+          { fiscalYear: scope.fiscalYear, period: scope.period, fundId: gf.id },
+          codes,
+        )
+      : Promise.resolve(null),
+  ]);
 
   return {
     scope,

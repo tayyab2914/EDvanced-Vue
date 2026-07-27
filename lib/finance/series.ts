@@ -1,6 +1,7 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { TenantDb } from "@/lib/tenant-db";
-import type { DatasetKind } from "@/lib/enums";
+import { currentVersionsForYear, adoptedBudget } from "@/lib/finance/versions";
+import { memo, dbKey } from "@/lib/request-cache";
 
 /**
  * Every figure a trend chart needs, for a whole fiscal year, in four queries.
@@ -91,33 +92,9 @@ export interface YearSeries {
   adoptedRevenueBudget: Prisma.Decimal;
 }
 
-/**
- * Current version ids for a whole fiscal year, keyed by dataset and then by period.
- *
- * Deliberately omits `period` from the where clause — that omission is the whole point.
- * Annual datasets come back under period `null`.
- */
-export async function currentVersionsForYear(
-  db: TenantDb,
-  fiscalYear: string,
-): Promise<Map<DatasetKind, Map<number | null, string>>> {
-  const rows = await db.datasetVersion.findMany({
-    where: { fiscalYear, isCurrent: true },
-    select: { id: true, dataset: true, period: true },
-  });
-
-  const out = new Map<DatasetKind, Map<number | null, string>>();
-  for (const r of rows) {
-    const kind = r.dataset as DatasetKind;
-    let byPeriod = out.get(kind);
-    if (!byPeriod) {
-      byPeriod = new Map();
-      out.set(kind, byPeriod);
-    }
-    byPeriod.set(r.period, r.id);
-  }
-  return out;
-}
+// The year-wide version lookup moved to lib/finance/versions.ts, where the per-period
+// engine lookups now answer from it too — one query per render instead of fourteen.
+export { currentVersionsForYear };
 
 /** Inverts a period→versionId map so a grouped aggregate can be read back by period. */
 function periodOf(byPeriod: Map<number | null, string> | undefined): Map<string, number> {
@@ -137,7 +114,18 @@ function periodOf(byPeriod: Map<number | null, string> | undefined): Map<string,
  * present but flagged `hasData: false` — the chart draws a gap there rather than
  * interpolating across a month nobody reported.
  */
-export async function yearSeries(
+export const yearSeries = memo(
+  "yearSeries",
+  (db: TenantDb, args: { fiscalYear: string; fundId?: string; throughPeriod?: number }) => {
+    const k = dbKey(db);
+    return k === null
+      ? null
+      : `${k}|${args.fiscalYear}|${args.fundId ?? ""}|${args.throughPeriod ?? ""}`;
+  },
+  buildYearSeries,
+);
+
+async function buildYearSeries(
   db: TenantDb,
   args: { fiscalYear: string; fundId?: string; throughPeriod?: number },
 ): Promise<YearSeries> {
@@ -151,8 +139,6 @@ export async function yearSeries(
   const spendByPeriod = periodOf(versions.get("EXPENDITURE_DETAIL"));
   const cashByPeriod = periodOf(versions.get("CASH_POSITION"));
   const openingVersion = versions.get("OPENING_FUND_BALANCE")?.get(null);
-  const expBudgetVersion = versions.get("EXPENDITURE_BUDGET")?.get(null);
-  const revBudgetVersion = versions.get("REVENUE_BUDGET")?.get(null);
 
   const ids = (m: Map<string, number>) => [...m.keys()];
 
@@ -203,19 +189,10 @@ export async function yearSeries(
         })
       : Promise.resolve(null),
 
-    expBudgetVersion
-      ? db.budgetLine.aggregate({
-          where: { versionId: expBudgetVersion, kind: "EXPENDITURE", ...fund },
-          _sum: { amount: true },
-        })
-      : Promise.resolve(null),
-
-    revBudgetVersion
-      ? db.budgetLine.aggregate({
-          where: { versionId: revBudgetVersion, kind: "REVENUE", ...fund },
-          _sum: { amount: true },
-        })
-      : Promise.resolve(null),
+    // Shared with days-cash, the reserve percentage and the forecast, all of which want
+    // this exact figure and used to run their own SUM for it.
+    adoptedBudget(db, { fiscalYear, kind: "EXPENDITURE", fundId }),
+    adoptedBudget(db, { fiscalYear, kind: "REVENUE", fundId }),
   ]);
 
   const index = <T extends { versionId: string }>(rows: T[], map: Map<string, number>) => {
@@ -291,8 +268,8 @@ export async function yearSeries(
     fiscalYear,
     points,
     opening: openingTotals,
-    adoptedExpenditureBudget: expBudget?._sum.amount ?? ZERO,
-    adoptedRevenueBudget: revBudget?._sum.amount ?? ZERO,
+    adoptedExpenditureBudget: expBudget?.total ?? ZERO,
+    adoptedRevenueBudget: revBudget?.total ?? ZERO,
   };
 }
 

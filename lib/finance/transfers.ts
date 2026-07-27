@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@/lib/generated/prisma/client";
 import { ActivityClass } from "@/lib/enums";
+import { memo, dbKey } from "@/lib/request-cache";
 
 /**
  * Telling transfers apart from revenue and spending, by object code.
@@ -95,20 +96,42 @@ export function buildMatcher(
  * Loads the classification. Reads through the BASE client, not a tenant one: this is a
  * global lookup shared by every district.
  */
-export async function loadActivityCodes(db: PrismaClient): Promise<ActivityCodes> {
-  const rows = await db.financialActivityCode.findMany({
-    where: { active: true },
-    select: { activityClass: true, codeFrom: true, codeTo: true },
-  });
+export const loadActivityCodes = memo(
+  "activityCodes",
+  (db: PrismaClient) => dbKey(db),
+  async (db: PrismaClient): Promise<ActivityCodes> => {
+    const rows = await db.financialActivityCode.findMany({
+      where: { active: true },
+      select: { activityClass: true, codeFrom: true, codeTo: true },
+    });
 
-  const of = (c: ActivityClass) => buildMatcher(rows.filter((r) => r.activityClass === c));
+    const of = (c: ActivityClass) => buildMatcher(rows.filter((r) => r.activityClass === c));
 
-  return {
-    transfersIn: of(ActivityClass.TRANSFERS_IN),
-    transfersOut: of(ActivityClass.TRANSFERS_OUT),
-    otherFinancing: of(ActivityClass.OTHER_FINANCING_SOURCES),
-    configured: rows.length > 0,
-  };
+    return {
+      transfersIn: of(ActivityClass.TRANSFERS_IN),
+      transfersOut: of(ActivityClass.TRANSFERS_OUT),
+      otherFinancing: of(ActivityClass.OTHER_FINANCING_SOURCES),
+      configured: rows.length > 0,
+    };
+  },
+);
+
+/**
+ * A stable fingerprint of a classification, for the cache keys in the engine.
+ *
+ * The engines take `codes` as an argument and the figures they return depend on it —
+ * `activityTotals(db, scope, NO_CODES)` is a DIFFERENT answer from
+ * `activityTotals(db, scope, live)` on the same scope, which is exactly what
+ * verify:finance asserts. So the classification has to be part of the key, and it cannot
+ * be object identity: the matchers are rebuilt on every load.
+ */
+export function codesKey(codes: ActivityCodes): string {
+  const of = (m: CodeMatcher) =>
+    `${[...m.exact].sort().join(",")}/${m.ranges
+      .map((r) => `${r.from}-${r.to}`)
+      .sort()
+      .join(",")}`;
+  return `${of(codes.transfersIn)}|${of(codes.transfersOut)}|${of(codes.otherFinancing)}`;
 }
 
 /** True when this revenue object code is a transfer in or other financing source. */

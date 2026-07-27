@@ -1,12 +1,15 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { TenantDb } from "@/lib/tenant-db";
 import type { ActivityCodes } from "@/lib/finance/transfers";
+import { codesKey } from "@/lib/finance/transfers";
 import {
   activityTotals,
   beginningFundBalance,
   type ActivityTotals,
   type PeriodScope,
 } from "@/lib/finance/engine";
+import { adoptedBudget } from "@/lib/finance/versions";
+import { memo, dbKey } from "@/lib/request-cache";
 import type { FundBalanceField } from "@/lib/enums";
 
 /**
@@ -85,7 +88,21 @@ export interface FundBalanceResult {
   missingOpeningBalance: boolean;
 }
 
-export async function computeFundBalance(
+/**
+ * The cache key every figure in this module shares: the district, the period, the fund —
+ * and the classification, because `NO_CODES` and a live one are genuinely different
+ * answers on the same scope.
+ */
+const scopeKey = (db: TenantDb, scope: PeriodScope, codes: ActivityCodes) => {
+  const k = dbKey(db);
+  return k === null
+    ? null
+    : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}|${codesKey(codes)}`;
+};
+
+export const computeFundBalance = memo("computeFundBalance", scopeKey, buildFundBalance);
+
+async function buildFundBalance(
   db: TenantDb,
   scope: PeriodScope,
   codes: ActivityCodes,
@@ -123,7 +140,9 @@ export async function computeFundBalance(
  * re-designates them by board action, which arrives as a new Opening Fund Balance or as
  * an override — never as a side effect of monthly activity.
  */
-export async function computeUnassigned(
+export const computeUnassigned = memo("computeUnassigned", scopeKey, buildUnassigned);
+
+async function buildUnassigned(
   db: TenantDb,
   scope: PeriodScope,
   codes: ActivityCodes,
@@ -157,33 +176,29 @@ export async function computeUnassigned(
  * Returns null rather than zero when there is no budget: "we cannot work this out yet"
  * and "your reserve is 0%" are very different sentences to show a superintendent.
  */
-export async function reservePercent(
+export const reservePercent = memo("reservePercent", scopeKey, buildReservePercent);
+
+async function buildReservePercent(
   db: TenantDb,
   scope: PeriodScope,
   codes: ActivityCodes,
 ): Promise<{ percent: Prisma.Decimal | null; unassigned: Prisma.Decimal; budget: Prisma.Decimal }> {
-  const unassigned = await computeUnassigned(db, scope, codes);
+  // Adopted budget, from the annual Expenditure Budget import — the same figure the trend
+  // series divides by, resolved through the same shared lookup so the two cannot disagree.
+  const [unassigned, adopted] = await Promise.all([
+    computeUnassigned(db, scope, codes),
+    adoptedBudget(db, {
+      fiscalYear: scope.fiscalYear,
+      kind: "EXPENDITURE",
+      fundId: scope.fundId,
+    }),
+  ]);
 
-  // Adopted budget, from the annual Expenditure Budget import.
-  const versions = await db.datasetVersion.findMany({
-    where: { fiscalYear: scope.fiscalYear, period: null, isCurrent: true },
-    select: { id: true, dataset: true },
-  });
-  const budgetVersion = versions.find((v) => v.dataset === "EXPENDITURE_BUDGET");
-
-  if (!budgetVersion) {
+  if (!adopted) {
     return { percent: null, unassigned: unassigned.total, budget: new D(0) };
   }
 
-  const agg = await db.budgetLine.aggregate({
-    where: {
-      versionId: budgetVersion.id,
-      kind: "EXPENDITURE",
-      ...(scope.fundId ? { fundId: scope.fundId } : {}),
-    },
-    _sum: { amount: true },
-  });
-  const budget = agg._sum.amount ?? new D(0);
+  const budget = adopted.total;
 
   if (budget.isZero()) {
     return { percent: null, unassigned: unassigned.total, budget };

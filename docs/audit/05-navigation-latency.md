@@ -226,7 +226,12 @@ should land near the prod TTFB above plus hydration.
 
 ---
 
-## 7. Fixes — ranked by ms saved per hour of work (plan only, nothing implemented)
+## 7. Fixes — ranked by ms saved per hour of work
+
+> **Status: #1, #2, #3 and #5 are implemented and measured — see §8.** #4 (region move) is an
+> ops decision and was left for the client; #6 is not worth doing, by this section's own
+> reasoning.
+
 
 Ordered best-value first. Savings quoted as **local (measured model)** with the **prod
 (iad1, estimated)** in brackets; prod savings are ~1.5× local because the per-query cost is
@@ -298,6 +303,100 @@ query count drops. #5 is a cleanup; #6 only after #2.
 
 ---
 
+## 8. What was implemented, and what it measured
+
+Same machine, same database, same session, both builds clean (`rm -rf .next && next build`),
+two warm-up passes then three measured. Local dev machine → Mumbai, so these are the §4
+conditions, not production.
+
+### Query count — the thing the latency is linear in
+
+`loadCore`, Demo ISD, FY 2026-27, period 12, All Funds:
+
+| | before | after |
+|---|---:|---:|
+| queries per call | **76** | **27** |
+| of which were a repeat of one already run | **54** | **8** |
+| summed database time | 26.0 s | 9.0 s |
+
+The remaining 8 "repeats" are the same SQL shape with genuinely different parameters
+(period 12 and 11; All Funds and General Fund) — the normalisation strips placeholders and
+cannot tell them apart. Locked in by **`npm run verify:queries`**.
+
+### Soft navigation — a sidebar click (RSC request, full response)
+
+This is the number the complaint was about.
+
+| Route | before | after | |
+|---|---:|---:|---:|
+| `/dashboard` | 3.24 s | **1.37 s** | −58% |
+| `/revenues` | 3.23 s | **1.66 s** | −49% |
+| `/expenditures` | 3.87 s | **1.98 s** | −49% |
+| `/cash` | 3.09 s | **1.49 s** | −52% |
+| `/fund-balance` | 3.42 s | **1.61 s** | −53% |
+| `/data/versions` | 1.54 s | 1.43 s | −7% (does not call `loadCore`) |
+| `/users` | 0.64 s | 0.79 s | within noise at this scale |
+
+### Full page load — TTFB, i.e. when anything at all appears
+
+`loading.tsx` is what moves this one: the shell now streams immediately instead of the
+browser waiting for the whole render.
+
+| Route | TTFB before | TTFB after | full response after |
+|---|---:|---:|---:|
+| `/dashboard` | 6.09 s | **0.66 s** | 1.69 s |
+| `/revenues` | 5.65 s | **0.58 s** | 1.45 s |
+| `/expenditures` | 5.66 s | **0.65 s** | 1.99 s |
+| `/cash` | 5.44 s | **0.77 s** | 1.72 s |
+| `/fund-balance` | 6.08 s | **0.86 s** | 1.69 s |
+
+(The before column reproduces §4's measurements to within the RTT spread §2 recorded, which
+is the cross-check that this harness and that one are measuring the same thing.)
+
+### How the query count came down
+
+The report attributed the fan-out to `yearSeries` re-walking periods. That was wrong —
+`yearSeries` was already grouped and cost 6 queries. The repeats came from **five callers
+each re-opening the same way**: `activityTotals`, `endingCash`, `beginningFundBalance`,
+`currentBudgets`, `daysCash` and `reservePercent` all begin by resolving the current dataset
+versions and then re-summing the same actuals. Four changes:
+
+1. **A per-render memo** keyed on primitives rather than argument identity
+   (`lib/request-cache.ts`). `React.cache()` alone cannot do this here, exactly as the old
+   comment in `load.ts` warned — `tenantDb()` returns a new client per call and the engines
+   take option objects, so an identity-keyed cache never hits. The store is still React's;
+   only the key changed.
+2. **One version lookup per render** (`lib/finance/versions.ts`). The year-wide query already
+   returns every current version for the year, so every per-period lookup is now a Map read.
+   14 queries → 1.
+3. **One grouped aggregate per file** in `activityTotals` instead of five filtered `SUM`s —
+   the totals and the transfer subsets are the same rows, split in memory. 5 → 2.
+4. **One shared adopted-budget read**, which the trend series, days-cash and the reserve
+   percentage all now go through instead of each running its own `SUM`. 5 → 2.
+
+Plus the sequential tails: `evaluateAlerts` and `reservePercent` in `loadCore`, four
+independent reads in `gatherFacts`, and two on the fund-balance page (fix #5).
+
+### What was NOT done, and why
+
+- **#4, co-locating the app and the database.** Still the largest absolute production win
+  (est. `/dashboard` ~7.6 s → ~1.5 s) and it needs no code — but it is a deployment decision
+  with a caveat this report already flagged: moving the database may move it away from other
+  consumers. That is the client's call, not a code change. Note the remaining ~1.4 s is
+  *still* mostly Mumbai round trips, so this is worth doing on top.
+- **#6, eager prefetch.** Unchanged, on this report's own reasoning: prefetching a dynamic
+  route fetches the loading state, not the data. Now that `loading.tsx` exists that state is
+  already instant, so there is nothing left for it to win.
+
+### Verification
+
+`npm run verify:queries` (new) plus all 18 existing suites — 889 assertions, 0 failures, and
+every suite's output **byte-identical** to before the change. `verify:queries` additionally
+asserts that the memoised core returns figure-for-figure what the same core returns with the
+memo bypassed, which is the assertion that would catch a cache that is fast and wrong.
+
+---
+
 ## Appendix — method & honesty notes
 
 - **Measured:** §2 (DB RTT), §3 (query counts, both methods), §4 (TTFB/RSC, prod build).
@@ -311,3 +410,13 @@ query count drops. #5 is a cleanup; #6 only after #2.
   logging in `lib/db.ts`, a temp `/api/auditbuf` route, a `.audit-tmp` tsconfig exclude) was
   deleted; the forged `Session` row was deleted; `master` is untouched. Only new file is this
   document.
+- **§8 addendum (the fix pass):** the same method. A second forged `Session` row was minted
+  to drive the TTFB harness and has been deleted. The one lasting script is
+  `scripts/verify-queries.mts`, which is a test rather than an artifact — it is the thing
+  that would have caught this in the first place, since nothing in the repo could previously
+  tell twenty queries from eighty.
+- **A correction to §3 of this report:** it named `yearSeries` as the source of the
+  per-period re-query fan-out. It was not — `yearSeries` already did the whole year in six
+  grouped queries. The repeats came from the engines beneath it, each re-resolving versions
+  and re-summing actuals per caller. The measured counts in §3 stand; the attribution
+  sentence did not.

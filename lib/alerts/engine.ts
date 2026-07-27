@@ -1,10 +1,13 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { TenantDb } from "@/lib/tenant-db";
 import type { ActivityCodes } from "@/lib/finance/transfers";
+import { codesKey } from "@/lib/finance/transfers";
 import { activityTotals, currentVersionIds, endingCash } from "@/lib/finance/engine";
+import { adoptedBudget } from "@/lib/finance/versions";
 import { computeFundBalance, reservePercent } from "@/lib/finance/fund-balance";
 import { projectYearEnd } from "@/lib/forecast/engine";
 import { loadPolicy } from "@/lib/policies/load";
+import { memo, dbKey } from "@/lib/request-cache";
 import type { PolicyValues } from "@/lib/policies/registry";
 import { money as fmtMoney } from "@/lib/dashboard/format";
 import {
@@ -69,7 +72,22 @@ export interface AlertReport {
   informationalCount: number;
 }
 
-export async function evaluateAlerts(
+export const evaluateAlerts = memo(
+  "evaluateAlerts",
+  (
+    db: TenantDb,
+    scope: { districtId: string; fiscalYear: string; period: number; fundId?: string },
+    codes: ActivityCodes,
+  ) => {
+    const k = dbKey(db);
+    return k === null
+      ? null
+      : `${k}|${scope.districtId}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}|${codesKey(codes)}`;
+  },
+  buildAlertReport,
+);
+
+async function buildAlertReport(
   db: TenantDb,
   scope: { districtId: string; fiscalYear: string; period: number; fundId?: string },
   codes: ActivityCodes,
@@ -153,7 +171,25 @@ const money = (v: Prisma.Decimal) => fmtMoney(v, 2);
  * file" and "spending didn't move" are different facts, and only one of them should keep
  * an alert quiet.
  */
-export async function gatherFacts(
+export const gatherFacts = memo(
+  "gatherFacts",
+  (
+    db: TenantDb,
+    scope: { fiscalYear: string; period: number; fundId?: string },
+    codes: ActivityCodes,
+    opts: { ignoreSalaryObjectsMom?: boolean } = {},
+  ) => {
+    const k = dbKey(db);
+    return k === null
+      ? null
+      : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}|${codesKey(codes)}|${
+          opts.ignoreSalaryObjectsMom === true
+        }`;
+  },
+  buildFacts,
+);
+
+async function buildFacts(
   db: TenantDb,
   scope: { fiscalYear: string; period: number; fundId?: string },
   codes: ActivityCodes,
@@ -224,23 +260,46 @@ export async function gatherFacts(
   const prevRevenue = previous ? previous.totalRevenueMtd : null;
   const prevExpenditure = previous ? previous.totalExpenditureMtd : null;
 
-  // A district can ask that salary swings not count as a spending trend: payroll runs and
-  // step increases move month to month for reasons that are not a budget concern. When the
-  // policy is set, this month's and last month's salary spend come out of both sides of the
-  // expenditure month-over-month comparison before the percentage is worked out.
-  const [salaryNow, salaryPrev] = opts.ignoreSalaryObjectsMom
-    ? await Promise.all([
-        salaryExpenditureMtd(db, scope),
-        scope.period > 1
-          ? salaryExpenditureMtd(db, { ...scope, period: scope.period - 1 })
-          : Promise.resolve(ZERO),
-      ])
-    : [ZERO, ZERO];
+  /**
+   * The remaining four reads, in one round instead of four.
+   *
+   * None of them depends on another — they were simply written as separate `await`s, and
+   * against a database on another continent each one of those is a round trip nobody
+   * needed to wait for. `daysCash` reads `cash`, which is already resolved above.
+   *
+   * The salary pair is the district's option to keep payroll swings out of the spending
+   * trend: payroll runs and step increases move month to month for reasons that are not a
+   * budget concern, so when the policy is set this month's and last month's salary spend
+   * come out of both sides of the comparison before the percentage is worked out.
+   */
+  const [[salaryNow, salaryPrev], cashDecreasePercent, components, daysCashOnHand] =
+    await Promise.all([
+      opts.ignoreSalaryObjectsMom
+        ? Promise.all([
+            salaryExpenditureMtd(db, scope),
+            scope.period > 1
+              ? salaryExpenditureMtd(db, { ...scope, period: scope.period - 1 })
+              : Promise.resolve(ZERO),
+          ])
+        : Promise.resolve([ZERO, ZERO] as const),
+      monthOverMonthCashDrop(db, scope),
+      /**
+       * Whether the district's designated components exceed the projected balance — the
+       * 24th alert, once hardcoded to `false` and therefore permanently silent.
+       *
+       * The components are the ones the district reported on its Opening Fund Balance:
+       * nonspendable, restricted, committed and assigned. If they add up to more than the
+       * balance the year is projected to end at, the unassigned reserve would be negative —
+       * a board having designated more money than the fund actually holds. That is worth a
+       * critical alert and it is computable from data already imported.
+       */
+      designatedComponents(db, scope),
+      daysCash(db, scope, cash.total),
+    ]);
+
   const expenditureMtdForMom = totals.totalExpenditureMtd.minus(salaryNow);
   const prevExpenditureForMom =
     prevExpenditure === null ? null : prevExpenditure.minus(salaryPrev);
-
-  const cashDecreasePercent = await monthOverMonthCashDrop(db, scope);
 
   /**
    * The projected year-end reserve — and the three alerts that could not fire without it.
@@ -271,17 +330,7 @@ export async function gatherFacts(
     ? null
     : projectedUnassigned.dividedBy(reserve.budget).times(100);
 
-  /**
-   * Whether the district's designated components exceed the projected balance — the 24th
-   * alert, also hardcoded (to `false`) and therefore also permanently silent.
-   *
-   * The components are the ones the district reported on its Opening Fund Balance:
-   * nonspendable, restricted, committed and assigned. If they add up to more than the
-   * balance the year is projected to end at, the unassigned reserve would be negative —
-   * a board having designated more money than the fund actually holds. That is worth a
-   * critical alert and it is computable from data already imported.
-   */
-  const components = await designatedComponents(db, scope);
+  // `components` is resolved in the round above; this is the balance it is measured against.
   const projectedTotal = fb.beginning.plus(remainingRevenue.minus(remainingSpend)).plus(
     totals.totalRevenueYtd.minus(totals.totalExpenditureYtd),
   );
@@ -302,7 +351,7 @@ export async function gatherFacts(
     expenditureForecastVariancePercent: expenditureForecast.variancePercent,
     expenditureMomIncreasePercent: momChange(expenditureMtdForMom, prevExpenditureForMom),
 
-    daysCashOnHand: await daysCash(db, scope, cash.total),
+    daysCashOnHand,
     cashDecreasePercent,
 
     reservePercent: reserve.percent,
@@ -325,19 +374,12 @@ async function designatedComponents(
   db: TenantDb,
   scope: { fiscalYear: string; fundId?: string },
 ): Promise<Prisma.Decimal | null> {
-  const version = await db.datasetVersion.findFirst({
-    where: {
-      fiscalYear: scope.fiscalYear,
-      period: null,
-      isCurrent: true,
-      dataset: "OPENING_FUND_BALANCE",
-    },
-    select: { id: true },
-  });
-  if (!version) return null;
+  const versions = await currentVersionIds(db, { fiscalYear: scope.fiscalYear, period: null });
+  const versionId = versions.get("OPENING_FUND_BALANCE");
+  if (!versionId) return null;
 
   const agg = await db.openingFundBalance.aggregate({
-    where: { versionId: version.id, ...(scope.fundId ? { fundId: scope.fundId } : {}) },
+    where: { versionId, ...(scope.fundId ? { fundId: scope.fundId } : {}) },
     _sum: {
       begNonspendable: true,
       begRestricted: true,
@@ -358,7 +400,16 @@ async function designatedComponents(
 }
 
 /** Budget and encumbrances for the period, from the current versions. */
-async function currentBudgets(
+const currentBudgets = memo(
+  "currentBudgets",
+  (db: TenantDb, scope: { fiscalYear: string; period: number; fundId?: string }) => {
+    const k = dbKey(db);
+    return k === null ? null : `${k}|${scope.fiscalYear}|${scope.period}|${scope.fundId ?? ""}`;
+  },
+  buildCurrentBudgets,
+);
+
+async function buildCurrentBudgets(
   db: TenantDb,
   scope: { fiscalYear: string; period: number; fundId?: string },
 ): Promise<{ revenue: Prisma.Decimal; expenditure: Prisma.Decimal; encumbrances: Prisma.Decimal }> {
@@ -406,25 +457,15 @@ async function daysCash(
   scope: { fiscalYear: string; fundId?: string },
   cash: Prisma.Decimal,
 ): Promise<Prisma.Decimal | null> {
-  const version = await db.datasetVersion.findFirst({
-    where: {
-      fiscalYear: scope.fiscalYear,
-      period: null,
-      isCurrent: true,
-      dataset: "EXPENDITURE_BUDGET",
-    },
+  // The same adopted budget the reserve percentage and the trend series divide by.
+  const adopted = await adoptedBudget(db, {
+    fiscalYear: scope.fiscalYear,
+    kind: "EXPENDITURE",
+    fundId: scope.fundId,
   });
-  if (!version) return null;
+  if (!adopted) return null;
 
-  const agg = await db.budgetLine.aggregate({
-    where: {
-      versionId: version.id,
-      kind: "EXPENDITURE",
-      ...(scope.fundId ? { fundId: scope.fundId } : {}),
-    },
-    _sum: { amount: true },
-  });
-  const annual = agg._sum.amount ?? ZERO;
+  const annual = adopted.total;
   if (annual.isZero()) return null;
 
   const perDay = annual.dividedBy(365);

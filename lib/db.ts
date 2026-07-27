@@ -2,6 +2,7 @@ import "server-only";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/lib/generated/prisma/client";
 import { env } from "@/lib/env";
+import { registerDbKey } from "@/lib/request-cache";
 
 const createPrismaClient = () =>
   new PrismaClient({
@@ -21,5 +22,9 @@ const globalForPrisma = globalThis as unknown as {
  * query is automatically scoped to a single district. See lib/tenant-db.ts.
  */
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+
+// The platform-wide lookups (activity codes) read through this client, and they memoise
+// per render like everything else. See lib/request-cache.ts.
+registerDbKey(prisma, "base");
 
 if (env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

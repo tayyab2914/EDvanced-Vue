@@ -86,12 +86,24 @@ export default async function FundBalancePage({
 
   const labels = periodAxisLabels(scope, series.points.length);
 
-  // The waterfall's movements, taken from the engine rather than assembled by hand.
-  const totals = await activityTotals(
-    db,
-    { fiscalYear: scope.fiscalYear, period: scope.period, fundId: scope.fundId },
-    codes,
-  );
+  // The waterfall's movements and the by-fund table: two reads with nothing between them,
+  // so they go together rather than one after the other. (The totals are usually free —
+  // `loadCore` already asked for this exact scope — but the by-fund read is not.)
+  const [totals, fundRows] = await Promise.all([
+    // The waterfall's movements, taken from the engine rather than assembled by hand.
+    activityTotals(
+      db,
+      { fiscalYear: scope.fiscalYear, period: scope.period, fundId: scope.fundId },
+      codes,
+    ),
+    byFund(db, {
+      revenueVersionId: core.versions.get("REVENUE_DETAIL"),
+      expenditureVersionId: core.versions.get("EXPENDITURE_DETAIL"),
+      cashVersionId: core.versions.get("CASH_POSITION"),
+      openingVersionId: core.versions.get("OPENING_FUND_BALANCE"),
+    }),
+  ]);
+
   const opening = toNumber(series.opening?.total) ?? 0;
   const steps = [
     { label: "Beginning", value: opening, anchor: true, display: compactMoney(series.opening?.total) },
@@ -122,12 +134,6 @@ export default async function FundBalancePage({
   // movement and dropping them would stop the last bar equalling the running total.
   const foots = waterfallFoots(steps, toNumber(totalNow) ?? 0);
 
-  const fundRows = await byFund(db, {
-    revenueVersionId: core.versions.get("REVENUE_DETAIL"),
-    expenditureVersionId: core.versions.get("EXPENDITURE_DETAIL"),
-    cashVersionId: core.versions.get("CASH_POSITION"),
-    openingVersionId: core.versions.get("OPENING_FUND_BALANCE"),
-  });
   const withBalance = fundRows.filter((f) => f.fundBalance !== null);
   const allFundsTotal = withBalance.reduce(
     (a, f) => (f.fundBalance ? a + (toNumber(f.fundBalance) ?? 0) : a),

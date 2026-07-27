@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { makeTenantExtension } from "@/lib/tenant-scope";
+import { registerDbKey } from "@/lib/request-cache";
 
 /**
  * Multi-tenancy choke point. `tenantDb(districtId)` returns a Prisma client that
@@ -14,9 +15,14 @@ import { makeTenantExtension } from "@/lib/tenant-scope";
  * the returned client is typed as the base client for ergonomic delegate access.
  */
 export function tenantDb(districtId: string): typeof prisma {
-  return prisma.$extends(
+  const db = prisma.$extends(
     makeTenantExtension(districtId),
   ) as unknown as typeof prisma;
+  // Names the district this client is scoped to, so the read paths can memoise per render
+  // without keying on the client's identity — which changes on every call. See
+  // lib/request-cache.ts.
+  registerDbKey(db, districtId);
+  return db;
 }
 
 export type TenantDb = typeof prisma;

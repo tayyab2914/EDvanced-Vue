@@ -1,4 +1,5 @@
 import type { TenantDb } from "@/lib/tenant-db";
+import { memo, dbKey } from "@/lib/request-cache";
 
 /**
  * Which fund is THE General Fund, and which funds a district actually reports on.
@@ -54,7 +55,9 @@ export async function generalFundAmbiguous(db: TenantDb): Promise<boolean> {
   return (await generalFundCandidates(db)).length > 1;
 }
 
-async function generalFundCandidates(db: TenantDb): Promise<FundRef[]> {
+const generalFundCandidates = memo("generalFundCandidates", dbKey, async (
+  db: TenantDb,
+): Promise<FundRef[]> => {
   const rows = await db.fund.findMany({
     where: {
       active: true,
@@ -73,7 +76,7 @@ async function generalFundCandidates(db: TenantDb): Promise<FundRef[]> {
     name: f.name,
     typeName: f.fundType?.name ?? null,
   }));
-}
+});
 
 /**
  * Every fund the district has, for the scope selector and the by-fund tables.
@@ -83,7 +86,7 @@ async function generalFundCandidates(db: TenantDb): Promise<FundRef[]> {
  * the rows stop adding up to the total. Master data is deactivated, not deleted, precisely
  * so this stays possible (§5.14).
  */
-export async function listFunds(db: TenantDb): Promise<FundRef[]> {
+export const listFunds = memo("listFunds", dbKey, async (db: TenantDb): Promise<FundRef[]> => {
   const rows = await db.fund.findMany({
     select: { id: true, code: true, name: true, fundType: { select: { name: true } } },
     orderBy: [{ sortOrder: "asc" }, { code: "asc" }],
@@ -95,7 +98,7 @@ export async function listFunds(db: TenantDb): Promise<FundRef[]> {
     name: f.name,
     typeName: f.fundType?.name ?? null,
   }));
-}
+});
 
 /** "1000 — General Fund". Codes are shown with their names resolved everywhere (§5.19). */
 export function fundLabel(f: Pick<FundRef, "code" | "name">): string {

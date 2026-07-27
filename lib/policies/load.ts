@@ -1,5 +1,6 @@
 import type { TenantDb } from "@/lib/tenant-db";
 import { resolvePolicy, type PolicyValues } from "@/lib/policies/registry";
+import { memo, dbKey } from "@/lib/request-cache";
 import type { BusinessRuleThresholds } from "@/lib/validation/import/layers/business-rules";
 
 /**
@@ -8,17 +9,24 @@ import type { BusinessRuleThresholds } from "@/lib/validation/import/layers/busi
  * Separate from the registry because the registry is client-safe and this touches the
  * database.
  */
-export async function loadPolicy(db: TenantDb, districtId: string): Promise<PolicyValues> {
-  const row = await db.districtPolicy.findFirst({ where: { districtId } });
-  if (!row) return resolvePolicy(null);
+export const loadPolicy = memo(
+  "loadPolicy",
+  (db: TenantDb, districtId: string) => {
+    const k = dbKey(db);
+    return k === null ? null : `${k}|${districtId}`;
+  },
+  async (db: TenantDb, districtId: string): Promise<PolicyValues> => {
+    const row = await db.districtPolicy.findFirst({ where: { districtId } });
+    if (!row) return resolvePolicy(null);
 
-  return resolvePolicy({
-    revenue: row.revenue,
-    expenditure: row.expenditure,
-    cash: row.cash,
-    fundBalance: row.fundBalance,
-  });
-}
+    return resolvePolicy({
+      revenue: row.revenue,
+      expenditure: row.expenditure,
+      cash: row.cash,
+      fundBalance: row.fundBalance,
+    });
+  },
+);
 
 /**
  * The import validator's view of the policy.
