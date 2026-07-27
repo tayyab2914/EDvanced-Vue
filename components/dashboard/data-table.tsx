@@ -188,17 +188,22 @@ export function MoverList({
     return <p className="py-5 text-center text-[12.5px] text-muted-2">{empty}</p>;
   }
   return (
-    <ul className="flex flex-col">
+    <ul data-mover-list className="flex flex-col">
       {items.map((i, idx) => (
         <li
           key={i.id}
+          data-mover-row
           className={cn(
             "flex items-center justify-between gap-3 py-2.5",
             idx < items.length - 1 && "border-b border-line-soft",
           )}
         >
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[12.5px] text-ink-muted" title={i.name}>
+            <span
+              data-mover-name
+              className="block truncate text-[12.5px] text-ink-muted"
+              title={i.name}
+            >
               {i.name}
             </span>
             {(i.fund || i.note) && (

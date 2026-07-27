@@ -1,15 +1,25 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { LogoMark, LogoWordmark } from "@/components/logo";
 import { LogoutButton } from "@/components/logout-button";
 import { SidebarNav, type NavGroup } from "@/components/sidebar-nav";
 import {
+  ExpandedOnly,
   MenuButton,
+  RailAccountLink,
+  RailSwap,
+  RailWorkspaceTile,
+  ShellMain,
   ShellProvider,
+  SidebarBrand,
   SidebarCloseButton,
+  SidebarCollapseToggle,
+  SidebarHeader,
   SidebarOverlay,
   SidebarPanel,
 } from "@/components/sidebar-shell";
+import { SIDEBAR_COOKIE, isCollapsedPreference } from "@/lib/sidebar-preference";
 
 /** A thing needing the user's attention, surfaced on the header bell. */
 export interface ShellAlert {
@@ -69,7 +79,7 @@ function initials(name: string): string {
   return (a + b).toUpperCase() || "?";
 }
 
-export function AppShell({
+export async function AppShell({
   workspaceName,
   workspaceSub,
   contextTag,
@@ -96,61 +106,100 @@ export function AppShell({
   hideHeader?: boolean;
   children: ReactNode;
 }) {
+  // The remembered rail width. Read here rather than in each layout so all three shells
+  // (district, platform, external) get it without repeating themselves — and read on the
+  // server so the sidebar is already the right width in the first paint.
+  const collapsed = isCollapsedPreference(
+    (await cookies()).get(SIDEBAR_COOKIE)?.value,
+  );
+
   return (
-    <ShellProvider>
+    <ShellProvider initialCollapsed={collapsed}>
       <div className="flex min-h-screen">
         <SidebarOverlay />
 
         {/* SIDEBAR */}
         <SidebarPanel>
-          <div className="border-b border-white/[0.07] px-5 pb-4 pt-5">
-            <div className="mb-4 flex items-center gap-2.5">
+          <SidebarHeader>
+            <SidebarBrand>
               <LogoMark size={30} onDark />
-              <LogoWordmark onDark className="min-w-0 flex-1 truncate text-[15.5px]" />
+              <ExpandedOnly className="min-w-0 flex-1">
+                <LogoWordmark onDark className="block truncate text-[15.5px]" />
+              </ExpandedOnly>
               <SidebarCloseButton />
-            </div>
-            {switcher ?? (
-              <div className="flex items-center gap-2.5 rounded-[9px] bg-white/[0.05] px-2.5 py-2">
-                <div className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-md bg-[#20406b] text-[11px] font-semibold text-[#9cc0ff]">
-                  {initials(workspaceName)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-semibold text-[#e7edf6]">
-                    {workspaceName}
+            </SidebarBrand>
+            <RailSwap
+              expanded={
+                switcher ?? (
+                  <div className="flex items-center gap-2.5 rounded-[9px] bg-white/[0.05] px-2.5 py-2">
+                    <div className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-md bg-[#20406b] text-[11px] font-semibold text-[#9cc0ff]">
+                      {initials(workspaceName)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[13px] font-semibold text-[#e7edf6]">
+                        {workspaceName}
+                      </div>
+                      <div className="truncate text-[11px] text-[#6f8099]">
+                        {workspaceSub}
+                      </div>
+                    </div>
                   </div>
-                  <div className="truncate text-[11px] text-[#6f8099]">
-                    {workspaceSub}
-                  </div>
+                )
+              }
+              // The district name is the only "where am I" cue in this shell when the page
+              // header is hidden, so the rail keeps the tile even though it drops the card.
+              // Switching districts (external users) needs the sidebar expanded.
+              collapsed={
+                <div className="mt-3">
+                  <RailWorkspaceTile
+                    initials={initials(workspaceName)}
+                    label={workspaceName}
+                  />
                 </div>
-              </div>
-            )}
-          </div>
+              }
+            />
+          </SidebarHeader>
 
           <SidebarNav groups={nav} />
 
           <div className="border-t border-white/[0.07] p-3">
-            <div className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-2">
-              {/* The user's own card is where people look for "my account" — a nav item
-                  would put it beside the district's data, which is not what it is. */}
-              <Link
-                href="/account"
-                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[7px] transition-opacity hover:opacity-80"
-              >
-                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#3a5680] text-[12.5px] font-semibold text-white">
-                  {initials(user.name)}
+            <RailSwap
+              expanded={
+                <div className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-2">
+                  {/* The user's own card is where people look for "my account" — a nav item
+                      would put it beside the district's data, which is not what it is. */}
+                  <Link
+                    href="/account"
+                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[7px] transition-opacity hover:opacity-80"
+                  >
+                    <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#3a5680] text-[12.5px] font-semibold text-white">
+                      {initials(user.name)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[12.5px] font-semibold text-[#e7edf6]">
+                        {user.name}
+                      </div>
+                      <div className="truncate text-[11px] text-[#6f8099]">
+                        {user.roleLabel}
+                      </div>
+                    </div>
+                  </Link>
+                  <LogoutButton />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[12.5px] font-semibold text-[#e7edf6]">
-                    {user.name}
-                  </div>
-                  <div className="truncate text-[11px] text-[#6f8099]">
-                    {user.roleLabel}
-                  </div>
+              }
+              collapsed={
+                <div className="flex flex-col items-center gap-1.5 py-1">
+                  <RailAccountLink
+                    initials={initials(user.name)}
+                    label={`${user.name} · ${user.roleLabel}`}
+                  />
+                  <LogoutButton />
                 </div>
-              </Link>
-              <LogoutButton />
-            </div>
+              }
+            />
           </div>
+
+          <SidebarCollapseToggle />
         </SidebarPanel>
 
         {/* MAIN */}
@@ -159,7 +208,13 @@ export function AppShell({
             // Header removed for this area. The sidebar is always visible on `lg`, but
             // below it the drawer needs a trigger — this floating button is the only one
             // left, so it stays mobile-only (`lg:hidden`).
-            <div className="sticky top-0 z-20 flex justify-start p-3 lg:hidden">
+            //
+            // `print:hidden` as well, and NOT because it is redundant with `lg:hidden`.
+            // Breakpoint variants are not reliable in a print layout, and this 60px strip
+            // is the first thing on the page: it pushed the one-page summary sheet down by
+            // its own height, and `break-inside: avoid` then moved the entire sheet to page
+            // two rather than splitting it. Chrome that cannot be clicked must not print.
+            <div className="sticky top-0 z-20 flex justify-start p-3 lg:hidden print:hidden">
               <MenuButton />
             </div>
           ) : (
@@ -183,9 +238,7 @@ export function AppShell({
             </header>
           )}
 
-          <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-7 lg:py-7">
-            {children}
-          </main>
+          <ShellMain>{children}</ShellMain>
         </div>
       </div>
     </ShellProvider>

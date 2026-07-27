@@ -30,16 +30,19 @@ export interface ScopeOption {
 /**
  * The export control — a MENU, not a link, since M4.
  *
- * The client asked for two exports and was specific about the difference: an Executive
- * Summary, "one-page landscape PDF … intended for board meetings and executive leadership",
- * and the existing multi-page detailed export "for analysis". Those are different artefacts
- * for different rooms, and collapsing them behind one button would mean whichever it did
- * was wrong half the time.
+ * The client asked for two exports and was specific about the difference: a one-page
+ * landscape PDF "intended for board meetings and executive leadership", and the existing
+ * multi-page detailed export "for analysis". Those are different artefacts for different
+ * rooms, and collapsing them behind one button would mean whichever it did was wrong half
+ * the time.
  *
  * The summary is a ROUTE, not a generated file: `?view=summary` re-renders the same server
  * components into a one-page print layout. That is the same bargain §8.5 struck for the
  * detailed PDF — the browser's own Save as PDF is the export — and it is why these charts
  * are server-rendered SVG rather than a client charting library, which would print blank.
+ *
+ * The heading says "One-page summary" rather than "Executive summary": every dashboard has
+ * one now, and only one of them is the Executive dashboard.
  */
 export function ExportMenu({
   detailHref,
@@ -87,7 +90,7 @@ export function ExportMenu({
           {summaryHref && (
             <>
               <p className="px-3 pb-1 pt-1.5 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-2">
-                Executive summary
+                One-page summary
               </p>
               <a role="menuitem" href={summaryHref} className={item}>
                 One-page landscape PDF

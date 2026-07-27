@@ -3,8 +3,10 @@ import Link from "next/link";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { datasetBySlug, DATASET_SLUGS } from "@/lib/datasets/kinds";
 import { browse, cellOf, nameOf, PAGE_SIZE } from "@/lib/datasets/browse";
+import { labelMode } from "@/lib/dashboard/label-mode";
 import { periodLabel } from "@/lib/periods/fiscal";
 import { formatDateTime } from "@/lib/format";
+import { VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -105,9 +107,15 @@ export default async function DatasetBrowsePage({
     pageSize: PAGE_SIZE,
   });
 
+  // The reader's Codes / Names setting. The export route deliberately does NOT read it —
+  // see the note on `cellOf`.
+  const mode = await labelMode();
+
   const rows: ServerRow[] = result.rows.map((row) => ({
     id: String(row.id),
-    cells: Object.fromEntries(result.columns.map((c) => [c.key, cellOf(meta.slug, row, c)])),
+    cells: Object.fromEntries(
+      result.columns.map((c) => [c.key, cellOf(meta.slug, row, c, { display: true, mode })]),
+    ),
     titles: Object.fromEntries(result.columns.map((c) => [c.key, nameOf(meta.slug, row, c)])),
   }));
 
@@ -153,7 +161,7 @@ export default async function DatasetBrowsePage({
             {formatDateTime(selected.committedAt)}
           </span>
           <Link href="/data/versions" className="font-medium text-brand hover:underline">
-            Version history
+            {VIEW_DETAILS.versionHistory}
           </Link>
         </div>
       </Card>

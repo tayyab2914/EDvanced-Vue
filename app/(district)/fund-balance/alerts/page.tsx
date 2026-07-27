@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
+import { labelMode } from "@/lib/dashboard/label-mode";
 import { loadCore } from "@/lib/dashboard/load";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { alertFunds } from "@/lib/dashboard/options";
+import { GO_TO } from "@/lib/dashboard/cta";
 import { FundBalanceShell } from "../shell";
 
 /** Fund Balance — Alerts (Spec §6.4). */
@@ -17,7 +19,7 @@ export default async function FundBalanceAlertsTab({
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
-  const scope = await resolveScope(db, districtId, sp);
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
   const core = await loadCore(db, districtId, scope);
   const fbAlerts = (core.alerts?.alerts ?? []).filter((a) => a.group === "fundBalance");
 
@@ -29,7 +31,7 @@ export default async function FundBalanceAlertsTab({
       <SectionCard
         title="Current position"
         subtitle="Raised from the reserve as it stands"
-        footer="Review your thresholds"
+        footer={GO_TO.policies}
         footerHref="/policies"
       >
         {/*
@@ -39,6 +41,7 @@ export default async function FundBalanceAlertsTab({
           header of lib/alerts/attribution.ts.
         */}
         <AlertList
+          mode={scope.labelMode}
           alerts={current.map((a) => ({
             id: a.id,
             severity: a.severity,
@@ -53,10 +56,11 @@ export default async function FundBalanceAlertsTab({
       <SectionCard
         title="Forecast"
         subtitle="Raised from the projected year-end reserve"
-        footer="Go to forecast and planning"
+        footer={GO_TO.forecast}
         footerHref={`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`}
       >
         <AlertList
+          mode={scope.labelMode}
           alerts={forecast.map((a) => ({ id: a.id, severity: a.severity, title: a.title, message: a.message }))}
           empty="The projected reserve stays within your thresholds."
         />

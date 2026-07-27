@@ -18,11 +18,14 @@ export function FundBalanceShell({
   scope,
   active,
   alertCount,
+  /** Set on the tab that has a one-page print sheet — only Current Position does. */
+  summaryHref,
   children,
 }: {
   scope: DashboardScope;
   active: string;
   alertCount?: number;
+  summaryHref?: string;
   children: ReactNode;
 }) {
   const options = scopeOptions(scope);
@@ -37,6 +40,7 @@ export function FundBalanceShell({
           <DashboardFilters
             scope={scope}
             exportHref={options.exportHref("/fund-balance/export")}
+            summaryHref={summaryHref}
           />
         }
       />

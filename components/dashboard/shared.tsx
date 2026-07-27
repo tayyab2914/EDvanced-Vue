@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons";
+import { MANAGE } from "@/lib/dashboard/cta";
 
 /**
  * The small shared pieces: link tabs, empty states, the policy echo card, and the banner
@@ -184,7 +185,7 @@ export function FundLevelNotice({ subject }: { subject: string }) {
 export function PolicyEchoCard({
   rows,
   manageHref,
-  manageLabel = "Manage policies",
+  manageLabel = MANAGE.policies,
 }: {
   rows: { label: string; value: string; note?: string }[];
   manageHref?: string;
@@ -271,10 +272,16 @@ export function FundTag({
  * A dashboard row that collapses on narrow screens.
  *
  * `2-2-1` is the shape the client's Revenue and Expenditure layout diagrams describe: two
- * chart columns of equal weight and a narrower rail carrying the policy echo, the movers
- * and the alerts. `minmax(0,…)` rather than a bare fraction on every track, because a wide
- * table inside a grid child will otherwise blow the column past its share and push the rail
- * off the page.
+ * chart columns and a narrower rail carrying the policy echo, the movers and the alerts.
+ * `minmax(0,…)` rather than a bare fraction on every track, because a wide table inside a
+ * grid child will otherwise blow the column past its share and push the rail off the page.
+ *
+ * The two chart columns were once equal at 1.1fr each. They are not any more: the client's
+ * note on "Revenues — budget vs actual" was that its figures came out truncated, and the
+ * cause was width — a 640-unit viewBox squeezed into a ~430px column draws its type at two
+ * thirds size, and the summary strip beneath it had four money columns to fit in the same
+ * space. The rail is the cheapest donor on the row, because everything in it (a policy
+ * list, a mover list) is a label-and-figure pair that reflows rather than scales.
  */
 export function Row({
   children,
@@ -290,7 +297,7 @@ export function Row({
     "3": "lg:grid-cols-3",
     "1-2": "lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]",
     "2-1": "lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]",
-    "2-2-1": "xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)]",
+    "2-2-1": "xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1.1fr)_minmax(0,0.8fr)]",
     "1-2-rail": "xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,0.9fr)]",
   }[cols];
   return <div className={cn("grid gap-4", grid, className)}>{children}</div>;
@@ -328,9 +335,13 @@ export function KeyInsightBar({
   } as const;
 
   return (
-    <div className={cn("flex items-start gap-2.5 rounded-lg border px-3.5 py-3", TONE[tone])}>
+    <div
+      data-insight-bar
+      className={cn("flex items-start gap-2.5 rounded-lg border px-3.5 py-3", TONE[tone])}
+    >
       <span
         aria-hidden
+        data-insight-bar-chip
         className={cn(
           "flex h-[24px] w-[24px] flex-none items-center justify-center rounded-full",
           CHIP[tone],
@@ -342,7 +353,9 @@ export function KeyInsightBar({
         <span className="block text-[9.5px] font-semibold uppercase tracking-[0.06em] opacity-80">
           Key insight
         </span>
-        <span className="mt-0.5 block text-[12.5px] leading-relaxed">{children}</span>
+        <span data-insight-bar-text className="mt-0.5 block text-[12.5px] leading-relaxed">
+          {children}
+        </span>
       </span>
     </div>
   );

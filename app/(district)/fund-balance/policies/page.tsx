@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
+import { labelMode } from "@/lib/dashboard/label-mode";
 import { loadCore, reserveThresholds, forecastReserveThresholds } from "@/lib/dashboard/load";
 import { ladder, bands as statusBands, ruleOf } from "@/lib/dashboard/status";
 import { percent, toNumber } from "@/lib/dashboard/format";
+import { MANAGE } from "@/lib/dashboard/cta";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { Row, PolicyEchoCard } from "@/components/dashboard/shared";
 import { BenchmarkBand } from "@/components/dashboard/charts/benchmark-band";
@@ -26,7 +28,7 @@ export default async function FundBalancePoliciesTab({
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
-  const scope = await resolveScope(db, districtId, sp);
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
   const core = await loadCore(db, districtId, scope);
   const { policy, alerts, reserve } = core;
   const fbAlerts = (alerts?.alerts ?? []).filter((a) => a.group === "fundBalance");
@@ -58,6 +60,7 @@ export default async function FundBalancePoliciesTab({
               },
             ]}
             manageHref={userCan(user, "configure_district") ? "/policies" : undefined}
+            manageLabel={MANAGE.fundBalancePolicies}
           />
         </SectionCard>
 

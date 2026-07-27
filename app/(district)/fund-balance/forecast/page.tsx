@@ -1,12 +1,16 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
+import { labelMode } from "@/lib/dashboard/label-mode";
 import { loadCore, reserveThresholds, forecastReserveThresholds } from "@/lib/dashboard/load";
 import { projectFundBalance, districtGrowth, componentAssumptions } from "@/lib/forecast/engine";
 import { ladder } from "@/lib/dashboard/status";
+import { GO_TO, MANAGE } from "@/lib/dashboard/cta";
 import {
   compactMoney,
+  money,
   accounting,
   percent,
   toNumber,
@@ -52,14 +56,13 @@ import {
 export default async function ForecastPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; period?: string; fund?: string; basis?: string }>;
+  searchParams: Promise<{ fy?: string; period?: string; fund?: string }>;
 }) {
   const { db, user, districtId } = await getTenantDb();
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
-  const scope = await resolveScope(db, districtId, sp);
-  const asPercent = sp.basis === "percent";
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
 
   if (scope.empty) {
     return (
@@ -114,7 +117,10 @@ export default async function ForecastPage({
       : null;
   const lowest = projection.reduce(
     (lo, y) =>
-      lo === null || (y.reservePercent && lo.reservePercent && y.reservePercent.lessThan(lo.reservePercent))
+      lo === null ||
+      (y.unassignedPercentOfRevenue &&
+        lo.unassignedPercentOfRevenue &&
+        y.unassignedPercentOfRevenue.lessThan(lo.unassignedPercentOfRevenue))
         ? y
         : lo,
     null as (typeof projection)[number] | null,
@@ -135,29 +141,39 @@ export default async function ForecastPage({
   const recurringBase =
     currentYearSpend === null ? null : currentYearSpend.minus(oneTimeSpend ?? 0);
 
-  const q = new URLSearchParams();
-  if (scope.fiscalYear) q.set("fy", scope.fiscalYear);
-  if (scope.period) q.set("period", String(scope.period));
-  if (scope.fundId) q.set("fund", scope.fundId);
-  const basisHref = (basis: "dollars" | "percent") => {
-    const next = new URLSearchParams(q);
-    if (basis === "percent") next.set("basis", "percent");
-    return `/fund-balance/forecast?${next.toString()}`;
-  };
+  /**
+   * A figure's share of that year's projected revenues.
+   *
+   * Revenues is the divisor for every percentage on this screen — components and the
+   * unassigned balance alike — because that is the denominator the district's own workbook
+   * uses when it plans. Elsewhere in the platform a reserve percentage divides by
+   * expenditures, and the two must not be quietly mixed; see the note on
+   * `unassignedPercentOfRevenue` in lib/forecast/engine.ts.
+   */
+  const shareOfRevenue = (
+    value: Prisma.Decimal,
+    y: (typeof projection)[number],
+  ): Prisma.Decimal | null =>
+    y.projectedRevenue.isZero() ? null : value.dividedBy(y.projectedRevenue).times(100);
 
   /**
    * A row of the calculation flow.
    *
-   * `basis` decides whether a money row shows dollars or its share of that year's projected
-   * expenditure — the client's "Dollars | % of Expenditures" toggle. The percentage view
-   * exists because a board comparing a district against its own policy is comparing
-   * percentages, and doing that arithmetic in your head across four columns is how mistakes
-   * get made.
+   * `showPercent` prints the share of revenues UNDER the dollars rather than behind a
+   * toggle. The screen used to offer "Dollars | % of Expenditures" and show one or the
+   * other; the client's answer to that was "I noticed it's programmed to toggle but adding
+   * to the screen is better for the user" — a board reading a component against policy
+   * wants the dollars and the percentage in the same glance, not one click apart.
    */
   const moneyRow = (
     label: string,
-    pick: (y: (typeof projection)[number]) => { value: import("@/lib/generated/prisma/client").Prisma.Decimal; negative?: boolean },
-    opts: { emphasis?: boolean; indent?: boolean; tone?: "positive" | "negative" | "auto" } = {},
+    pick: (y: (typeof projection)[number]) => { value: Prisma.Decimal; negative?: boolean },
+    opts: {
+      emphasis?: boolean;
+      indent?: boolean;
+      tone?: "positive" | "negative" | "auto";
+      showPercent?: boolean;
+    } = {},
   ) => ({
     id: label,
     cells: {
@@ -171,20 +187,30 @@ export default async function ForecastPage({
       ...Object.fromEntries(
         projection.map((y) => {
           const { value, negative } = pick(y);
-          const display = asPercent
-            ? y.projectedExpenditure.isZero()
-              ? NOT_AVAILABLE
-              : percent(value.dividedBy(y.projectedExpenditure).times(100))
-            : negative
-              ? accounting(value.negated(), { compact: true })
-              : compactMoney(value);
+          const display = negative ? accounting(value.negated()) : money(value);
           const tone =
             opts.tone === "auto"
               ? value.isNegative()
                 ? ("negative" as const)
                 : ("positive" as const)
               : opts.tone;
-          return [y.fiscalYear, { value: display, tone, strong: opts.emphasis }];
+          return [
+            y.fiscalYear,
+            {
+              value: opts.showPercent ? (
+                <>
+                  <span className="block">{display}</span>
+                  <span className="mt-0.5 block text-[10.5px] font-normal tabular-nums text-muted-2">
+                    {percent(shareOfRevenue(value, y))}
+                  </span>
+                </>
+              ) : (
+                display
+              ),
+              tone,
+              strong: opts.emphasis,
+            },
+          ];
         }),
       ),
     },
@@ -194,7 +220,7 @@ export default async function ForecastPage({
     moneyRow(
       `Less: ${FUND_BALANCE_COMPONENT_LABELS[component]}`,
       (y) => ({ value: y.componentBreakdown[component], negative: true }),
-      { indent: true, tone: "negative" },
+      { indent: true, tone: "negative", showPercent: true },
     );
 
   const methodOf = new Map<FundBalanceComponent, ForecastMethod>(
@@ -237,33 +263,13 @@ export default async function ForecastPage({
           <SectionCard
             title="2. Fund balance forecast"
             subtitle="Financial health view · forecast results update automatically when you adjust assumptions"
-            control={
-              <div className="flex overflow-hidden rounded-lg border border-line text-[11.5px] font-medium">
-                <Link
-                  href={basisHref("dollars")}
-                  className={cn(
-                    "px-2.5 py-1 transition-colors",
-                    asPercent ? "bg-white text-muted hover:text-ink-soft" : "bg-brand text-white",
-                  )}
-                >
-                  Dollars
-                </Link>
-                <Link
-                  href={basisHref("percent")}
-                  className={cn(
-                    "border-l border-line px-2.5 py-1 transition-colors",
-                    asPercent ? "bg-brand text-white" : "bg-white text-muted hover:text-ink-soft",
-                  )}
-                >
-                  % of expenditures
-                </Link>
-              </div>
-            }
           >
             <DataTable
               dense
               columns={[
-                { key: "row", label: asPercent ? "(% of expenditures)" : "(Dollars)" },
+                // No basis label. It named a toggle that no longer exists, and with dollars
+                // and percentages now on the same row there is no single basis to name.
+                { key: "row", label: "" },
                 ...projection.map((y) => ({
                   key: y.fiscalYear,
                   label:
@@ -303,9 +309,12 @@ export default async function ForecastPage({
                 {
                   id: "reserve-percent",
                   cells: {
-                    row: { value: "Unassigned fund balance % of expenditures" },
+                    row: { value: "Unassigned fund balance % of revenues" },
                     ...Object.fromEntries(
-                      projection.map((y) => [y.fiscalYear, percent(y.reservePercent)]),
+                      projection.map((y) => [
+                        y.fiscalYear,
+                        percent(y.unassignedPercentOfRevenue),
+                      ]),
                     ),
                   },
                 },
@@ -321,7 +330,7 @@ export default async function ForecastPage({
                             <span className="flex justify-end">
                               <StatusBadge
                                 status={ladder(
-                                  toNumber(y.reservePercent),
+                                  toNumber(y.unassignedPercentOfRevenue),
                                   y.index === 0 ? reserveT : fcT,
                                 )}
                                 size="sm"
@@ -338,6 +347,7 @@ export default async function ForecastPage({
             />
 
             <p className="mt-3 text-[11.5px] leading-relaxed text-muted-2">
+              Percentages are each figure&apos;s share of that year&apos;s projected revenues.
               Growth is applied from the current year&apos;s projected pace, not from the adopted
               budget. Expenditure growth compounds on the recurring operating base only, so
               one-time and carryforward spending does not build into future years.
@@ -392,7 +402,7 @@ export default async function ForecastPage({
                 className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-brand hover:underline"
               >
                 <Icon name="settings" size={13} />
-                Manage policies
+                {MANAGE.fundBalancePolicies}
               </Link>
             )}
           </RailCard>
@@ -429,13 +439,16 @@ export default async function ForecastPage({
               {lowest ? `FY ${lowest.fiscalYear}` : "Not enough data"}
             </p>
             <p className="mt-1 text-[26px] font-semibold leading-none tracking-[-0.6px] text-ink">
-              {percent(lowest?.reservePercent)}
+              {percent(lowest?.unassignedPercentOfRevenue)}
             </p>
             <p className="mt-1.5 text-[11.5px] text-muted-2">
-              Unassigned fund balance % of expenditures
+              Unassigned fund balance % of revenues
             </p>
             <div className="mt-2.5">
-              <StatusBadge status={ladder(toNumber(lowest?.reservePercent), fcT)} size="md" />
+              <StatusBadge
+                status={ladder(toNumber(lowest?.unassignedPercentOfRevenue), fcT)}
+                size="md"
+              />
             </div>
           </RailCard>
 
@@ -461,11 +474,11 @@ export default async function ForecastPage({
       <Row cols="2-1">
         <SectionCard
           title="Reserve trend"
-          subtitle="Projected unassigned fund balance as a share of expenditures"
+          subtitle="Projected unassigned fund balance as a share of revenues"
         >
           <LineChart
             title="Projected reserve percentage"
-            summary={`Projected unassigned reserve across ${projection.length} fiscal years, against the district's own thresholds.`}
+            summary={`Projected unassigned reserve as a share of projected revenues across ${projection.length} fiscal years, against the district's own thresholds.`}
             categories={projection.map((y) => `FY${y.fiscalYear.slice(2)}`)}
             format={(v) => `${v.toFixed(1)}%`}
             height={260}
@@ -483,16 +496,17 @@ export default async function ForecastPage({
                 color: "var(--color-viz-forecast)",
                 labelLast: true,
                 points: projection.map((y) => ({
-                  value: toNumber(y.reservePercent),
-                  label: percent(y.reservePercent, 1),
+                  value: toNumber(y.unassignedPercentOfRevenue),
+                  label: percent(y.unassignedPercentOfRevenue, 1),
                 })),
               },
             ]}
           />
         </SectionCard>
 
-        <SectionCard title="Forecast alerts" footer="View all alerts" footerHref="/alerts">
+        <SectionCard title="Forecast alerts" footer={GO_TO.alerts} footerHref="/alerts">
           <AlertList
+            mode={scope.labelMode}
             alerts={fbAlerts
               .filter((a) => a.id.startsWith("FORECAST"))
               .map((a) => ({ id: a.id, severity: a.severity, title: a.title, message: a.message }))}

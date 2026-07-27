@@ -9,6 +9,7 @@ import {
 } from "@/app/actions/import";
 import { EMPTY_FORM_STATE, type FormState } from "@/lib/forms";
 import { DUPLICATE_PROMPT } from "@/lib/import/duplicate";
+import { VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
@@ -98,7 +99,9 @@ export function ValidationReport({
       <Card>
         <Alert tone="success">{commitState.success}</Alert>
         <div className="mt-4 flex gap-2">
-          <Button onClick={() => router.push("/data/versions")}>View version history</Button>
+          <Button onClick={() => router.push("/data/versions")}>
+            {VIEW_DETAILS.versionHistory}
+          </Button>
           <Button variant="secondary" onClick={() => router.push("/data/upload")}>
             Upload another
           </Button>

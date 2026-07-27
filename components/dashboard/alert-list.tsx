@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { FundTag } from "@/components/dashboard/shared";
-import { codeName } from "@/lib/text";
+import { codeName, type LabelMode } from "@/lib/text";
 import type { AlertSeverity } from "@/lib/alerts/catalog";
 import type { StatusRung } from "@/lib/dashboard/status";
 
@@ -71,11 +71,18 @@ export function AlertList({
   max,
   /** Makes each row a link — the client's "allow alerts to become clickable". */
   href,
+  /**
+   * The reader's Codes / Names setting, normally `scope.labelMode`. Defaulted, because a
+   * caller that has no scope to hand still gets the client's recommended Codes + Names
+   * rather than a type error.
+   */
+  mode,
 }: {
   alerts: AlertRow[];
   empty?: string;
   max?: number;
   href?: string;
+  mode?: LabelMode;
 }) {
   if (alerts.length === 0) {
     return (
@@ -91,12 +98,13 @@ export function AlertList({
   const shown = max ? alerts.slice(0, max) : alerts;
 
   return (
-    <ul className="flex flex-col">
+    <ul data-alert-list className="flex flex-col">
       {shown.map((a, i) => {
         const body = (
           <>
             <span
               aria-hidden
+              data-alert-chip
               className={cn(
                 "mt-[1px] flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full",
                 CHIP[a.severity],
@@ -105,10 +113,15 @@ export function AlertList({
               <Icon name={GLYPH[a.severity]} size={14} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[12.5px] font-medium leading-snug text-ink-muted">
+              <span
+                data-alert-message
+                className="block text-[12.5px] font-medium leading-snug text-ink-muted"
+              >
                 {a.message}
               </span>
-              <span className="mt-0.5 block text-[11px] text-muted-2">{a.title}</span>
+              <span data-alert-title className="mt-0.5 block text-[11px] text-muted-2">
+                {a.title}
+              </span>
             </span>
             <StatusBadge
               status={RUNG[a.severity]}
@@ -168,7 +181,7 @@ export function AlertList({
                 {funds.map((f) => (
                   <FundTag
                     key={f.id}
-                    label={codeName(f.code, f.name)}
+                    label={codeName(f.code, f.name, mode)}
                     detail={f.detail}
                     href={f.href}
                   />
@@ -278,12 +291,16 @@ export function InsightList({
   };
 
   return (
-    <ul className={cn(layout === "grid" ? "grid gap-3 md:grid-cols-3" : "flex flex-col")}>
+    <ul
+      data-insight-list
+      className={cn(layout === "grid" ? "grid gap-3 md:grid-cols-3" : "flex flex-col")}
+    >
       {insights.map((i, idx) => {
         const body = (
           <>
             <span
               aria-hidden
+              data-insight-glyph
               className={cn(
                 "flex h-[28px] w-[28px] flex-none items-center justify-center rounded-lg",
                 chip[i.direction],
@@ -292,11 +309,17 @@ export function InsightList({
               <Icon name={glyph[i.direction]} size={15} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[12.5px] font-medium leading-relaxed text-ink-muted">
+              <span
+                data-insight-text
+                className="block text-[12.5px] font-medium leading-relaxed text-ink-muted"
+              >
                 {i.text}
               </span>
               {i.detail && (
-                <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-2">
+                <span
+                  data-insight-detail
+                  className="mt-0.5 block text-[11.5px] leading-snug text-muted-2"
+                >
                   {i.detail}
                 </span>
               )}

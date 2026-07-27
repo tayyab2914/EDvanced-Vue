@@ -35,7 +35,9 @@
     "test:smtp": "tsx scripts/test-smtp.mts",
     "postinstall": "prisma generate",
     "verify:dashboard": "tsx --conditions=react-server scripts/verify-dashboard.mts",
-    "verify:queries": "tsx --conditions=react-server scripts/verify-queries.mts"
+    "verify:queries": "tsx --conditions=react-server scripts/verify-queries.mts",
+    "verify:print": "tsx scripts/verify-print.mts",
+    "verify:sidebar": "tsx scripts/verify-sidebar.mts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

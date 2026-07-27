@@ -2,6 +2,8 @@ import type { TenantDb } from "@/lib/tenant-db";
 import type { DatasetSlug } from "@/lib/datasets/kinds";
 import { datasetDef } from "@/lib/datasets/registry";
 import type { ResolveTarget } from "@/lib/datasets/fields";
+import { money } from "@/lib/dashboard/format";
+import { codeName, DEFAULT_LABEL_MODE, type LabelMode } from "@/lib/text";
 
 /**
  * Reading committed periodic data back out.
@@ -74,8 +76,32 @@ export function browseInclude(slug: DatasetSlug): Record<string, unknown> {
   return include;
 }
 
-/** Reads one cell for display, from a row loaded with `browseInclude`. */
-export function cellOf(slug: DatasetSlug, row: Record<string, unknown>, col: BrowseColumn): string {
+/**
+ * Reads one cell, from a row loaded with `browseInclude`.
+ *
+ * Two callers, two contracts, one function so they can never disagree about WHICH rows and
+ * columns they are reading:
+ *
+ *   - the CSV export takes the default, `display: false`, and gets bare digits. Master
+ *     data's round-trip rule is that numbers export unadorned (1000, not $1,000) so a
+ *     district can edit the file and import it straight back.
+ *   - the screen passes `display: true` and gets the same currency format as every other
+ *     figure in the product — grouped, with a dollar sign, and with cents only where there
+ *     are cents. "426845120.00" in a ledger column is a number the reader has to count.
+ *
+ * THE SAME SPLIT NOW DECIDES WHETHER A DIMENSION CARRIES ITS NAME, and for the same reason.
+ * The screen shows `1000 — General Fund`, per the client's §10: this page was the last place
+ * in the product still rendering bare codes, with the name hidden in a `title`, and "the
+ * name is one hover away from every one of eight columns" is not the same as showing it.
+ * The EXPORT still gets the bare code — it is a file a district edits and imports straight
+ * back, and `1000 — General Fund` in a Fund Code column would not resolve on the way in.
+ */
+export function cellOf(
+  slug: DatasetSlug,
+  row: Record<string, unknown>,
+  col: BrowseColumn,
+  opts: { display?: boolean; mode?: LabelMode } = {},
+): string {
   const def = datasetDef(slug);
   const field = def.fields.find((f) => f.name === col.key);
 
@@ -83,7 +109,11 @@ export function cellOf(slug: DatasetSlug, row: Record<string, unknown>, col: Bro
     const rel = row[col.relation] as Record<string, unknown> | null;
     if (!rel) return "";
     const target = RELATION[field!.resolvesTo!];
-    return String(rel[target.codeField] ?? "");
+    const code = String(rel[target.codeField] ?? "");
+    // `status` resolves against a lookup whose code IS its name (see RELATION above), so
+    // there is no second half to add and `codeName` would render "PENDING — Pending".
+    if (!opts.display || target.codeField === target.nameField) return code;
+    return codeName(code, String(rel[target.nameField] ?? ""), opts.mode ?? DEFAULT_LABEL_MODE);
   }
 
   const v = row[col.key];
@@ -91,25 +121,38 @@ export function cellOf(slug: DatasetSlug, row: Record<string, unknown>, col: Bro
   if (v instanceof Date) return v.toISOString().slice(0, 10);
 
   if (col.type === "amount") {
-    // Decimal.toString() drops trailing zeros — $99,000.00 comes back as "99000". In a
-    // finance ledger cents are not decoration: a column where some rows show cents and
-    // others don't reads as though the data is inconsistent.
-    //
-    // Plain digits, not a currency format: this same function feeds the CSV export, and
-    // master-data's round-trip rule is that numbers export bare (1000, not $1,000) so the
-    // file can be edited and imported straight back.
     const d = v as { toFixed?: (n: number) => string };
-    return typeof d.toFixed === "function" ? d.toFixed(2) : String(v);
+    if (typeof d.toFixed !== "function") return String(v);
+    // On screen: the product's currency format. `money` reads the Decimal structurally, so
+    // the exact value reaches the formatter without a float round-trip.
+    if (opts.display) return money(d as Parameters<typeof money>[0]);
+    // In the export: two fixed decimal places. Decimal.toString() drops trailing zeros —
+    // 99000.00 comes back as "99000" — and a column where some rows carry cents and others
+    // don't reads as though the data itself is inconsistent.
+    return d.toFixed(2);
   }
 
   return String(v);
 }
 
-/** The name beside a code, for the row's title attribute — context without a wider table. */
+/**
+ * The cell's tooltip — always the FULL `Code — Name`, whatever the cell itself shows.
+ *
+ * The client's rule (c) on dimension fields: "On hover, display the full Code – Name." So
+ * this is not "the half the cell left out" — a reader on Codes Only who hovers wants the
+ * name, and a reader whose column ellipsised wants the rest of it, and one string answers
+ * both. It returns null only when there is nothing more to say than the cell already does.
+ */
 export function nameOf(slug: DatasetSlug, row: Record<string, unknown>, col: BrowseColumn): string | null {
   if (!col.relation) return null;
   const rel = row[col.relation] as Record<string, unknown> | null;
-  return rel ? String(rel.name ?? "") || null : null;
+  if (!rel) return null;
+
+  const field = datasetDef(slug).fields.find((f) => f.name === col.key);
+  const target = RELATION[field!.resolvesTo!];
+  if (target.codeField === target.nameField) return null;
+
+  return codeName(String(rel[target.codeField] ?? ""), String(rel[target.nameField] ?? "")) || null;
 }
 
 // ===================== the query =====================

@@ -158,18 +158,32 @@ export function ServerTable({
                 {columns.map((c) => (
                   <td
                     key={c.key}
-                    // The code is what a district recognises; the name is the reassurance.
-                    // A title keeps both without doubling the width of every column.
+                    // Always the full `Code — Name`, even when the cell shows it in full:
+                    // the client's rule (c) on dimension fields.
                     title={r.titles[c.key] ?? undefined}
                     className={cn(
                       "py-2",
                       c.type === "amount"
                         ? "pl-3 text-right font-mono tabular-nums"
                         : "pr-3",
-                      c.type === "code" && "font-mono text-ink-soft",
+                      c.type === "code" && "text-ink-soft",
                     )}
                   >
-                    {r.cells[c.key] || <span className="text-muted-2">—</span>}
+                    {r.cells[c.key] ? (
+                      c.type === "code" ? (
+                        // A dimension column now carries `1000 — General Fund` rather than
+                        // `1000`, and Expenditure Detail has EIGHT of them. Without a
+                        // ceiling one long project name sets the width of a column on
+                        // every one of fifty rows and pushes the amounts off the screen.
+                        // 26ch is the low end of the client's 25–35, chosen for a table
+                        // this dense; CSS ellipsises earlier if the column is narrower.
+                        <span className="block max-w-[26ch] truncate">{r.cells[c.key]}</span>
+                      ) : (
+                        r.cells[c.key]
+                      )
+                    ) : (
+                      <span className="text-muted-2">—</span>
+                    )}
                   </td>
                 ))}
               </tr>

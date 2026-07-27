@@ -8,6 +8,7 @@ import { activityTotals } from "@/lib/finance/engine";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
 import {
   compactMoney,
+  money,
   accounting,
   percent,
   signedPercent,
@@ -29,8 +30,27 @@ import { ViewBy } from "@/components/dashboard/view-by";
 import { FundBalanceShell } from "./shell";
 import { COMPONENT_COLORS, SERIES_SLOTS } from "@/lib/dashboard/palette";
 import { codeName } from "@/lib/text";
+import { labelMode } from "@/lib/dashboard/label-mode";
+import { DimLabel } from "@/components/dashboard/dim-label";
 import { PageHeader } from "@/components/page-header";
 import { FUND_BALANCE_VIEWS, resolveView } from "@/lib/dashboard/view";
+import { GO_TO } from "@/lib/dashboard/cta";
+import { scopeOptions } from "@/lib/dashboard/options";
+import {
+  PrintSheet,
+  SheetBand,
+  SheetCard,
+  SheetKpi,
+  SheetStats,
+} from "@/components/dashboard/print-sheet";
+import {
+  rungTone,
+  sheetTone,
+  sheetScope,
+  sheetAsOf,
+  SHEET_TABLE_ROWS,
+  SHEET_TABLE_NOTE,
+} from "@/lib/dashboard/summary";
 
 /**
  * Fund Balance — Current Position (Spec §6.1), rebuilt to the client's M4 layout.
@@ -49,13 +69,20 @@ import { FUND_BALANCE_VIEWS, resolveView } from "@/lib/dashboard/view";
 export default async function FundBalancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; period?: string; fund?: string; groupBy?: string }>;
+  searchParams: Promise<{
+    fy?: string;
+    period?: string;
+    fund?: string;
+    groupBy?: string;
+    view?: string;
+  }>;
 }) {
   const { db, user, districtId } = await getTenantDb();
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
-  const scope = await resolveScope(db, districtId, sp);
+  const summary = sp.view === "summary";
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
   const view = resolveView(FUND_BALANCE_VIEWS, sp.groupBy);
 
   if (scope.empty) {
@@ -175,7 +202,7 @@ export default async function FundBalancePage({
    */
   const fundSlices = withBalance
     .filter((f) => !scope.fundId || f.fundId === scope.fundId)
-    .map((f) => ({ id: f.fundId, label: codeName(f.code, f.name), value: toNumber(f.fundBalance) ?? 0 }))
+    .map((f) => ({ id: f.fundId, label: codeName(f.code, f.name, scope.labelMode), value: toNumber(f.fundBalance) ?? 0 }))
     .filter((f) => f.value > 0)
     .sort((a, b) => b.value - a.value);
   // Six categorical slots; a seventh fund folds rather than taking a generated hue.
@@ -192,8 +219,240 @@ export default async function FundBalancePage({
       : fundSlices;
   const fundSliceTotal = fundSlices.reduce((a, f) => a + f.value, 0);
 
+  const options = scopeOptions(scope);
+  const summaryHref = options.query
+    ? `/fund-balance?${options.query}&view=summary`
+    : "/fund-balance?view=summary";
+
+  // ---------- the sheet's five headline figures ----------
+  const kpiData = [
+    {
+      key: "total",
+      label: "Total fund balance",
+      value: compactMoney(totalNow),
+      sub: scope.fund ? scope.fund.name : "All funds",
+      note:
+        change === null
+          ? previous
+            ? undefined
+            : "no earlier period"
+          : `${accounting(change, { compact: true })}${changePct === null ? "" : ` (${signedPercent(changePct)})`}`,
+      tone: change === null ? ("neutral" as const) : sheetTone(deltaTone(toNumber(change), "up")),
+    },
+    {
+      key: "change",
+      label: "Change from prior month",
+      value: accounting(change, { compact: true }),
+      sub: "movement in total fund balance",
+      note: previous ? `since period ${previous.period}` : "no earlier period",
+      tone: change === null ? ("neutral" as const) : sheetTone(deltaTone(toNumber(change), "up")),
+    },
+    {
+      key: "unassigned",
+      label: "Unassigned fund balance",
+      value: compactMoney(unassignedNow),
+      sub: core.generalFund ? `${core.generalFund.name} only` : "General fund only",
+      note:
+        unassignedChange === null
+          ? undefined
+          : `${accounting(unassignedChange, { compact: true })} vs prior`,
+      tone:
+        unassignedChange === null
+          ? ("neutral" as const)
+          : sheetTone(deltaTone(toNumber(unassignedChange), "up")),
+    },
+    {
+      key: "reserve-pct",
+      label: "Unassigned fund balance %",
+      value: percent(reserve?.percent),
+      sub: "of budgeted general fund expenditures",
+      note: `Target ≥ ${reserveT.target.toFixed(2)}%`,
+      tone: rungTone(reserveRung),
+    },
+    {
+      key: "reserve-status",
+      label: "Reserve status",
+      value: reserveRung === "N/A" ? "Not available" : reserveRung,
+      sub: `Policy ${statutoryMinimum.toFixed(2)}% – ${reserveT.target.toFixed(2)}%`,
+      note: `Warning below ${reserveT.warning.toFixed(2)}%`,
+      tone: rungTone(reserveRung),
+    },
+  ];
+
+  // ===================== the one-page landscape summary =====================
+  // Outside `FundBalanceShell`: the shell's four tabs are navigation, and navigation on
+  // paper is ink spent on something nobody can click.
+  if (summary) {
+    return (
+      <PrintSheet
+        title="Fund Balance Summary"
+        district={user.districtName ?? "District"}
+        scope={sheetScope(scope)}
+        asOf={sheetAsOf(scope.dataAsOf)}
+        backHref={options.query ? `/fund-balance?${options.query}` : "/fund-balance"}
+      >
+        <SheetBand cols="1fr 1fr 1fr 1fr 1fr">
+          {kpiData.map((k) => (
+            <SheetKpi
+              key={k.key}
+              label={k.label}
+              value={k.value}
+              sub={k.sub}
+              note={k.note}
+              tone={k.tone}
+            />
+          ))}
+        </SheetBand>
+
+        <SheetBand cols="1.15fr 1fr">
+          <SheetCard
+            title="Fund balance trend"
+            badge={<StatusBadge status={reserveRung} size="sm" dot={false} />}
+            note={scope.fund ? scope.fund.name : "All funds"}
+          >
+            <LineChart
+              title="Fund balance trend"
+              summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
+              categories={labels}
+              format={(v) => compactMoney(v, 0)}
+              height={240}
+              series={[
+                {
+                  key: "total",
+                  label: "Ending fund balance",
+                  color: "var(--color-viz-budget)",
+                  labelLast: true,
+                  points: series.points.map((p) => ({
+                    value: toNumber(p.fundBalance),
+                    label: compactMoney(p.fundBalance),
+                  })),
+                },
+                {
+                  key: "unassigned",
+                  label: "Unassigned fund balance",
+                  color: "var(--color-viz-actual)",
+                  labelLast: true,
+                  points: series.points.map((p) => ({
+                    value: toNumber(p.unassignedFundBalance),
+                    label: compactMoney(p.unassignedFundBalance),
+                  })),
+                },
+              ]}
+            />
+            <SheetStats
+              items={[
+                { label: "Ending", value: compactMoney(totalNow) },
+                { label: "Unassigned", value: compactMoney(unassignedNow) },
+                { label: "Target", value: `${reserveT.target.toFixed(2)}%` },
+                { label: "Minimum", value: `${statutoryMinimum.toFixed(2)}%` },
+              ]}
+            />
+          </SheetCard>
+
+          <SheetCard
+            title="Fund balance waterfall"
+            note={foots ? "Beginning · movements · ending" : "Does not reconcile"}
+          >
+            <WaterfallChart
+              title="Fund balance waterfall"
+              summary={`How the fund balance moved from ${compactMoney(series.opening?.total)} at the start of the year to ${compactMoney(totalNow)}.`}
+              steps={steps}
+              format={(v) => compactMoney(v, 0)}
+              height={260}
+            />
+          </SheetCard>
+        </SheetBand>
+
+        <SheetBand cols="1.5fr 1fr">
+          <SheetCard title="Fund balance by fund" note={SHEET_TABLE_NOTE}>
+            <DataTable
+              dense
+              columns={[
+                { key: "fund", label: "Fund" },
+                { key: "balance", label: "Ending fund balance", align: "right" },
+                { key: "class", label: "Primary classification" },
+                { key: "status", label: "Status", align: "right" },
+              ]}
+              rows={withBalance.slice(0, SHEET_TABLE_ROWS).map((f) => {
+                const isGeneral = core.generalFund?.id === f.fundId;
+                const balance = toNumber(f.fundBalance);
+                const rung = isGeneral
+                  ? reserveRung
+                  : balance === null
+                    ? "N/A"
+                    : balance < 0
+                      ? "Action Required"
+                      : "Strong";
+                return {
+                  id: f.fundId,
+                  flag: balance !== null && balance < 0 ? ("negative" as const) : undefined,
+                  cells: {
+                    fund: { value: codeName(f.code, f.name, scope.labelMode), strong: true },
+                    balance: { value: compactMoney(f.fundBalance), strong: true },
+                    class: isGeneral ? "Unassigned" : (primaryClassification(f) ?? "—"),
+                    status: (
+                      <span className="flex justify-end">
+                        <StatusBadge status={rung} size="sm" dot={false} />
+                      </span>
+                    ),
+                  },
+                };
+              })}
+              total={{
+                id: "total",
+                total: true,
+                cells: {
+                  fund: "Total all funds",
+                  balance: compactMoney(allFundsTotal),
+                  class: "—",
+                  status: "—",
+                },
+              }}
+              empty="No fund has a committed opening balance for this year."
+            />
+          </SheetCard>
+
+          <SheetCard title="Fund balance composition" note="By classification">
+            {components.length > 0 ? (
+              <ShareBars
+                title="Fund balance composition"
+                summary="How the fund balance splits between its designated components and the unassigned reserve."
+                rows={components.map((c) => ({
+                  id: c.label,
+                  label: c.label,
+                  value: c.value,
+                  display: compactMoney(c.amount),
+                  share: percent(sharePercent(c.value, componentTotal), 1),
+                  color: COMPONENT_COLORS[c.label],
+                }))}
+              />
+            ) : (
+              <p className="py-3 text-center text-[9.5px] text-muted-2">
+                No opening fund balance committed for this year.
+              </p>
+            )}
+            {reservePct !== null && (
+              <KeyInsightBar tone={reserveRung === "Strong" ? "info" : "monitor"}>
+                Unassigned fund balance is {percent(reservePct)},{" "}
+                {reservePct >= statutoryMinimum ? "above" : "below"} the{" "}
+                {statutoryMinimum.toFixed(2)}% statutory minimum and{" "}
+                {reservePct >= reserveT.target ? "at or above" : "below"} the district target of{" "}
+                {reserveT.target.toFixed(2)}%.
+              </KeyInsightBar>
+            )}
+          </SheetCard>
+        </SheetBand>
+      </PrintSheet>
+    );
+  }
+
   return (
-    <FundBalanceShell scope={scope} active="/fund-balance" alertCount={fbAlerts.length}>
+    <FundBalanceShell
+      scope={scope}
+      active="/fund-balance"
+      alertCount={fbAlerts.length}
+      summaryHref={summaryHref}
+    >
       {/* ---------- KPI CARDS ---------- */}
       <KpiRow count={5}>
         <KpiTile
@@ -314,13 +573,16 @@ export default async function FundBalancePage({
                 id: f.fundId,
                 flag: balance !== null && balance < 0 ? ("negative" as const) : undefined,
                 cells: {
-                  fund: { value: codeName(f.code, f.name), strong: true },
-                  balance: { value: compactMoney(f.fundBalance), strong: true },
+                  fund: {
+                    value: <DimLabel code={f.code} name={f.name} mode={scope.labelMode} />,
+                    strong: true,
+                  },
+                  balance: { value: money(f.fundBalance), strong: true },
                   class: isGeneral ? (
                     <span>
                       Unassigned
                       <span className="block text-[11px] text-muted-2">
-                        {compactMoney(unassignedNow)}
+                        {money(unassignedNow)}
                         {reservePct === null ? "" : ` (${percent(reservePct)})`}
                       </span>
                     </span>
@@ -340,7 +602,7 @@ export default async function FundBalancePage({
               total: true,
               cells: {
                 fund: "Total all funds",
-                balance: compactMoney(allFundsTotal),
+                balance: money(allFundsTotal),
                 class: "—",
                 status: "—",
               },
@@ -365,7 +627,7 @@ export default async function FundBalancePage({
           title="Fund balance trend"
           subtitle={scope.fund ? scope.fund.name : "All funds"}
           badge={<StatusBadge status={reserveRung} size="sm" />}
-          footer="Go to forecast and planning"
+          footer={GO_TO.forecast}
           footerHref={`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`}
           footerNote="All amounts are unaudited"
         >
@@ -562,7 +824,7 @@ export default async function FundBalancePage({
         </SectionCard>
       </Row>
 
-      <FooterInfoBar action="Go to forecast and planning" href={`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`}>
+      <FooterInfoBar action={GO_TO.forecast} href={`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`}>
         Want to see the future? Build a three-year projection from your own growth assumptions
         and see how reserves hold up.
       </FooterInfoBar>

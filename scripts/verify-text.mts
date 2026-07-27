@@ -1,4 +1,13 @@
-import { titleCase, displayName, codeName } from "@/lib/text";
+import {
+  titleCase,
+  displayName,
+  codeName,
+  clip,
+  isLabelMode,
+  resolveLabelMode,
+  DEFAULT_LABEL_MODE,
+  LABEL_CHARS,
+} from "@/lib/text";
 
 /**
  * Checks the display convention in lib/text.ts — the one that decides how every fund,
@@ -110,6 +119,57 @@ eq(codeName("", "general fund"), "General Fund", "an empty code is no code");
 eq(codeName("3xx", "OTHER SERVICES"), "3xx — Other Services", "the CODE keeps the district's own casing");
 eq(codeName("1000", ""), "1000", "a code whose name is missing still names itself");
 eq(codeName("0021", "lincoln elementary"), "0021 — Lincoln Elementary", "a cost centre");
+
+/*
+ * The client's §10: "displaying both the code and description … rather than codes alone …
+ * If needed, we can also consider a user preference for Codes Only, Names Only, or Codes +
+ * Names, with Codes + Names as the default."
+ *
+ * The default is asserted twice over — once as the constant and once as the behaviour of a
+ * two-argument call — because that pair is what guarantees the setting can never quietly
+ * become opt-in for the district that has not opened it.
+ */
+console.log("\n[11] The Codes / Names preference, and its default");
+assert(DEFAULT_LABEL_MODE === "code-name", "the default is the client's recommendation");
+eq(codeName("1000", "GENERAL FUND"), "1000 — General Fund", "…and a two-argument call takes it");
+eq(codeName("1000", "GENERAL FUND", "code-name"), "1000 — General Fund", "Codes + Names");
+eq(codeName("1000", "GENERAL FUND", "code"), "1000", "Codes Only");
+eq(codeName("1000", "GENERAL FUND", "name"), "General Fund", "Names Only");
+eq(codeName("3xx", "OTHER SERVICES", "code"), "3xx", "Codes Only does not re-case the code");
+
+console.log("\n[12] A mode NARROWS what is shown; it never blanks a cell");
+eq(codeName(null, "SPECIAL REVENUE", "code"), "Special Revenue", "no code to show — the name stands in");
+eq(codeName("", "SPECIAL REVENUE", "code"), "Special Revenue", "…and an empty code is no code");
+eq(codeName("1000", null, "name"), "1000", "no name to show — the code stands in");
+eq(codeName("1000", "   ", "name"), "1000", "…and a blank name is no name");
+eq(codeName(null, null, "code"), "", "nothing either way is still nothing");
+
+console.log("\n[13] resolveLabelMode falls back rather than throwing on a stale cookie");
+assert(resolveLabelMode("code") === "code", "a value it knows");
+assert(resolveLabelMode("codes-only") === "code-name", "one it does not");
+assert(resolveLabelMode(undefined) === "code-name", "an unset cookie");
+assert(resolveLabelMode("") === "code-name", "an empty one");
+assert(isLabelMode("name") && !isLabelMode("Name"), "the guard is exact");
+
+/*
+ * `clip` is the SVG/plain-text half of the client's (a) and (b). The DOM half is CSS —
+ * components/dashboard/dim-label.tsx — and is deliberately not asserted here, because what
+ * it does depends on a column width no script has.
+ */
+console.log("\n[14] clip — the character budget, and the ellipsis when it bites");
+eq(clip("1000 — General Fund"), "1000 — General Fund", "inside the budget, untouched");
+assert(LABEL_CHARS >= 25 && LABEL_CHARS <= 35, `the budget sits in the client's 25–35 (${LABEL_CHARS})`);
+assert(clip("5100 — Student and Instructional Support Services").length <= LABEL_CHARS, "the result respects the budget");
+assert(clip("5100 — Student and Instructional Support Services").endsWith("…"), "and says it was cut");
+eq(
+  clip("5100 — Student and Instructional Support Services"),
+  "5100 — Student and…",
+  "it cuts on a word boundary rather than mid-word",
+);
+eq(clip("Supercalifragilisticexpialidocious Fund", 20), "Supercalifragilisti…", "…except when the boundary is too far back");
+eq(clip("General Fund and", 16), "General Fund and", "a name exactly at the budget is not cut");
+assert(!clip("Salaries, Benefits and Other Costs", 26).includes(",…"), "no dangling punctuation before the ellipsis");
+eq(clip("  General Fund  "), "General Fund", "and it trims, like every other formatter here");
 
 console.log(`\n──────── ${passed} passed, ${failed} failed ────────\n`);
 process.exit(failed === 0 ? 0 : 1);

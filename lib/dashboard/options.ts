@@ -22,7 +22,7 @@ export function scopeOptions(scope: DashboardScope) {
     label: `${a.label} · FY ${a.fiscalYear}`,
   }));
 
-  const funds = scope.funds.map((f) => ({ value: f.id, label: fundLabel(f) }));
+  const funds = scope.funds.map((f) => ({ value: f.id, label: fundLabel(f, scope.labelMode) }));
 
   const params = new URLSearchParams();
   if (scope.fiscalYear) params.set("fy", scope.fiscalYear);
@@ -75,7 +75,7 @@ export function moverFund(
   fund: { id: string; code: string; name: string } | null | undefined,
 ): { label: string; href: string } | undefined {
   if (!fund || scope.fundId) return undefined;
-  return { label: fundLabel(fund), href: scopeHref(base, scope, { fund: fund.id }) };
+  return { label: fundLabel(fund, scope.labelMode), href: scopeHref(base, scope, { fund: fund.id }) };
 }
 
 /** The "where to look" chips under an alert. */

@@ -197,9 +197,15 @@ async function main() {
       "Project / Grant renders the project's number",
     );
     const availCol = cols.find((c) => c.key === "availableBudget")!;
+    const bare = cellOf("expenditure-detail", row, availCol);
     assert(
-      cellOf("expenditure-detail", row, availCol).includes("."),
-      "an amount renders at cent precision",
+      /^-?\d+\.\d\d$/.test(bare),
+      `an amount exports as bare digits at cent precision, so the file imports straight back (got "${bare}")`,
+    );
+    const shown = cellOf("expenditure-detail", row, availCol, { display: true });
+    assert(
+      /^-?\$[\d,]+(\.\d\d)?$/.test(shown) && shown.includes(","),
+      `and renders on screen as grouped currency, cents only when it has them (got "${shown}")`,
     );
 
     console.log("\nExport");

@@ -57,6 +57,7 @@ export function StatusBadge({
 
   return (
     <span
+      data-status-badge
       title={status === "N/A" ? (reason ?? "Not enough data to work this out yet.") : undefined}
       className={cn(
         "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-semibold",

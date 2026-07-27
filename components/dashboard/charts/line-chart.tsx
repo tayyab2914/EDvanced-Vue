@@ -75,7 +75,12 @@ export function LineChart({
     return <ChartEmpty height={height}>No data for this period yet.</ChartEmpty>;
   }
 
-  const plot = plotOf(width, height, { l: 58 });
+  // A series that prints its last value needs somewhere to print it. Without this the plot
+  // ran to 12 units off the right edge, the label had nowhere to go, and it flipped back
+  // over its own marker — which reads as a clipped number, which is what the client saw on
+  // "Revenues — budget vs actual". Reserve the gutter instead, and only when it is used.
+  const endLabels = series.some((s) => s.labelLast);
+  const plot = plotOf(width, height, { l: 58, r: endLabels ? 62 : 12 });
   const ticks = niceTicks(
     Math.min(...values, ...thresholdValues),
     Math.max(...values, ...thresholdValues),

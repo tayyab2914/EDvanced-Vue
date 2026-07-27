@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
+import { labelMode } from "@/lib/dashboard/label-mode";
 import { loadCore } from "@/lib/dashboard/load";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/section-card";
@@ -8,6 +9,7 @@ import { AlertList, AlertSummary } from "@/components/dashboard/alert-list";
 import { EmptyState, SubstitutionNotice, Row } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { alertFunds, scopeDescription } from "@/lib/dashboard/options";
+import { GO_TO } from "@/lib/dashboard/cta";
 import type { AlertGroup } from "@/lib/alerts/catalog";
 
 /**
@@ -19,11 +21,11 @@ import type { AlertGroup } from "@/lib/alerts/catalog";
  * obvious, and a trend chart that visibly dips below a red line with no alert beside it
  * looks broken unless the page explains itself.
  */
-const GROUPS: { key: AlertGroup; title: string; href: string }[] = [
-  { key: "revenue", title: "Revenue", href: "/revenues" },
-  { key: "expenditure", title: "Expenditure", href: "/expenditures" },
-  { key: "cash", title: "Cash", href: "/cash" },
-  { key: "fundBalance", title: "Fund balance", href: "/fund-balance" },
+const GROUPS: { key: AlertGroup; title: string; href: string; cta: string }[] = [
+  { key: "revenue", title: "Revenue", href: "/revenues", cta: GO_TO.revenues },
+  { key: "expenditure", title: "Expenditure", href: "/expenditures", cta: GO_TO.expenditures },
+  { key: "cash", title: "Cash", href: "/cash", cta: GO_TO.cash },
+  { key: "fundBalance", title: "Fund balance", href: "/fund-balance", cta: GO_TO.fundBalance },
 ];
 
 export default async function AlertsPage({
@@ -35,7 +37,7 @@ export default async function AlertsPage({
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
-  const scope = await resolveScope(db, districtId, sp);
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
 
   if (scope.empty) {
     return (
@@ -67,7 +69,7 @@ export default async function AlertsPage({
       <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
       <Row cols="1-2">
-        <SectionCard title="Summary" footer="Review your thresholds" footerHref="/policies">
+        <SectionCard title="Summary" footer={GO_TO.policies} footerHref="/policies">
           <AlertSummary
             alerts={(alerts?.alerts ?? []).map((a) => ({
               id: a.id,
@@ -85,6 +87,7 @@ export default async function AlertsPage({
 
         <SectionCard title="For awareness" subtitle="Facts worth noticing, with no threshold behind them">
           <AlertList
+            mode={scope.labelMode}
             alerts={(alerts?.observations ?? []).map((o) => ({
               id: o.id,
               severity: "INFORMATIONAL" as const,
@@ -103,10 +106,11 @@ export default async function AlertsPage({
             <SectionCard
               key={g.key}
               title={`${g.title} (${group.length})`}
-              footer={`Go to ${g.title.toLowerCase()}`}
+              footer={g.cta}
               footerHref={g.href}
             >
               <AlertList
+                mode={scope.labelMode}
                 alerts={group.map((a) => ({
                   id: a.id,
                   severity: a.severity,
@@ -124,7 +128,7 @@ export default async function AlertsPage({
         })}
       </div>
 
-      <FooterInfoBar action="Manage thresholds" href="/policies">
+      <FooterInfoBar action={GO_TO.policies} href="/policies">
         Alerts are evaluated for {scope.label} only. A threshold crossed in an earlier month
         appears on that month, not here — use the period selector to look back.
       </FooterInfoBar>

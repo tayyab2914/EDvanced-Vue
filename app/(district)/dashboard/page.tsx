@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
+import { labelMode } from "@/lib/dashboard/label-mode";
 import {
   loadCore,
   reserveThresholds,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/finance/breakdown";
 import { buildInsights, trendNarrative } from "@/lib/alerts/insights";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
+import { GO_TO, GO_TO_DASHBOARD_SHORT } from "@/lib/dashboard/cta";
 import { revenuePace, expenditurePace } from "@/lib/dashboard/pace";
 import { cashFlowYtd, cashPercentOfExpenditures } from "@/lib/finance/cash";
 import {
@@ -50,7 +52,14 @@ import { BudgetBars, MetricStrip } from "@/components/dashboard/charts/budget-ba
 import { Gauge } from "@/components/dashboard/charts/gauge";
 import { Sparkline } from "@/components/dashboard/charts/sparkline";
 import { scopeOptions, alertFunds, scopeDescription } from "@/lib/dashboard/options";
-import { SummaryPrint } from "./summary-print";
+import {
+  PrintSheet,
+  SheetBand,
+  SheetCard,
+  SheetKpi,
+  SheetStats,
+} from "@/components/dashboard/print-sheet";
+import { rungTone, sheetTone, sheetScope, sheetAsOf } from "@/lib/dashboard/summary";
 
 /**
  * The Executive dashboard — the cross-domain summary (Spec §3).
@@ -75,7 +84,7 @@ export default async function ExecutiveDashboard({
 
   const sp = await searchParams;
   const summary = sp.view === "summary";
-  const scope = await resolveScope(db, districtId, sp);
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
 
   if (scope.empty) {
     return (
@@ -385,113 +394,163 @@ export default async function ExecutiveDashboard({
   // ===================== the cards, declared once and placed twice =====================
   // The summary view is a re-arrangement of these, not a re-implementation.
 
+  /**
+   * The six headline figures, as DATA rather than as markup.
+   *
+   * The screen tile and the sheet tile are different components — one is built for a 170px
+   * column with a status badge and a drill-down link, the other for a 155px slot on paper
+   * with neither — but a summary that could print a different figure from the dashboard it
+   * summarises would be worse than no summary. So the figures are computed once here and
+   * the two components only decide how to draw them.
+   */
+  const kpiData = [
+    {
+      key: "revenues",
+      label: "Total revenues (YTD)",
+      value: compactMoney(point?.revenueYtd),
+      sub:
+        point && toNumber(point.revenueBudget)
+          ? `${percent(((toNumber(point.revenueYtd) ?? 0) / (toNumber(point.revenueBudget) || 1)) * 100)} of full-year budget`
+          : "No revenue budget uploaded",
+      note: revVarPct === null ? undefined : `${signedPercent(revVarPct)} vs budget to date`,
+      tone: revVarPct === null ? ("neutral" as const) : sheetTone(deltaTone(revVarPct, "up")),
+      icon: "dollar" as const,
+      tileTone: "green" as const,
+      href: "/revenues",
+      delta:
+        revVarPct === null
+          ? undefined
+          : {
+              text: signedPercent(revVarPct),
+              tone: deltaTone(revVarPct, "up"),
+              direction: (revVarPct < 0 ? "down" : revVarPct > 0 ? "up" : "flat") as
+                | "down"
+                | "up"
+                | "flat",
+              note: "vs budget to date",
+            },
+    },
+    {
+      key: "expenditures",
+      label: "Total expenditures (YTD)",
+      value: compactMoney(point?.expenditureYtd),
+      sub:
+        point && toNumber(point.expenditureBudget)
+          ? `${percent(((toNumber(point.expenditureYtd) ?? 0) / (toNumber(point.expenditureBudget) || 1)) * 100)} of full-year budget`
+          : "No expenditure budget uploaded",
+      note: utilPct === null ? undefined : `${percent(utilPct)} committed`,
+      tone: "neutral" as const,
+      icon: "receipt" as const,
+      tileTone: "blue" as const,
+      href: "/expenditures",
+      delta:
+        utilPct === null
+          ? undefined
+          : { text: `${percent(utilPct)} committed`, tone: "neutral" as const },
+    },
+    {
+      key: "reserve",
+      label: "Unassigned fund balance %",
+      value: percent(reserve?.percent),
+      sub: core.generalFund
+        ? `of budgeted ${core.generalFund.name} expenditures`
+        : "no General Fund identified",
+      note: `${reserveRung} · target ≥ ${reserveT.target.toFixed(2)}%`,
+      tone: rungTone(reserveRung),
+      icon: "shield" as const,
+      tileTone: "purple" as const,
+      href: "/fund-balance",
+      status: reserveRung,
+      statusNote: `Target ≥ ${reserveT.target.toFixed(2)}%`,
+      unavailableReason:
+        "Needs a fund typed General, an opening fund balance and an adopted expenditure budget.",
+    },
+    {
+      key: "days-cash",
+      label: "Days of operating cash",
+      value: daysCash === null ? NOT_AVAILABLE : fmtDays(daysCash),
+      sub: "days in reserve",
+      note: `${cashRung} · policy ≥ ${cashT.warning} days`,
+      tone: rungTone(cashRung),
+      icon: "clock" as const,
+      tileTone: "amber" as const,
+      href: "/cash",
+      status: cashRung,
+      statusNote: `Policy ≥ ${cashT.warning} days`,
+      unavailableReason: "Needs a cash position file and an adopted expenditure budget.",
+    },
+    {
+      key: "available",
+      label: "Available budget",
+      value: accounting(facts?.availableBudget, { compact: true }),
+      sub: "budget less spend and encumbrances",
+      note:
+        facts && toNumber(facts.availableBudget) !== null
+          ? toNumber(facts.availableBudget)! < 0
+            ? "Overcommitted"
+            : "Remaining"
+          : undefined,
+      tone:
+        facts && toNumber(facts.availableBudget) !== null
+          ? sheetTone(deltaTone(toNumber(facts.availableBudget), "up"))
+          : ("neutral" as const),
+      icon: "wallet" as const,
+      tileTone: "teal" as const,
+      delta:
+        facts && toNumber(facts.availableBudget) !== null
+          ? {
+              text: toNumber(facts.availableBudget)! < 0 ? "Overcommitted" : "Remaining",
+              tone: deltaTone(toNumber(facts.availableBudget), "up"),
+            }
+          : undefined,
+    },
+    {
+      key: "alerts",
+      label: "Alerts",
+      value: String(alerts?.alerts.length ?? 0),
+      sub: "require attention",
+      note:
+        alerts && alerts.criticalCount > 0
+          ? `${alerts.criticalCount} critical`
+          : alerts && alerts.warningCount > 0
+            ? `${alerts.warningCount} warning`
+            : "All clear",
+      tone:
+        alerts && alerts.criticalCount > 0
+          ? ("negative" as const)
+          : alerts && alerts.warningCount > 0
+            ? ("monitor" as const)
+            : ("positive" as const),
+      icon: "warning" as const,
+      tileTone: "red" as const,
+      href: "/alerts",
+      delta:
+        alerts && alerts.criticalCount > 0
+          ? { text: `${alerts.criticalCount} critical`, tone: "negative" as const }
+          : alerts && alerts.warningCount > 0
+            ? { text: `${alerts.warningCount} warning`, tone: "neutral" as const }
+            : { text: "All clear", tone: "positive" as const },
+    },
+  ];
+
   const kpis = (
     <KpiRow count={6}>
-      <KpiTile
-        icon="dollar"
-        tone="green"
-        label="Total revenues (YTD)"
-        value={compactMoney(point?.revenueYtd)}
-        sub={
-          point && toNumber(point.revenueBudget)
-            ? `${percent(((toNumber(point.revenueYtd) ?? 0) / (toNumber(point.revenueBudget) || 1)) * 100)} of full-year budget`
-            : "No revenue budget uploaded"
-        }
-        delta={
-          revVarPct === null
-            ? undefined
-            : {
-                text: signedPercent(revVarPct),
-                tone: deltaTone(revVarPct, "up"),
-                direction: revVarPct < 0 ? "down" : revVarPct > 0 ? "up" : "flat",
-                note: "vs budget to date",
-              }
-        }
-        href="/revenues"
-        hrefLabel="Detail"
-      />
-
-      <KpiTile
-        icon="receipt"
-        tone="blue"
-        label="Total expenditures (YTD)"
-        value={compactMoney(point?.expenditureYtd)}
-        sub={
-          point && toNumber(point.expenditureBudget)
-            ? `${percent(((toNumber(point.expenditureYtd) ?? 0) / (toNumber(point.expenditureBudget) || 1)) * 100)} of full-year budget`
-            : "No expenditure budget uploaded"
-        }
-        delta={
-          utilPct === null
-            ? undefined
-            : { text: `${percent(utilPct)} committed`, tone: "neutral" }
-        }
-        href="/expenditures"
-        hrefLabel="Detail"
-      />
-
-      <KpiTile
-        icon="shield"
-        tone="purple"
-        label="Unassigned fund balance %"
-        value={percent(reserve?.percent)}
-        sub={
-          core.generalFund
-            ? `of budgeted ${core.generalFund.name} expenditures`
-            : "no General Fund identified"
-        }
-        status={reserveRung}
-        statusNote={`Target ≥ ${reserveT.target.toFixed(2)}%`}
-        unavailableReason="Needs a fund typed General, an opening fund balance and an adopted expenditure budget."
-        href="/fund-balance"
-        hrefLabel="Detail"
-      />
-
-      <KpiTile
-        icon="clock"
-        tone="amber"
-        label="Days of operating cash"
-        value={daysCash === null ? NOT_AVAILABLE : fmtDays(daysCash)}
-        sub="days in reserve"
-        status={cashRung}
-        statusNote={`Policy ≥ ${cashT.warning} days`}
-        unavailableReason="Needs a cash position file and an adopted expenditure budget."
-        href="/cash"
-        hrefLabel="Detail"
-      />
-
-      <KpiTile
-        icon="wallet"
-        tone="teal"
-        label="Available budget"
-        value={accounting(facts?.availableBudget, { compact: true })}
-        sub="budget less spend and encumbrances"
-        delta={
-          facts && toNumber(facts.availableBudget) !== null
-            ? {
-                text: toNumber(facts.availableBudget)! < 0 ? "Overcommitted" : "Remaining",
-                tone: deltaTone(toNumber(facts.availableBudget), "up"),
-              }
-            : undefined
-        }
-      />
-
-      <KpiTile
-        icon="warning"
-        tone="red"
-        label="Alerts"
-        value={String(alerts?.alerts.length ?? 0)}
-        sub="require attention"
-        delta={
-          alerts && alerts.criticalCount > 0
-            ? { text: `${alerts.criticalCount} critical`, tone: "negative" }
-            : alerts && alerts.warningCount > 0
-              ? { text: `${alerts.warningCount} warning`, tone: "neutral" }
-              : { text: "All clear", tone: "positive" }
-        }
-        href="/alerts"
-        hrefLabel="View all"
-      />
+      {kpiData.map((k) => (
+        <KpiTile
+          key={k.key}
+          icon={k.icon}
+          tone={k.tileTone}
+          label={k.label}
+          value={k.value}
+          sub={k.sub}
+          delta={k.delta}
+          status={k.status}
+          statusNote={k.statusNote}
+          unavailableReason={k.unavailableReason}
+          href={k.href}
+          hrefLabel={k.href ? GO_TO_DASHBOARD_SHORT : undefined}
+        />
+      ))}
     </KpiRow>
   );
 
@@ -499,7 +558,7 @@ export default async function ExecutiveDashboard({
     <SectionCard
       title="Revenues vs budget (YTD)"
       subtitle="Five largest sources, against the budget expected by now"
-      footer="Go to revenues"
+      footer={GO_TO.revenues}
       footerHref="/revenues"
       info={`Status is judged against your revenue variance policy: warning at ${revT.warning.toFixed(2)}%, critical at ${revT.critical.toFixed(2)}%.`}
     >
@@ -516,7 +575,7 @@ export default async function ExecutiveDashboard({
     <SectionCard
       title="Expenditures vs budget (YTD)"
       subtitle="By object, against the budget expected by now"
-      footer="Go to expenditures"
+      footer={GO_TO.expenditures}
       footerHref="/expenditures"
       info={`Status is judged against your expenditure variance policy: warning at ${expT.warning.toFixed(2)}%, critical at ${expT.critical.toFixed(2)}%.`}
     >
@@ -544,7 +603,7 @@ export default async function ExecutiveDashboard({
           </span>
         )
       }
-      footer="View full analysis"
+      footer={GO_TO.fundBalance}
       footerHref="/fund-balance"
       footerNote="All amounts are unaudited"
     >
@@ -591,7 +650,7 @@ export default async function ExecutiveDashboard({
       title="Cash position"
       subtitle={`As of ${scope.label} (FY ${scope.fiscalYear})`}
       badge={scope.fundLevelOnly ? <FundLevelOnly what="Cash is" /> : undefined}
-      footer="Go to cash"
+      footer={GO_TO.cash}
       footerHref="/cash"
     >
       <MetricStrip
@@ -656,7 +715,7 @@ export default async function ExecutiveDashboard({
     <SectionCard
       title="Financial health summary"
       subtitle="Key indicators compared to policy targets"
-      footer="View full financial health"
+      footer={GO_TO.policies}
       footerHref="/policies"
     >
       <DataTable
@@ -691,7 +750,7 @@ export default async function ExecutiveDashboard({
   );
 
   const insightsCard = (
-    <SectionCard title="Key insights" footer="View all insights" footerHref="/alerts">
+    <SectionCard title="Key insights" footer={GO_TO.alerts} footerHref="/alerts">
       {insights.length > 0 ? (
         <InsightList insights={insights} layout="column" />
       ) : (
@@ -706,7 +765,7 @@ export default async function ExecutiveDashboard({
   const alertsCard = (
     <SectionCard
       title={`Alert summary (${alerts?.alerts.length ?? 0})`}
-      footer="View all alerts"
+      footer={GO_TO.alerts}
       footerHref="/alerts"
     >
       <AlertSummary
@@ -720,44 +779,149 @@ export default async function ExecutiveDashboard({
   );
 
   // ===================== the one-page landscape summary =====================
+  //
+  // NOT the dashboard with tighter padding. The bands below are chosen for a 990px canvas
+  // and nothing else: the two budget charts get a half-width column each because their
+  // fixed label / reference / status columns leave a three-up layout roughly 8px of actual
+  // bar to draw in — which is how the previous summary managed to print a chart with no
+  // chart in it. Everything the screen version showed is still here.
   if (summary) {
     return (
-      <div data-summary className="animate-fade-up space-y-3">
-        {/* Scoped to this view only, so the multi-page detailed print stays portrait. */}
-        <style>{`@media print { @page { size: A4 landscape; margin: 8mm; } }`}</style>
-        <SummaryPrint />
+      <PrintSheet
+        title="Executive Summary"
+        district={user.districtName ?? "District"}
+        scope={sheetScope(scope)}
+        asOf={sheetAsOf(scope.dataAsOf)}
+        backHref={options.query ? `/dashboard?${options.query}` : "/dashboard"}
+      >
+        <SheetBand cols="1fr 1fr 1fr 1fr 1fr 1fr">
+          {kpiData.map((k) => (
+            <SheetKpi
+              key={k.key}
+              label={k.label}
+              value={k.value}
+              sub={k.sub}
+              note={k.note}
+              tone={k.tone}
+            />
+          ))}
+        </SheetBand>
 
-        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-line pb-3">
-          <div>
-            <h1 className="text-[19px] font-semibold tracking-[-0.3px] text-ink">
-              {user.districtName ?? "District"} — Executive Summary
-            </h1>
-            <p className="mt-0.5 text-[12px] text-muted">
-              {scope.label} · FY {scope.fiscalYear} ·{" "}
-              {scope.fund ? scope.fund.name : "All funds"} · all amounts unaudited
-            </p>
-          </div>
-          <a
-            href={options.query ? `/dashboard?${options.query}` : "/dashboard"}
-            className="rounded-lg border border-line bg-white px-3 py-1.5 text-[12.5px] font-medium text-ink-soft print:hidden"
+        <SheetBand cols="1fr 1fr">
+          <SheetCard title="Revenues vs budget (YTD)" note="Five largest sources">
+            <BudgetBars
+              title="Revenues against budget"
+              summary="Actual year-to-date revenue against the budget expected by now and the full-year budget, for the five largest sources."
+              rows={revenueRows}
+              format={(v) => compactMoney(v, 0)}
+            />
+          </SheetCard>
+
+          <SheetCard title="Expenditures vs budget (YTD)" note="By object">
+            <BudgetBars
+              title="Expenditures against budget"
+              summary="Actual year-to-date spending against the budget expected by now and the full-year budget, by object type."
+              rows={expenditureRows}
+              format={(v) => compactMoney(v, 0)}
+            />
+          </SheetCard>
+        </SheetBand>
+
+        <SheetBand cols="1.05fr 1.25fr 0.9fr">
+          <SheetCard
+            title="Fund balance trend"
+            badge={
+              isGeneralFund ? <StatusBadge status={reserveRung} size="sm" dot={false} /> : undefined
+            }
+            note={scope.fund ? scope.fund.name : "All funds"}
           >
-            ← Back to dashboard
-          </a>
-        </div>
+            <LineChart
+              title="Fund balance trend"
+              summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
+              categories={labels}
+              format={(v) => compactMoney(v, 0)}
+              height={250}
+              series={[
+                {
+                  key: "total",
+                  label: isGeneralFund ? "Ending fund balance" : "Total fund balance",
+                  color: "var(--color-viz-budget)",
+                  points: fundBalanceTrend,
+                  labelLast: true,
+                },
+                ...(isGeneralFund
+                  ? [
+                      {
+                        key: "unassigned",
+                        label: "Unassigned fund balance",
+                        color: "var(--color-viz-actual)",
+                        points: unassignedTrend,
+                        labelLast: true,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+            <SheetStats
+              items={
+                isGeneralFund
+                  ? [
+                      { label: "Ending", value: compactMoney(endingFundBalance) },
+                      { label: "Unassigned", value: compactMoney(point?.unassignedFundBalance) },
+                      { label: "Target", value: `${reserveT.target.toFixed(2)}%` },
+                      { label: "Minimum", value: `${statutoryMinimum.toFixed(2)}%` },
+                    ]
+                  : [
+                      { label: "Ending", value: compactMoney(endingFundBalance) },
+                      { label: "Opening", value: compactMoney(openingFundBalance) },
+                      {
+                        label: "Change",
+                        value: accounting(fbChange, { compact: true }),
+                        tone: fbChange?.isNegative() ? ("negative" as const) : ("positive" as const),
+                      },
+                    ]
+              }
+            />
+          </SheetCard>
 
-        {kpis}
+          <SheetCard title="Financial health summary" note="Against policy targets">
+            <DataTable
+              dense
+              columns={[
+                { key: "indicator", label: "Indicator" },
+                { key: "current", label: "Current", align: "right" },
+                { key: "target", label: "Target", align: "right" },
+                { key: "status", label: "Status", align: "right" },
+              ]}
+              rows={health.map((h) => ({
+                id: h.id,
+                cells: {
+                  indicator: { value: h.indicator, strong: true },
+                  current: h.current,
+                  target: h.target,
+                  status: (
+                    <span className="flex justify-end">
+                      <StatusBadge status={h.rung} size="sm" dot={false} />
+                    </span>
+                  ),
+                },
+              }))}
+            />
+          </SheetCard>
 
-        <div className="grid gap-3 lg:grid-cols-3">
-          {revenueCard}
-          {expenditureCard}
-          {fundBalanceCard}
-        </div>
-
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          {healthCard}
-          {insightsCard}
-        </div>
-      </div>
+          <SheetCard title="Key insights">
+            {insights.length > 0 ? (
+              // Four, not all of them. The sheet is a fixed page and an unbounded list is
+              // the one thing on it that can grow without limit; the rest are on /alerts.
+              <InsightList insights={insights.slice(0, 4)} layout="column" />
+            ) : (
+              <p className="py-3 text-center text-[9.5px] text-muted-2">
+                Nothing stands out this period.
+              </p>
+            )}
+          </SheetCard>
+        </SheetBand>
+      </PrintSheet>
     );
   }
 

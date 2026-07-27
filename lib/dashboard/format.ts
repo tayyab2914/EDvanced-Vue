@@ -41,8 +41,9 @@ export const NOT_AVAILABLE = "—";
  * the browser. Formatting by hand is a dozen characters of regex and cannot drift with the
  * runtime's ICU data.
  *
- * The default of two decimal places is the client's, and it applies everywhere a figure is
- * shown in full. Axis ticks pass `dp: 0` explicitly, because cents on a gridline are noise.
+ * `dp` is decided by the caller and defaults to `autoDp` below — cents when the figure has
+ * cents, none when it does not. Axis ticks pass `dp: 0` explicitly, to hold a fixed tick
+ * width rather than to say anything about cents.
  */
 function group(abs: number, dp: number): string {
   const [whole, fraction] = abs.toFixed(dp).split(".");
@@ -50,20 +51,57 @@ function group(abs: number, dp: number): string {
   return fraction ? `${grouped}.${fraction}` : grouped;
 }
 
-/** The plain grouped number, no currency symbol: 426,845,120.00. */
-export function number(v: Numeric | null | undefined, dp = 2): string {
-  const n = toNumber(v);
-  if (n === null) return NOT_AVAILABLE;
-  return `${n < 0 ? "−" : ""}${group(Math.abs(n), dp)}`;
+/**
+ * How many decimal places a figure actually needs: cents when it HAS cents, none when it
+ * does not.
+ *
+ * The client's rule, and the reason every `dp` below defaults to this rather than to 2:
+ * "$426,845,120.00" spends four characters saying the district's general fund is a whole
+ * number of dollars, and a column of them trains the eye to skip the end of every figure —
+ * which is where the cents live on the rows that do have them.
+ *
+ * It asks the value ROUNDED TO CENTS, not the raw float. These figures are sums of
+ * Prisma.Decimals, so a whole-dollar total can land at 1234.9999999 on the way through
+ * `toNumber`; testing the raw value would call that "has cents" and then render it as
+ * "1,235.00" — the exact trailing zeros this exists to remove.
+ */
+function autoDp(n: number): number {
+  return Math.round(Math.abs(n) * 100) % 100 === 0 ? 0 : 2;
 }
 
 /**
- * The headline form: $426.85M, $41.60M, $890.00K, $1,240.00.
+ * Drops a fraction that is nothing but zeros: 41.60 → 41.6, 890.00 → 890.
  *
- * A district's general fund runs to hundreds of millions, and "$426,845,120.00" on a KPI
- * tile is a number nobody reads — they count digits instead. Compact is the right default
- * for a tile or an axis; `money()` below is for tables, where the exact figure is the
- * point.
+ * For the ABBREVIATED forms only, where the decimals are a scale artefact rather than
+ * cents — "$41.60M" is not sixty cents, it is six hundred thousand dollars written in a
+ * place the reader has to count to. `autoDp` handles the exact forms; this handles the
+ * mantissa left over after dividing by a million.
+ *
+ * The `includes(".")` guard is load-bearing: without it the regex eats the trailing zeros
+ * of a whole number and turns "1,000" into "1,".
+ */
+function trimZeros(s: string): string {
+  return s.includes(".") ? s.replace(/\.?0+$/, "") : s;
+}
+
+/** The plain grouped number, no currency symbol: 426,845,120. Cents only if it has them. */
+export function number(v: Numeric | null | undefined, dp?: number): string {
+  const n = toNumber(v);
+  if (n === null) return NOT_AVAILABLE;
+  return `${n < 0 ? "−" : ""}${group(Math.abs(n), dp ?? autoDp(n))}`;
+}
+
+/**
+ * The headline form: $426.85M, $41.6M, $890K, $1,240.
+ *
+ * A district's general fund runs to hundreds of millions, and "$426,845,120" on a KPI tile
+ * is a number nobody reads — they count digits instead. Compact is the right form for a
+ * tile or an axis tick, and ONLY for those; `money()` below is for tables and drill-downs,
+ * where the exact figure with its thousands separators is the point.
+ *
+ * The mantissa is trimmed of trailing zeros, so the decimals that survive are the ones
+ * carrying information: $426.85M keeps both, $41.6M keeps the one that matters, $890K
+ * keeps none. Pass `dp` explicitly — axis ticks pass 0 — to fix the width instead.
  */
 export function compactMoney(v: Numeric | null | undefined, dp?: number): string {
   const n = toNumber(v);
@@ -71,19 +109,27 @@ export function compactMoney(v: Numeric | null | undefined, dp?: number): string
 
   const abs = Math.abs(n);
   const sign = n < 0 ? "-" : "";
-  const d = dp ?? 2;
+  // A caller that names its decimal places wants that width held, so only the defaulted
+  // case is trimmed.
+  const scaled = (unit: number) =>
+    dp === undefined ? trimZeros(group(abs / unit, 2)) : group(abs / unit, dp);
 
-  if (abs >= 1_000_000_000) return `${sign}$${group(abs / 1_000_000_000, d)}B`;
-  if (abs >= 1_000_000) return `${sign}$${group(abs / 1_000_000, d)}M`;
-  if (abs >= 1_000) return `${sign}$${group(abs / 1_000, d)}K`;
-  return `${sign}$${group(abs, d)}`;
+  if (abs >= 1_000_000_000) return `${sign}$${scaled(1_000_000_000)}B`;
+  if (abs >= 1_000_000) return `${sign}$${scaled(1_000_000)}M`;
+  if (abs >= 1_000) return `${sign}$${scaled(1_000)}K`;
+  // Below a thousand there is nothing to abbreviate, so this is the exact figure and cents
+  // are cents rather than a scale artefact.
+  return `${sign}$${group(abs, dp ?? autoDp(n))}`;
 }
 
-/** The exact figure, comma-grouped: $426,845,120.00. Tables and drill-downs. */
-export function money(v: Numeric | null | undefined, dp = 2): string {
+/**
+ * The exact figure, comma-grouped: $426,845,120, or $426,845,120.37 when there are cents.
+ * Tables and drill-downs.
+ */
+export function money(v: Numeric | null | undefined, dp?: number): string {
   const n = toNumber(v);
   if (n === null) return NOT_AVAILABLE;
-  return `${n < 0 ? "-" : ""}$${group(Math.abs(n), dp)}`;
+  return `${n < 0 ? "-" : ""}$${group(Math.abs(n), dp ?? autoDp(n))}`;
 }
 
 /**
@@ -101,7 +147,7 @@ export function accounting(
   if (n === null) return NOT_AVAILABLE;
   const body = opts.compact
     ? compactMoney(Math.abs(n), opts.dp)
-    : money(Math.abs(n), opts.dp ?? 0);
+    : money(Math.abs(n), opts.dp);
   return n < 0 ? `(${body})` : body;
 }
 

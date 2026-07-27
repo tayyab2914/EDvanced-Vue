@@ -1,4 +1,5 @@
 import { linear, niceTicks, barPath } from "@/lib/dashboard/scale";
+import { clip } from "@/lib/text";
 import { Legend, ChartFigure, ChartEmpty, type LegendItem } from "./chrome";
 
 /**
@@ -29,10 +30,16 @@ export interface HBarSeries {
   outline?: boolean;
 }
 
-/** Names are truncated rather than overflowed: SVG text neither wraps nor ellipsises. */
-function truncate(s: string, max = 22): string {
-  return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
-}
+/**
+ * The gutter's character budget.
+ *
+ * Below the 25–35 the client set for a table column, and deliberately: the gutter is a fixed
+ * 150px beside the plot, not a column that can take what it needs. `clip` is shared with
+ * every other plain-text truncation in the product so the ellipsis rule is written once —
+ * see lib/text.ts, and components/dashboard/dim-label.tsx for the DOM version that measures
+ * the real width instead of guessing at it.
+ */
+const GUTTER_CHARS = 22;
 
 export function HBarChart({
   rows,
@@ -94,7 +101,7 @@ export function HBarChart({
                   fill="var(--color-ink-muted)"
                 >
                   <title>{row.label}</title>
-                  {truncate(row.label)}
+                  {clip(row.label, GUTTER_CHARS)}
                 </text>
 
                 {series.map((s, si) => {

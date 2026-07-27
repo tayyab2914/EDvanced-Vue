@@ -58,7 +58,7 @@ export default async function DistrictDetailPage({
         actions={
           <div className="flex gap-2">
             <Link href="/platform/districts">
-              <Button variant="ghost">← All districts</Button>
+              <Button variant="ghost">← Back to all districts</Button>
             </Link>
             <Link href={`/platform/districts/${district.id}/users`}>
               <Button variant="secondary">

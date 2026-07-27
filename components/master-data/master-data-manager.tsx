@@ -84,7 +84,7 @@ export function MasterDataManager({
     if (raw == null || raw === "") return "—";
     if (f.numeric) {
       const n = Number(raw);
-      return isNaN(n) ? String(raw) : money(n, 2);
+      return isNaN(n) ? String(raw) : money(n);
     }
     if (f.staticOptions)
       return f.staticOptions.find((o) => o.value === String(raw))?.label ?? String(raw);

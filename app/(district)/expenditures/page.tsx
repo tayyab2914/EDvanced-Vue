@@ -24,6 +24,7 @@ import { expenditurePace, approachingCeiling } from "@/lib/dashboard/pace";
 import { daysIntoFiscalYear } from "@/lib/finance/variance";
 import {
   compactMoney,
+  money,
   accounting,
   percent,
   signedPercent,
@@ -45,8 +46,26 @@ import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { ColumnChart } from "@/components/dashboard/charts/column-chart";
 import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
 import { scopeOptions, moverFund, alertFunds, scopeDescription } from "@/lib/dashboard/options";
+import { GO_TO, MANAGE, VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { SERIES_SLOTS } from "@/lib/dashboard/palette";
-import { codeName } from "@/lib/text";
+import {
+  PrintSheet,
+  SheetBand,
+  SheetCard,
+  SheetKpi,
+  SheetStats,
+} from "@/components/dashboard/print-sheet";
+import {
+  rungTone,
+  sheetTone,
+  sheetScope,
+  sheetAsOf,
+  SHEET_TABLE_ROWS,
+  SHEET_TABLE_NOTE,
+} from "@/lib/dashboard/summary";
+import { codeName, type LabelMode } from "@/lib/text";
+import { labelMode } from "@/lib/dashboard/label-mode";
+import { DimLabel } from "@/components/dashboard/dim-label";
 import { EXPENDITURE_VIEWS, resolveView, type ExpenditureView } from "@/lib/dashboard/view";
 
 /**
@@ -61,17 +80,16 @@ import { EXPENDITURE_VIEWS, resolveView, type ExpenditureView } from "@/lib/dash
  *
  * The full function list is untouched and still sits two rows down, in Function Type Code
  * order, because that is the reference table the client asked for and this is not it.
+ *
+ * There is no per-view `label` any more. Object types and cost centre types used to render
+ * their bare name while functions and projects rendered `code — name`, so the same card
+ * changed convention as the reader moved the selector. All four are dimensions and all four
+ * carry a code (lib/finance/breakdown.ts builds every one of these rows through `makeRow`),
+ * so all four go through `codeName` and honour the reader's Codes / Names setting.
  */
 const VIEW_META: Record<
   ExpenditureView,
-  {
-    title: string;
-    subtitle: string;
-    info: string;
-    column: string;
-    ranked: boolean;
-    label: (r: BreakdownRow) => string;
-  }
+  { title: string; subtitle: string; info: string; column: string; ranked: boolean }
 > = {
   object: {
     title: "Expenditures by object (YTD)",
@@ -79,7 +97,6 @@ const VIEW_META: Record<
     info: "Object types in chart-of-accounts order, not by size, so the list reads the same every month.",
     column: "Object",
     ranked: false,
-    label: (r) => r.name,
   },
   function: {
     title: "Expenditures by function (YTD)",
@@ -87,7 +104,6 @@ const VIEW_META: Record<
     info: "The biggest spending functions by budget, with the remainder folded into Other. The complete table follows in Function Type Code order.",
     column: "Function",
     ranked: true,
-    label: (r) => codeName(r.code, r.name),
   },
   costCenterType: {
     title: "Expenditures by cost center type (YTD)",
@@ -95,7 +111,6 @@ const VIEW_META: Record<
     info: "Cost centre types in their configured order. Rows whose cost centre column was left blank are shown as No Cost Center Type rather than dropped.",
     column: "Cost center type",
     ranked: false,
-    label: (r) => r.name,
   },
   project: {
     title: "Expenditures by project (YTD)",
@@ -103,9 +118,11 @@ const VIEW_META: Record<
     info: "The largest projects by budget, with the remainder folded into Other. Grant-funded spending arrives tagged here.",
     column: "Project",
     ranked: true,
-    label: (r) => codeName(r.code, r.name),
   },
 };
+
+/** A breakdown row's dimension, as text — for the chart labels, which are not DOM nodes. */
+const rowLabel = (r: BreakdownRow, mode: LabelMode) => codeName(r.code, r.name, mode);
 
 /**
  * The Expenditures dashboard (Spec §5) — spending against budget.
@@ -128,13 +145,20 @@ const VIEW_META: Record<
 export default async function ExpenditureDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; period?: string; fund?: string; groupBy?: string }>;
+  searchParams: Promise<{
+    fy?: string;
+    period?: string;
+    fund?: string;
+    groupBy?: string;
+    view?: string;
+  }>;
 }) {
   const { db, user, districtId } = await getTenantDb();
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
-  const scope = await resolveScope(db, districtId, sp);
+  const summary = sp.view === "summary";
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
   const view = resolveView(EXPENDITURE_VIEWS, sp.groupBy);
   const meta = VIEW_META[view];
 
@@ -213,6 +237,280 @@ export default async function ExpenditureDashboard({
   const fullYearBudget = toNumber(byFunction.total.budget) ?? 0;
   const options = scopeOptions(scope);
   const expenditureAlerts = (alerts?.alerts ?? []).filter((a) => a.group === "expenditure");
+  const summaryHref = options.query
+    ? `/expenditures?${options.query}&view=summary`
+    : "/expenditures?view=summary";
+
+  // ---------- the sheet's six headline figures ----------
+  // Same derived totals the screen tiles above read; only the presentation differs. See the
+  // note on `SheetKpi` for why the printed tile is its own component.
+  const kpiData = [
+    {
+      key: "total",
+      label: "Total expenditures (YTD)",
+      value: compactMoney(byFunction.total.actualYtd),
+      sub: `${percent(byFunction.total.consumption.percent)} of full-year budget`,
+      note: `${percent(byFunction.total.consumption.percent)} spent`,
+      tone: "neutral" as const,
+    },
+    {
+      key: "utilisation",
+      label: "Budget utilisation",
+      value: percent(byFunction.total.utilisation.percent),
+      sub: "spend plus encumbrances",
+      note: `${utilRung} · warning ${utilT.warning.toFixed(2)}%`,
+      tone: rungTone(utilRung),
+    },
+    {
+      key: "available",
+      label: "Available budget",
+      value: accounting(byFunction.total.available, { compact: true }),
+      sub: `of ${compactMoney(byFunction.total.budget)} budgeted`,
+      note: byFunction.total.available.isNegative() ? "Overcommitted" : "Remaining",
+      tone: byFunction.total.available.isNegative()
+        ? ("negative" as const)
+        : ("positive" as const),
+    },
+    {
+      key: "encumbrances",
+      label: "Encumbrances",
+      value: compactMoney(byFunction.total.encumbrances),
+      sub: "committed, not yet spent",
+      note: `${percent(sharePercent(byFunction.total.encumbrances, byFunction.total.budget), 1)} of budget`,
+      tone: "neutral" as const,
+    },
+    {
+      key: "mom",
+      label: "Month over month change",
+      value: compactMoney(point?.expenditureMtd),
+      sub: "spent this period",
+      note:
+        momPct === null
+          ? previous
+            ? undefined
+            : "no earlier period"
+          : `${signedPercent(momPct)} ${momPct < 0 ? "decrease" : "increase"}`,
+      tone: momPct === null ? ("neutral" as const) : sheetTone(deltaTone(momPct, "down")),
+    },
+    {
+      key: "status",
+      label: "Expenditure status (YTD)",
+      value: totalPace.label === "N/A" ? "Not available" : totalPace.label,
+      sub:
+        varPct === null
+          ? "needs an expenditure budget"
+          : `${signedPercent(varPct)} vs budget to date`,
+      note: `Policy ± ${fcT.warning.toFixed(2)}%`,
+      tone: rungTone(totalPace.rung),
+    },
+  ];
+
+  // ===================== the one-page landscape summary =====================
+  if (summary) {
+    return (
+      <PrintSheet
+        title="Expenditure Summary"
+        district={user.districtName ?? "District"}
+        scope={sheetScope(scope)}
+        asOf={sheetAsOf(scope.dataAsOf)}
+        backHref={options.query ? `/expenditures?${options.query}` : "/expenditures"}
+      >
+        <SheetBand cols="1fr 1fr 1fr 1fr 1fr 1fr">
+          {kpiData.map((k) => (
+            <SheetKpi
+              key={k.key}
+              label={k.label}
+              value={k.value}
+              sub={k.sub}
+              note={k.note}
+              tone={k.tone}
+            />
+          ))}
+        </SheetBand>
+
+        <SheetBand cols="1fr 1fr">
+          <SheetCard title="Expenditures — budget vs actual" note={`Through ${scope.label}`}>
+            <LineChart
+              title="Expenditures, budget against actual"
+              summary={`Actual spending year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
+              categories={labels}
+              format={(v) => compactMoney(v, 0)}
+              height={230}
+              series={[
+                {
+                  key: "actual",
+                  label: "Actual (YTD)",
+                  color: "var(--color-viz-actual)",
+                  labelLast: true,
+                  points: series.points.map((p) => ({
+                    value: toNumber(p.expenditureYtd),
+                    label: compactMoney(p.expenditureYtd),
+                  })),
+                },
+                {
+                  key: "budget",
+                  label: "Budget (YTD)",
+                  color: "var(--color-viz-budget)",
+                  points: series.points.map((p) => ({
+                    value: p.hasData
+                      ? ((toNumber(p.expenditureBudget) ?? 0) * p.period) / 12
+                      : null,
+                  })),
+                },
+                {
+                  key: "full",
+                  label: "Budget (full year)",
+                  color: "var(--color-viz-reference)",
+                  dashed: true,
+                  markers: false,
+                  points: series.points.map(() => ({ value: fullYearBudget })),
+                },
+              ]}
+            />
+            <SheetStats
+              items={[
+                { label: "Actual (YTD)", value: compactMoney(byFunction.total.actualYtd) },
+                { label: "Budget (YTD)", value: compactMoney(byFunction.total.pace.budget) },
+                {
+                  label: "Variance (YTD)",
+                  value: accounting(byFunction.total.pace.amount, { compact: true }),
+                  // Spending BELOW pace is the good sign here, the opposite of revenue —
+                  // polarity is per-figure, never per-colour.
+                  tone: byFunction.total.pace.amount.isNegative() ? "positive" : "negative",
+                },
+                {
+                  label: "Available",
+                  value: accounting(byFunction.total.available, { compact: true }),
+                  tone: byFunction.total.available.isNegative() ? "negative" : "positive",
+                },
+              ]}
+            />
+          </SheetCard>
+
+          <SheetCard title={meta.title} note={meta.subtitle}>
+            <ShareBars
+              title={meta.title}
+              summary={`Share of year-to-date spending by ${meta.column.toLowerCase()}.`}
+              rows={grouped.rows.map((r, i) => ({
+                id: r.id,
+                label: rowLabel(r, scope.labelMode),
+                value: toNumber(r.actualYtd) ?? 0,
+                display: compactMoney(r.actualYtd),
+                share: percent(sharePercent(r.actualYtd, grouped.total.actualYtd), 1),
+                color: SERIES_SLOTS[i % SERIES_SLOTS.length],
+              }))}
+            />
+            <SheetStats
+              items={[
+                { label: "Total actual", value: compactMoney(grouped.total.actualYtd) },
+                { label: "Total budget", value: compactMoney(grouped.total.budget) },
+                { label: "Utilised", value: percent(grouped.total.utilisation.percent) },
+              ]}
+            />
+          </SheetCard>
+        </SheetBand>
+
+        <SheetBand cols="1.6fr 1fr">
+          <SheetCard title="Expenditures by function (YTD)" note={SHEET_TABLE_NOTE}>
+            <DataTable
+              dense
+              columns={[
+                { key: "fn", label: "Function" },
+                { key: "budget", label: "Budget", align: "right" },
+                { key: "actual", label: "Actual (YTD)", align: "right" },
+                { key: "enc", label: "Encumbered", align: "right" },
+                { key: "avail", label: "Available", align: "right" },
+                { key: "util", label: "Utilised", align: "right" },
+                { key: "status", label: "Status", align: "right" },
+              ]}
+              rows={byFunction.rows.slice(0, SHEET_TABLE_ROWS).map((r) => {
+                const rowUtil = toNumber(r.utilisation.percent);
+                const rowRung = ladder(rowUtil, utilT);
+                const overspent = r.available.isNegative() || rowRung === "Action Required";
+                const nearing = !overspent && approachingCeiling(rowUtil, utilT);
+                const pace = expenditurePace(toNumber(r.pace.percent), fcT);
+                return {
+                  id: r.id,
+                  flag: overspent
+                    ? ("negative" as const)
+                    : nearing
+                      ? ("warning" as const)
+                      : undefined,
+                  cells: {
+                    fn: { value: codeName(r.code, r.name, scope.labelMode), strong: true },
+                    budget: compactMoney(r.budget),
+                    actual: compactMoney(r.actualYtd),
+                    enc: compactMoney(r.encumbrances),
+                    avail: {
+                      value: accounting(r.available, { compact: true }),
+                      tone: r.available.isNegative() ? ("negative" as const) : ("neutral" as const),
+                    },
+                    util: percent(r.utilisation.percent),
+                    status: (
+                      <span className="flex justify-end">
+                        <StatusBadge
+                          status={overspent ? "Action Required" : nearing ? "Monitor" : pace.rung}
+                          label={overspent ? "Overspent" : nearing ? "Approaching" : pace.label}
+                          size="sm"
+                          dot={false}
+                        />
+                      </span>
+                    ),
+                  },
+                };
+              })}
+              total={{
+                id: "total",
+                total: true,
+                cells: {
+                  fn: "Total expenditures",
+                  budget: compactMoney(byFunction.total.budget),
+                  actual: compactMoney(byFunction.total.actualYtd),
+                  enc: compactMoney(byFunction.total.encumbrances),
+                  avail: accounting(byFunction.total.available, { compact: true }),
+                  util: percent(byFunction.total.utilisation.percent),
+                  status: (
+                    <span className="flex justify-end">
+                      <StatusBadge status={utilRung} size="sm" dot={false} />
+                    </span>
+                  ),
+                },
+              }}
+            />
+          </SheetCard>
+
+          <div className="flex min-w-0 flex-col gap-[7px]">
+            <SheetCard title="Largest variances" note="Against budget to date">
+              <MoverList
+                items={[...movers.positive, ...movers.negative].slice(0, 4).map((r) => ({
+                  id: r.id,
+                  name: codeName(r.code, r.name, scope.labelMode),
+                  value: accounting(r.pace.amount, { compact: true }),
+                  percent: signedPercent(r.pace.percent),
+                  // Over pace is the bad direction for spending.
+                  tone: r.pace.amount.isNegative() ? ("positive" as const) : ("negative" as const),
+                }))}
+                empty="Nothing is materially off budget."
+              />
+            </SheetCard>
+
+            <SheetCard title={`Expenditure alerts (${expenditureAlerts.length})`}>
+              <AlertList
+                mode={scope.labelMode}
+                alerts={expenditureAlerts.slice(0, 2).map((a) => ({
+                  id: a.id,
+                  severity: a.severity,
+                  title: a.title,
+                  message: a.message,
+                }))}
+                empty="No expenditure thresholds crossed."
+              />
+            </SheetCard>
+          </div>
+        </SheetBand>
+      </PrintSheet>
+    );
+  }
 
   return (
     <div className="animate-fade-up space-y-[18px]">
@@ -223,6 +521,7 @@ export default async function ExpenditureDashboard({
           <DashboardFilters
             scope={scope}
             exportHref={options.exportHref("/expenditures/export")}
+            summaryHref={summaryHref}
           />
         }
       />
@@ -409,7 +708,7 @@ export default async function ExpenditureDashboard({
             summary={`Share of year-to-date spending by ${meta.column.toLowerCase()}.`}
             rows={grouped.rows.map((r, i) => ({
               id: r.id,
-              label: meta.label(r),
+              label: rowLabel(r, scope.labelMode),
               value: toNumber(r.actualYtd) ?? 0,
               display: compactMoney(r.actualYtd),
               share: percent(sharePercent(r.actualYtd, grouped.total.actualYtd), 1),
@@ -438,9 +737,12 @@ export default async function ExpenditureDashboard({
                         ? ("warning" as const)
                         : undefined,
                   cells: {
-                    group: { value: meta.label(r), strong: true },
-                    budget: compactMoney(r.budget),
-                    actual: compactMoney(r.actualYtd),
+                    group: {
+                      value: <DimLabel code={r.code} name={r.name} mode={scope.labelMode} />,
+                      strong: true,
+                    },
+                    budget: money(r.budget),
+                    actual: money(r.actualYtd),
                     util: {
                       value: percent(r.utilisation.percent),
                       tone:
@@ -467,8 +769,8 @@ export default async function ExpenditureDashboard({
                 total: true,
                 cells: {
                   group: "Total expenditures",
-                  budget: compactMoney(grouped.total.budget),
-                  actual: compactMoney(grouped.total.actualYtd),
+                  budget: money(grouped.total.budget),
+                  actual: money(grouped.total.actualYtd),
                   util: percent(grouped.total.utilisation.percent),
                   status: null,
                 },
@@ -494,7 +796,7 @@ export default async function ExpenditureDashboard({
                 { label: "Month-over-month — critical", value: `${Number(policy.expenditure.momIncreaseCritical).toFixed(2)}%` },
               ]}
               manageHref={userCan(user, "configure_district") ? "/policies" : undefined}
-              manageLabel="Manage expenditure policies"
+              manageLabel={MANAGE.expenditurePolicies}
             />
           </SectionCard>
 
@@ -506,7 +808,7 @@ export default async function ExpenditureDashboard({
             <MoverList
               items={movers.positive.map((r) => ({
                 id: r.id,
-                name: codeName(r.code, r.name),
+                name: codeName(r.code, r.name, scope.labelMode),
                 fund: moverFund(scope, "/expenditures", r.fund),
                 note: r.group?.name,
                 value: accounting(r.pace.amount, { compact: true }),
@@ -560,7 +862,7 @@ export default async function ExpenditureDashboard({
           title="Expenditures by function (YTD)"
           subtitle="In Function Type Code order"
           info="A tinted row is overspent or past its utilisation ceiling. An amber row is approaching it."
-          footer="Browse expenditure detail"
+          footer={VIEW_DETAILS.expenditureDetail}
           footerHref={`/data/expenditure-detail?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
           <DataTable
@@ -586,15 +888,24 @@ export default async function ExpenditureDashboard({
                 flag: overspent ? ("negative" as const) : nearing ? ("warning" as const) : undefined,
                 cells: {
                   fn: {
-                    value: codeName(r.code, r.name),
+                    value: (
+                      <DimLabel
+                        code={r.code}
+                        name={r.name}
+                        mode={scope.labelMode}
+                        // The classification used to be the cell's own `title`, which the
+                        // label's tooltip would now sit on top of. Folded in, so one hover
+                        // gives the full name AND where it sits in the chart of accounts.
+                        note={r.group?.name ? `${r.group.name} (${r.group.code ?? "—"})` : undefined}
+                      />
+                    ),
                     strong: true,
-                    title: r.group?.name ? `${r.group.name} (${r.group.code ?? "—"})` : undefined,
                   },
-                  budget: compactMoney(r.budget),
-                  actual: compactMoney(r.actualYtd),
-                  enc: compactMoney(r.encumbrances),
+                  budget: money(r.budget),
+                  actual: money(r.actualYtd),
+                  enc: money(r.encumbrances),
                   avail: {
-                    value: accounting(r.available, { compact: true }),
+                    value: accounting(r.available),
                     tone: r.available.isNegative() ? ("negative" as const) : ("neutral" as const),
                     strong: r.available.isNegative(),
                   },
@@ -626,11 +937,11 @@ export default async function ExpenditureDashboard({
               total: true,
               cells: {
                 fn: "Total expenditures",
-                budget: compactMoney(byFunction.total.budget),
-                actual: compactMoney(byFunction.total.actualYtd),
-                enc: compactMoney(byFunction.total.encumbrances),
+                budget: money(byFunction.total.budget),
+                actual: money(byFunction.total.actualYtd),
+                enc: money(byFunction.total.encumbrances),
                 avail: {
-                  value: accounting(byFunction.total.available, { compact: true }),
+                  value: accounting(byFunction.total.available),
                   tone: byFunction.total.available.isNegative()
                     ? ("negative" as const)
                     : ("neutral" as const),
@@ -655,7 +966,7 @@ export default async function ExpenditureDashboard({
             <MoverList
               items={movers.negative.map((r) => ({
                 id: r.id,
-                name: codeName(r.code, r.name),
+                name: codeName(r.code, r.name, scope.labelMode),
                 fund: moverFund(scope, "/expenditures", r.fund),
                 note: r.group?.name,
                 value: accounting(r.pace.amount, { compact: true }),
@@ -676,10 +987,11 @@ export default async function ExpenditureDashboard({
 
           <SectionCard
             title={`Expenditure alerts (${expenditureAlerts.length})`}
-            footer="View all alerts"
+            footer={GO_TO.alerts}
             footerHref="/alerts"
           >
             <AlertList
+              mode={scope.labelMode}
               alerts={expenditureAlerts.map((a) => ({
                 id: a.id,
                 severity: a.severity,
@@ -696,7 +1008,7 @@ export default async function ExpenditureDashboard({
         </div>
       </Row>
 
-      <FooterInfoBar action="Go to forecast and planning" href="/fund-balance/forecast">
+      <FooterInfoBar action={GO_TO.forecast} href="/fund-balance/forecast">
         Adjust your growth assumptions to see how changes in spending flow through to fund
         balance and reserves over the next three years.
       </FooterInfoBar>

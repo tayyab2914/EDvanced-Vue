@@ -1,7 +1,7 @@
 import type { TenantDb } from "@/lib/tenant-db";
 import { masterLists, fundTypeNames } from "@/lib/master-data/lists";
 import { memo, dbKey } from "@/lib/request-cache";
-import { codeName } from "@/lib/text";
+import { codeName, DEFAULT_LABEL_MODE, type LabelMode } from "@/lib/text";
 
 /**
  * Which fund is THE General Fund, and which funds a district actually reports on.
@@ -120,6 +120,10 @@ export const listFunds = memo("listFunds", dbKey, async (db: TenantDb): Promise<
  * it again anyway because the operation is idempotent and a caller handing this a fund from
  * somewhere else should still get a label that matches the rest of the screen.
  */
-export function fundLabel(f: Pick<FundRef, "code" | "name">): string {
-  return codeName(f.code, f.name);
+export function fundLabel(
+  f: Pick<FundRef, "code" | "name">,
+  /** The reader's Codes / Names setting. Defaulted so a caller without one is unchanged. */
+  mode: LabelMode = DEFAULT_LABEL_MODE,
+): string {
+  return codeName(f.code, f.name, mode);
 }

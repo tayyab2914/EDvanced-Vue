@@ -15,6 +15,7 @@ import {
   resolveFilters,
   type ResolvedFilters,
 } from "@/lib/dashboard/filter-options";
+import { DEFAULT_LABEL_MODE, type LabelMode } from "@/lib/text";
 
 /**
  * What fiscal year, period and fund a dashboard is looking at.
@@ -99,6 +100,16 @@ export interface DashboardScope {
    * The page must surface this rather than swapping silently.
    */
   substituted: { asked: string; showing: string } | null;
+  /**
+   * How much of a dimension this reader wants to see — Codes Only, Names Only, or both.
+   *
+   * Carried on the scope so that anything already holding one can label a fund without a
+   * second parameter of its own: `scopeOptions`, the mover tags, the alert chips. It is not
+   * part of "what slice is on screen" like everything above it, but it travels to exactly
+   * the same places, and a separate prop threaded beside `scope` through every one of them
+   * would be the same value with more chances to be forgotten.
+   */
+  labelMode: LabelMode;
 }
 
 /** The datasets whose presence means "this period has data a dashboard can show". */
@@ -108,6 +119,15 @@ export async function resolveScope(
   db: TenantDb,
   districtId: string,
   params: ScopeParams,
+  /**
+   * The reader's Codes / Names setting, from lib/dashboard/label-mode.ts.
+   *
+   * A PARAMETER, not a cookie read in here. This function is called by the verify scripts
+   * too (scripts/verify-dashboard.mts, scripts/verify-queries.mts), which run outside a
+   * request where `cookies()` throws — and a display preference is not worth making the
+   * whole scope resolver unusable off a request.
+   */
+  mode: LabelMode = DEFAULT_LABEL_MODE,
 ): Promise<DashboardScope> {
   const [district, versions, funds, general, master] = await Promise.all([
     db.district.findFirst({
@@ -161,6 +181,7 @@ export async function resolveScope(
       master,
       { funds: new Set<string>(), costCenters: new Set<string>() },
       EMPTY_SELECTION,
+      mode,
     );
     return {
       fiscalYear: params.fy ? String(params.fy) : "",
@@ -179,6 +200,7 @@ export async function resolveScope(
       funds,
       empty: true,
       substituted: null,
+      labelMode: mode,
     };
   }
 
@@ -217,7 +239,7 @@ export async function resolveScope(
    * which is why `dataPresence` answers both dimensions in three queries rather than five.
    */
   const presence = await dataPresence(db, chosen.fiscalYear, chosen.period);
-  const filters = resolveFilters(master, presence, raw);
+  const filters = resolveFilters(master, presence, raw, mode);
 
   const sole = soleFundId(filters.filter);
   const fund = sole ? funds.find((f) => f.id === sole) : undefined;
@@ -242,6 +264,7 @@ export async function resolveScope(
     funds,
     empty: false,
     substituted,
+    labelMode: mode,
   };
 }
 

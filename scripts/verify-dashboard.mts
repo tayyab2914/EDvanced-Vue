@@ -335,7 +335,7 @@ async function main() {
       "the fund running ahead on collections is named",
     );
     assert(
-      where.revenueAhead[0]?.detail === "$300.00K ahead of pace",
+      where.revenueAhead[0]?.detail === "$300K ahead of pace",
       `and by how much: 3.3M collected against 3.0M expected by month 3 (got "${where.revenueAhead[0]?.detail}")`,
     );
     assert(
@@ -520,11 +520,25 @@ async function main() {
       projection[2].cumulativeFundBalanceUsed.greaterThanOrEqualTo(projection[1].cumulativeFundBalanceUsed),
       "cumulative fund balance used only ever accumulates",
     );
+    // The forecast screen states the unassigned balance as a share of PROJECTED REVENUES —
+    // the denominator the client's own workbook plans against, and the one every fund
+    // balance component on that screen is now shown against so the column adds up. The
+    // Current Position dashboard's `reservePercent()` still divides by expenditures; the
+    // two are deliberately different and neither may drift into the other.
     assert(
-      !projection[1].reservePercent!.equals(
-        projection[1].unassigned.dividedBy(projection[0].projectedExpenditure).times(100),
+      projection[1]
+        .unassignedPercentOfRevenue!.minus(
+          projection[1].unassigned.dividedBy(projection[1].projectedRevenue).times(100),
+        )
+        .abs()
+        .lessThan(new D("0.000001")),
+      "the forecast's unassigned % divides by revenues, not expenditures",
+    );
+    assert(
+      !projection[1].unassignedPercentOfRevenue!.equals(
+        projection[1].unassigned.dividedBy(projection[0].projectedRevenue).times(100),
       ),
-      "each year's reserve % divides by ITS OWN projected expenditure, not the current year's",
+      "and by ITS OWN year's projected revenue, not the current year's",
     );
 
     console.log("\nThe four alerts that could never fire");

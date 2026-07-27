@@ -238,6 +238,7 @@ export function Legend({
 
   return (
     <ul
+      data-chart-legend
       className={
         layout === "row"
           ? "flex flex-wrap items-center gap-x-4 gap-y-1.5"
@@ -247,7 +248,13 @@ export function Legend({
       {items.map((it) => (
         <li key={it.label} className="flex min-w-0 items-center gap-2 text-[11.5px]">
           <Swatch color={it.color} dashed={it.dashed} />
-          <span className="min-w-0 flex-1 truncate text-muted">{it.label}</span>
+          {/* A legend key is a dimension too — `1000 — General Fund` on the cash and
+              fund-balance composition donuts — and it truncates in a narrow card. The
+              `title` is the client's rule (c): the ellipsis must always have somewhere to
+              lead. */}
+          <span className="min-w-0 flex-1 truncate text-muted" title={it.label}>
+            {it.label}
+          </span>
           {it.value && (
             <span className="flex-none font-semibold tabular-nums text-ink">{it.value}</span>
           )}

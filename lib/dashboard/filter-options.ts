@@ -6,7 +6,7 @@ import { COST_CENTER_CATEGORIES } from "@/lib/master-data/cost-center";
 import { masterLists, type MasterLists } from "@/lib/master-data/lists";
 import type { FinanceFilter } from "@/lib/finance/filter";
 import type { FilterSelection } from "@/lib/dashboard/filter-params";
-import { codeName } from "@/lib/text";
+import { codeName, DEFAULT_LABEL_MODE, type LabelMode } from "@/lib/text";
 
 /**
  * The filter bar's option lists, and the rules that turn a URL selection into the slice the
@@ -202,6 +202,11 @@ const CATEGORY_LABEL = new Map(COST_CENTER_CATEGORIES.map((c) => [c.value, c.lab
  * The names are already title-cased by the shared master-data read, so this is the same
  * `codeName` every other label in the application is built from rather than a second
  * definition of what a labelled code looks like.
+ *
+ * The reader's Codes / Names setting reaches the filter bar through here. A dropdown that
+ * kept showing both while every table on the page showed one would be the loudest place the
+ * preference did not apply — and the bar is where a district reads a fund's name most
+ * often, not least.
  */
 const labelOf = codeName;
 
@@ -241,6 +246,12 @@ export function resolveFilters(
   master: MasterLists,
   presence: { funds: Set<string>; costCenters: Set<string> },
   raw: FilterSelection,
+  /**
+   * How much of each dimension to render. Defaulted rather than required so the verify
+   * scripts — which run outside a request and have no cookie to read — keep calling this
+   * with three arguments and get the client's recommended default.
+   */
+  mode: LabelMode = DEFAULT_LABEL_MODE,
 ): ResolvedFilters {
   // ---- funds ----
   const knownFundTypes = new Set(master.fundTypes.map((t) => t.id));
@@ -248,7 +259,7 @@ export function resolveFilters(
 
   const fundOptions: FilterOption[] = master.funds.map((f) => ({
     id: f.id,
-    label: labelOf(f.code, f.name),
+    label: labelOf(f.code, f.name, mode),
     code: f.code,
     name: f.name,
     parentId: f.fundTypeId,
@@ -290,7 +301,7 @@ export function resolveFilters(
       .filter((c) => (c.category ?? "OTHER") === category)
       .map((c) => ({
         id: c.id,
-        label: labelOf(c.schoolNumber, c.name),
+        label: labelOf(c.schoolNumber, c.name, mode),
         code: c.schoolNumber,
         name: c.name,
         parentId: c.typeId,

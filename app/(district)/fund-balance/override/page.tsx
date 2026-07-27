@@ -2,8 +2,9 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
+import { labelMode } from "@/lib/dashboard/label-mode";
 import { loadCore } from "@/lib/dashboard/load";
-import { money, compactMoney } from "@/lib/dashboard/format";
+import { money } from "@/lib/dashboard/format";
 import { formatDateTime } from "@/lib/format";
 import { fundLabel } from "@/lib/finance/funds";
 import { PageHeader } from "@/components/page-header";
@@ -29,7 +30,7 @@ export default async function OverridePage({
   const sp = await searchParams;
   if (!sp.fund) notFound();
 
-  const scope = await resolveScope(db, districtId, sp);
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
   if (scope.empty || !scope.fund) notFound();
 
   const core = await loadCore(db, districtId, scope);
@@ -60,7 +61,7 @@ export default async function OverridePage({
     <div className="animate-fade-up mx-auto max-w-[720px] space-y-[18px]">
       <PageHeader
         title="Correct a fund balance figure"
-        description={`${fundLabel(scope.fund)} · ${scope.label}`}
+        description={`${fundLabel(scope.fund, scope.labelMode)} · ${scope.label}`}
         actions={
           <Link
             href={`/fund-balance?fy=${scope.fiscalYear}&period=${scope.period}`}
@@ -100,7 +101,7 @@ export default async function OverridePage({
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-[12.5px] font-medium text-ink">{LABELS[o.field]}</span>
                   <span className="text-[13px] font-semibold tabular-nums text-ink">
-                    {compactMoney(o.value)}
+                    {money(o.value)}
                   </span>
                 </div>
                 <p className="mt-1 text-[12px] leading-relaxed text-muted">{o.reason}</p>

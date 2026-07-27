@@ -259,8 +259,19 @@ export interface FundBalanceForecast {
   componentBreakdown: Record<FundBalanceComponent, Prisma.Decimal>;
   /** What is left once the district's designated components are taken out. */
   unassigned: Prisma.Decimal;
-  /** Unassigned as a share of that year's projected expenditure. Null when there is none. */
-  reservePercent: Prisma.Decimal | null;
+  /**
+   * Unassigned as a share of that year's projected REVENUE. Null when there is none.
+   *
+   * Revenue, not expenditure, and only here. The Current Position dashboard's
+   * `reservePercent()` still divides by expenditure and must keep doing so — that is the
+   * figure board policy is written against and the one the reserve alerts read. On the
+   * forecast the client's own workbook states every fund balance component as a share of
+   * PROJECTED REVENUES, so a component's percentage and the reserve percentage below it
+   * are on one denominator and add up down the column. Naming it for its divisor rather
+   * than calling it `reservePercent` is the point: two numbers called "reserve %" with
+   * different denominators is how a board ends up comparing them.
+   */
+  unassignedPercentOfRevenue: Prisma.Decimal | null;
   /** True when the components add up to more than the balance — the workbook's own alert. */
   componentsExceedTotal: boolean;
 }
@@ -576,10 +587,12 @@ export async function projectFundBalance(
         componentValues.map((c) => [c.component, c.value]),
       ) as Record<FundBalanceComponent, Prisma.Decimal>,
       unassigned,
-      // Against THIS year's projected expenditure, not the current year's budget. Holding
-      // the divisor flat while the numerator moves makes a reserve percentage that drifts
-      // for a reason no district could explain.
-      reservePercent: expenditure.isZero() ? null : unassigned.dividedBy(expenditure).times(100),
+      // Against THIS year's projected revenue, not the current year's. Holding the divisor
+      // flat while the numerator moves makes a percentage that drifts for a reason no
+      // district could explain.
+      unassignedPercentOfRevenue: revenue.isZero()
+        ? null
+        : unassigned.dividedBy(revenue).times(100),
       // "Projected components add up to more than the projected ending balance, leaving a
       // negative unassigned reserve" — the workbook's own alert, and a real thing to
       // catch: a board can designate more than the fund actually holds.
@@ -595,4 +608,4 @@ export async function projectFundBalance(
 // `budgetedExpenditure` lived here and is gone. It supplied ONE divisor — the current
 // year's adopted budget — for every projected year's reserve percentage, which held
 // expenditures flat across three years while the balance moved. Each year now divides by
-// its own projected expenditure, which is both the right denominator and one query fewer.
+// its own projected figure, which is both the right denominator and one query fewer.

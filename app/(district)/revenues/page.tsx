@@ -17,6 +17,7 @@ import { revenuePace } from "@/lib/dashboard/pace";
 import { daysIntoFiscalYear } from "@/lib/finance/variance";
 import {
   compactMoney,
+  money,
   accounting,
   percent,
   signedPercent,
@@ -38,9 +39,27 @@ import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { ColumnChart } from "@/components/dashboard/charts/column-chart";
 import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
 import { scopeOptions, moverFund, alertFunds, scopeDescription } from "@/lib/dashboard/options";
+import { GO_TO, MANAGE, VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { SERIES_SLOTS } from "@/lib/dashboard/palette";
-import { codeName } from "@/lib/text";
+import { codeName, type LabelMode } from "@/lib/text";
+import { labelMode } from "@/lib/dashboard/label-mode";
+import { DimLabel } from "@/components/dashboard/dim-label";
 import { REVENUE_VIEWS, resolveView, type RevenueView } from "@/lib/dashboard/view";
+import {
+  PrintSheet,
+  SheetBand,
+  SheetCard,
+  SheetKpi,
+  SheetStats,
+} from "@/components/dashboard/print-sheet";
+import {
+  rungTone,
+  sheetTone,
+  sheetScope,
+  sheetAsOf,
+  SHEET_TABLE_ROWS,
+  SHEET_TABLE_NOTE,
+} from "@/lib/dashboard/summary";
 
 /**
  * How the "view by" card presents each perspective — "Revenue Type, Revenue Code & Name,
@@ -50,33 +69,38 @@ import { REVENUE_VIEWS, resolveView, type RevenueView } from "@/lib/dashboard/vi
  * folds only its unbounded dimensions. Revenue types number four or five, so the fold never
  * fires there; sources and projects run to dozens, and this card is the SHARE card. The
  * complete source list is the table in the row above, untouched.
+ *
+ * The per-view `label` is gone, for the reason given on the Expenditures card: a revenue
+ * TYPE carries a code exactly as a source does, so rendering one bare and the other
+ * `code — name` made the card change convention as the reader moved the selector. All three
+ * go through `codeName` and honour the reader's Codes / Names setting.
  */
 const VIEW_META: Record<
   RevenueView,
-  { title: string; subtitle: string; info: string; noun: string; label: (r: BreakdownRow) => string }
+  { title: string; subtitle: string; info: string; noun: string }
 > = {
   type: {
     title: "Revenue by category (YTD)",
     subtitle: "Share of collections by revenue type",
     info: "The same categories the forecast projects by, so a forecast and an actual compare without a translation table between them.",
     noun: "Revenue types",
-    label: (r) => r.name,
   },
   source: {
     title: "Revenue by code and name (YTD)",
     subtitle: "Share of collections by revenue source",
     info: "The district's own revenue source codes, largest first. The full list with variance and status is in the table above.",
     noun: "Revenue sources",
-    label: (r) => codeName(r.code, r.name),
   },
   grant: {
     title: "Revenue by project / grant (YTD)",
     subtitle: "The Project / Grant column on the revenue detail",
     info: "Grant revenue reaches the platform tagged in the required Project / Grant column, against the district's unified project master. That is what this groups by — the Grants Activity module itself is a V2 addition.",
     noun: "Projects",
-    label: (r) => codeName(r.code, r.name),
   },
 };
+
+/** A breakdown row's dimension, as text — for the chart labels, which are not DOM nodes. */
+const rowLabel = (r: BreakdownRow, mode: LabelMode) => codeName(r.code, r.name, mode);
 
 /**
  * The Revenue dashboard (Spec §4) — performance against budget.
@@ -100,13 +124,20 @@ const VIEW_META: Record<
 export default async function RevenueDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; period?: string; fund?: string; groupBy?: string }>;
+  searchParams: Promise<{
+    fy?: string;
+    period?: string;
+    fund?: string;
+    groupBy?: string;
+    view?: string;
+  }>;
 }) {
   const { db, user, districtId } = await getTenantDb();
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
-  const scope = await resolveScope(db, districtId, sp);
+  const summary = sp.view === "summary";
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
   const view = resolveView(REVENUE_VIEWS, sp.groupBy);
   const meta = VIEW_META[view];
 
@@ -187,6 +218,274 @@ export default async function RevenueDashboard({
 
   const options = scopeOptions(scope);
   const revenueAlerts = (alerts?.alerts ?? []).filter((a) => a.group === "revenue");
+  const summaryHref = options.query
+    ? `/revenues?${options.query}&view=summary`
+    : "/revenues?view=summary";
+
+  // ---------- the sheet's six headline figures ----------
+  // Every value here reads the same derived variable the screen tile above reads
+  // (`bySource.total`, `varPct`, `remaining`), so the printed page and the dashboard are
+  // computed once and formatted twice. The printed tile is a different component because it
+  // has no room for a caption, an ⓘ or a drill-down link — see `SheetKpi`.
+  const kpiData = [
+    {
+      key: "total",
+      label: "Total revenues (YTD)",
+      value: compactMoney(bySource.total.actualYtd),
+      sub: `${percent(bySource.total.consumption.percent)} of full-year budget`,
+      note: collectedPct === null ? undefined : `${percent(collectedPct)} collected`,
+      tone: "neutral" as const,
+    },
+    {
+      key: "variance",
+      label: "Revenue variance (YTD)",
+      value: accounting(bySource.total.pace.amount, { compact: true }),
+      sub: "against the budget expected by now",
+      note:
+        varPct === null
+          ? undefined
+          : `${signedPercent(varPct)} ${varPct < 0 ? "below" : "above"} budget`,
+      tone: varPct === null ? ("neutral" as const) : sheetTone(deltaTone(varPct, "up")),
+    },
+    {
+      key: "remaining",
+      label: "Remaining to collect",
+      value: compactMoney(overCollected ? remaining.abs() : remaining),
+      sub: overCollected
+        ? "collected above the full-year budget"
+        : `of ${compactMoney(bySource.total.budget)} budgeted`,
+      note: overCollected
+        ? "Over-collected"
+        : `${percent(100 - (collectedPct ?? 0))} outstanding`,
+      tone: overCollected ? ("positive" as const) : ("neutral" as const),
+    },
+    {
+      key: "mom",
+      label: "Month over month change",
+      value: compactMoney(point?.revenueMtd),
+      sub: "collected this period",
+      note:
+        momPct === null
+          ? previous
+            ? undefined
+            : "no earlier period"
+          : `${signedPercent(momPct)} ${momPct < 0 ? "decrease" : "increase"}`,
+      tone: momPct === null ? ("neutral" as const) : sheetTone(deltaTone(momPct, "up")),
+    },
+    {
+      key: "status",
+      label: "Revenue status (YTD)",
+      value: statusRung === "N/A" ? "Not available" : statusRung,
+      sub:
+        varPct === null
+          ? "needs a revenue budget for the year"
+          : Math.abs(varPct) < revT.warning
+            ? "within policy"
+            : "outside policy",
+      note: `Policy ± ${revT.warning.toFixed(2)}%`,
+      tone: rungTone(statusRung),
+    },
+    {
+      key: "days",
+      label: "Days in fiscal year",
+      value: String(daysIn.elapsed),
+      sub: `of ${daysIn.total} days`,
+      note: `${((daysIn.elapsed / daysIn.total) * 100).toFixed(1)}% elapsed`,
+      tone: "neutral" as const,
+    },
+  ];
+
+  // ===================== the one-page landscape summary =====================
+  if (summary) {
+    return (
+      <PrintSheet
+        title="Revenue Summary"
+        district={user.districtName ?? "District"}
+        scope={sheetScope(scope)}
+        asOf={sheetAsOf(scope.dataAsOf)}
+        backHref={options.query ? `/revenues?${options.query}` : "/revenues"}
+      >
+        <SheetBand cols="1fr 1fr 1fr 1fr 1fr 1fr">
+          {kpiData.map((k) => (
+            <SheetKpi
+              key={k.key}
+              label={k.label}
+              value={k.value}
+              sub={k.sub}
+              note={k.note}
+              tone={k.tone}
+            />
+          ))}
+        </SheetBand>
+
+        <SheetBand cols="1fr 1fr">
+          <SheetCard title="Revenues — budget vs actual" note={`Through ${scope.label}`}>
+            <LineChart
+              title="Revenues, budget against actual"
+              summary={`Actual collections year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
+              categories={labels}
+              format={(v) => compactMoney(v, 0)}
+              height={230}
+              series={[
+                {
+                  key: "actual",
+                  label: "Actual (YTD)",
+                  color: "var(--color-viz-actual)",
+                  labelLast: true,
+                  points: series.points.map((p) => ({
+                    value: toNumber(p.revenueYtd),
+                    label: compactMoney(p.revenueYtd),
+                  })),
+                },
+                {
+                  key: "budget",
+                  label: "Budget (YTD)",
+                  color: "var(--color-viz-budget)",
+                  points: series.points.map((p) => ({
+                    value: p.hasData ? ((toNumber(p.revenueBudget) ?? 0) * p.period) / 12 : null,
+                  })),
+                },
+                {
+                  key: "full",
+                  label: "Budget (full year)",
+                  color: "var(--color-viz-reference)",
+                  dashed: true,
+                  markers: false,
+                  points: series.points.map(() => ({ value: fullYearBudget })),
+                },
+              ]}
+            />
+            <SheetStats
+              items={[
+                { label: "Actual (YTD)", value: compactMoney(bySource.total.actualYtd) },
+                { label: "Budget (YTD)", value: compactMoney(bySource.total.pace.budget) },
+                {
+                  label: "Variance (YTD)",
+                  value: accounting(bySource.total.pace.amount, { compact: true }),
+                  tone: bySource.total.pace.amount.isNegative() ? "negative" : "positive",
+                },
+                {
+                  label: "Remaining",
+                  value: compactMoney(overCollected ? remaining.abs() : remaining),
+                },
+              ]}
+            />
+          </SheetCard>
+
+          <SheetCard title={meta.title} note={meta.subtitle}>
+            <ShareBars
+              title={meta.title}
+              summary={`Share of year-to-date collections by ${meta.noun.toLowerCase().replace(/s$/, "")}.`}
+              rows={categories.rows.map((r, i) => ({
+                id: r.id,
+                label: rowLabel(r, scope.labelMode),
+                value: toNumber(r.actualYtd) ?? 0,
+                display: compactMoney(r.actualYtd),
+                share: percent(sharePercent(r.actualYtd, categories.total.actualYtd), 1),
+                color: SERIES_SLOTS[i % SERIES_SLOTS.length],
+              }))}
+            />
+            <SheetStats
+              items={[
+                { label: "Total actual", value: compactMoney(categories.total.actualYtd) },
+                { label: "Total budget", value: compactMoney(categories.total.budget) },
+                { label: meta.noun, value: String(regroupedSource.rows.length) },
+              ]}
+            />
+          </SheetCard>
+        </SheetBand>
+
+        <SheetBand cols="1.6fr 1fr">
+          <SheetCard title="Revenue by major source" note={SHEET_TABLE_NOTE}>
+            <DataTable
+              dense
+              columns={[
+                { key: "source", label: "Revenue source" },
+                { key: "budget", label: "Budget", align: "right" },
+                { key: "actual", label: "Actual (YTD)", align: "right" },
+                { key: "variance", label: "Variance $", align: "right" },
+                { key: "variancePct", label: "Variance %", align: "right" },
+                { key: "status", label: "Status", align: "right" },
+              ]}
+              rows={bySource.rows.slice(0, SHEET_TABLE_ROWS).map((r) => {
+                const pace = revenuePace(toNumber(r.pace.percent), revT);
+                const negative = r.pace.amount.isNegative();
+                return {
+                  id: r.id,
+                  cells: {
+                    source: { value: codeName(r.code, r.name, scope.labelMode), strong: true },
+                    budget: compactMoney(r.budget),
+                    actual: compactMoney(r.actualYtd),
+                    variance: {
+                      value: accounting(r.pace.amount, { compact: true }),
+                      tone: negative ? ("negative" as const) : ("positive" as const),
+                    },
+                    variancePct: {
+                      value: signedPercent(r.pace.percent),
+                      tone: negative ? ("negative" as const) : ("positive" as const),
+                    },
+                    status: (
+                      <span className="flex justify-end">
+                        <StatusBadge status={pace.rung} label={pace.label} size="sm" dot={false} />
+                      </span>
+                    ),
+                  },
+                };
+              })}
+              total={{
+                id: "total",
+                total: true,
+                cells: {
+                  source: "Total revenues",
+                  budget: compactMoney(bySource.total.budget),
+                  actual: compactMoney(bySource.total.actualYtd),
+                  variance: accounting(bySource.total.pace.amount, { compact: true }),
+                  variancePct: signedPercent(bySource.total.pace.percent),
+                  status: (
+                    <span className="flex justify-end">
+                      <StatusBadge
+                        status={revenuePace(toNumber(bySource.total.pace.percent), revT).rung}
+                        size="sm"
+                        dot={false}
+                      />
+                    </span>
+                  ),
+                },
+              }}
+            />
+          </SheetCard>
+
+          <div className="flex min-w-0 flex-col gap-[7px]">
+            <SheetCard title="Largest variances" note="Against budget to date">
+              <MoverList
+                items={[...movers.negative, ...movers.positive].slice(0, 4).map((r) => ({
+                  id: r.id,
+                  name: codeName(r.code, r.name, scope.labelMode),
+                  value: accounting(r.pace.amount, { compact: true }),
+                  percent: signedPercent(r.pace.percent),
+                  tone: r.pace.amount.isNegative() ? ("negative" as const) : ("positive" as const),
+                }))}
+                empty="Nothing is materially off budget."
+              />
+            </SheetCard>
+
+            <SheetCard title={`Revenue alerts (${revenueAlerts.length})`}>
+              <AlertList
+                mode={scope.labelMode}
+                alerts={revenueAlerts.slice(0, 2).map((a) => ({
+                  id: a.id,
+                  severity: a.severity,
+                  title: a.title,
+                  message: a.message,
+                }))}
+                empty="No revenue thresholds crossed."
+              />
+            </SheetCard>
+          </div>
+        </SheetBand>
+      </PrintSheet>
+    );
+  }
 
   return (
     <div className="animate-fade-up space-y-[18px]">
@@ -197,6 +496,7 @@ export default async function RevenueDashboard({
           <DashboardFilters
             scope={scope}
             exportHref={options.exportHref("/revenues/export")}
+            summaryHref={summaryHref}
           />
         }
       />
@@ -376,7 +676,7 @@ export default async function RevenueDashboard({
         <SectionCard
           title="Revenue by major source"
           info="Ranked by budget. Variance is measured against the budget expected by now."
-          footer="View all revenue sources"
+          footer={VIEW_DETAILS.revenueDetail}
           footerHref={`/data/revenue-detail?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
           <DataTable
@@ -395,14 +695,16 @@ export default async function RevenueDashboard({
               const negative = r.pace.amount.isNegative();
               return {
                 id: r.id,
-                flag: pace.label === "Critical" ? ("negative" as const) : undefined,
                 cells: {
-                  source: { value: codeName(r.code, r.name), strong: true },
-                  budget: compactMoney(r.budget),
-                  actual: compactMoney(r.actualYtd),
+                  source: {
+                    value: <DimLabel code={r.code} name={r.name} mode={scope.labelMode} />,
+                    strong: true,
+                  },
+                  budget: money(r.budget),
+                  actual: money(r.actualYtd),
                   pctBudget: percent(r.consumption.percent),
                   variance: {
-                    value: accounting(r.pace.amount, { compact: true }),
+                    value: accounting(r.pace.amount),
                     tone: negative ? ("negative" as const) : ("positive" as const),
                     strong: true,
                   },
@@ -423,11 +725,11 @@ export default async function RevenueDashboard({
               total: true,
               cells: {
                 source: "Total revenues",
-                budget: compactMoney(bySource.total.budget),
-                actual: compactMoney(bySource.total.actualYtd),
+                budget: money(bySource.total.budget),
+                actual: money(bySource.total.actualYtd),
                 pctBudget: percent(bySource.total.consumption.percent),
                 variance: {
-                  value: accounting(bySource.total.pace.amount, { compact: true }),
+                  value: accounting(bySource.total.pace.amount),
                   tone: bySource.total.pace.amount.isNegative()
                     ? ("negative" as const)
                     : ("positive" as const),
@@ -468,7 +770,7 @@ export default async function RevenueDashboard({
                 { label: "Month-over-month change", value: `± ${Number(policy.revenue.significantChange).toFixed(2)}%` },
               ]}
               manageHref={userCan(user, "configure_district") ? "/policies" : undefined}
-              manageLabel="Manage revenue policies"
+              manageLabel={MANAGE.revenuePolicies}
             />
           </SectionCard>
 
@@ -476,7 +778,7 @@ export default async function RevenueDashboard({
             <MoverList
               items={movers.positive.map((r) => ({
                 id: r.id,
-                name: codeName(r.code, r.name),
+                name: codeName(r.code, r.name, scope.labelMode),
                 fund: moverFund(scope, "/revenues", r.fund),
                 value: accounting(r.pace.amount, { compact: true }),
                 percent: signedPercent(r.pace.percent),
@@ -540,7 +842,7 @@ export default async function RevenueDashboard({
           subtitle={meta.subtitle}
           info={meta.info}
           control={<ViewBy options={REVENUE_VIEWS} value={view} />}
-          footer="View full breakdown"
+          footer={VIEW_DETAILS.revenueDetail}
           footerHref={`/data/revenue-detail?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
           <ShareBars
@@ -548,7 +850,7 @@ export default async function RevenueDashboard({
             summary={`Share of year-to-date collections by ${meta.noun.toLowerCase().replace(/s$/, "")}.`}
             rows={categories.rows.map((r, i) => ({
               id: r.id,
-              label: meta.label(r),
+              label: rowLabel(r, scope.labelMode),
               value: toNumber(r.actualYtd) ?? 0,
               display: compactMoney(r.actualYtd),
               share: percent(sharePercent(r.actualYtd, categories.total.actualYtd), 1),
@@ -578,7 +880,7 @@ export default async function RevenueDashboard({
             <MoverList
               items={movers.negative.map((r) => ({
                 id: r.id,
-                name: codeName(r.code, r.name),
+                name: codeName(r.code, r.name, scope.labelMode),
                 fund: moverFund(scope, "/revenues", r.fund),
                 value: accounting(r.pace.amount, { compact: true }),
                 percent: signedPercent(r.pace.percent),
@@ -598,10 +900,11 @@ export default async function RevenueDashboard({
 
           <SectionCard
             title={`Revenue alerts (${revenueAlerts.length})`}
-            footer="View all alerts"
+            footer={GO_TO.alerts}
             footerHref="/alerts"
           >
             <AlertList
+              mode={scope.labelMode}
               alerts={revenueAlerts.map((a) => ({
                 id: a.id,
                 severity: a.severity,
@@ -618,7 +921,7 @@ export default async function RevenueDashboard({
         </div>
       </Row>
 
-      <FooterInfoBar action="Manage policies" href="/policies">
+      <FooterInfoBar action={GO_TO.policies} href="/policies">
         Revenue figures are drawn from the detail file committed for this period. Remaining to
         collect is current budget less actual revenue — it assumes no growth and is not a
         forecast. Adjust the thresholds above to change when these alerts fire.

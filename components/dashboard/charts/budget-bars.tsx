@@ -87,7 +87,9 @@ export function BudgetBars({
 
       <div aria-hidden>
         {/* ---- legend ---- */}
-        <ul className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        {/* The `data-bars-*` hooks are how the one-page sheet re-densifies this chart
+            without a second copy of it existing — see the sheet section of globals.css. */}
+        <ul data-bars-legend className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <li className="flex items-center gap-2 text-[11.5px] text-muted">
             <Swatch color="var(--color-viz-actual)" />
             {actualLabel}
@@ -103,8 +105,11 @@ export function BudgetBars({
         </ul>
 
         {/* ---- axis ---- */}
-        <div className="mb-1 flex items-end gap-3">
-          <span className="w-[104px] flex-none text-[9.5px] font-semibold uppercase tracking-[0.05em] text-muted-2">
+        <div data-bars-axis className="mb-1 flex items-end gap-3">
+          <span
+            data-bars-label
+            className="w-[104px] flex-none text-[9.5px] font-semibold uppercase tracking-[0.05em] text-muted-2"
+          >
             {unit}
           </span>
           <span className="relative flex-1">
@@ -114,8 +119,8 @@ export function BudgetBars({
               ))}
             </span>
           </span>
-          <span className="w-[86px] flex-none" />
-          <span className="w-[92px] flex-none" />
+          <span data-bars-ref className="w-[86px] flex-none" />
+          <span data-bars-badge className="w-[92px] flex-none" />
         </div>
 
         {/* ---- rows ---- */}
@@ -130,12 +135,14 @@ export function BudgetBars({
             return (
               <li
                 key={r.id}
+                data-bars-row
                 // The client asked for "improve spacing between rows" on the expenditure
                 // card and got it here for both: 14px of vertical air and a hairline, so a
                 // row is a unit rather than five things at similar heights.
                 className="flex items-center gap-3 border-b border-line-soft py-3.5 last:border-b-0"
               >
                 <span
+                  data-bars-label
                   className="w-[104px] flex-none text-[11.5px] font-medium leading-tight text-ink-muted"
                   title={r.label}
                 >
@@ -145,7 +152,7 @@ export function BudgetBars({
                 <span className="relative min-w-0 flex-1">
                   {/* the value labels sit above and below the track, not at the bar end,
                       so two nearly equal figures never collide */}
-                  <span className="mb-[3px] block h-[13px]">
+                  <span data-bars-value className="mb-[3px] block h-[13px]">
                     <span
                       className="absolute text-[10.5px] font-semibold tabular-nums text-strong"
                       style={{ left: `min(${actualPct}%, calc(100% - 3.5rem))` }}
@@ -154,7 +161,7 @@ export function BudgetBars({
                     </span>
                   </span>
 
-                  <span className="relative block h-[11px] rounded-full bg-line-soft">
+                  <span data-bars-track className="relative block h-[11px] rounded-full bg-line-soft">
                     {/* Budget to date, underneath. */}
                     <span
                       className="absolute inset-y-0 left-0 rounded-full"
@@ -186,7 +193,7 @@ export function BudgetBars({
                     )}
                   </span>
 
-                  <span className="mt-[3px] block h-[13px]">
+                  <span data-bars-value className="mt-[3px] block h-[13px]">
                     <span
                       className="absolute text-[10.5px] tabular-nums text-brand"
                       style={{ left: `min(${budgetPct}%, calc(100% - 3.5rem))` }}
@@ -196,11 +203,14 @@ export function BudgetBars({
                   </span>
                 </span>
 
-                <span className="w-[86px] flex-none text-right text-[11.5px] font-medium tabular-nums text-muted">
+                <span
+                  data-bars-ref
+                  className="w-[86px] flex-none text-right text-[11.5px] font-medium tabular-nums text-muted"
+                >
                   {r.budgetFullYearDisplay}
                 </span>
 
-                <span className="flex w-[92px] flex-none justify-end">
+                <span data-bars-badge className="flex w-[92px] flex-none justify-end">
                   <StatusBadge
                     status={r.status.rung}
                     label={r.status.label}
@@ -329,7 +339,21 @@ export function ShareBars({
   );
 }
 
-/** A hairline-separated key/value strip — used under the trend charts. */
+/**
+ * A hairline-separated key/value strip — used under the trend charts.
+ *
+ * WHY THE COLUMN COUNT IS A CONTAINER QUERY AND NOTHING TRUNCATES
+ *
+ * `sm:grid-cols-4` was a VIEWPORT query, and the viewport is never what is short of room
+ * here — the CARD is. On a wide screen the strip therefore always laid out four columns,
+ * including inside a one-third-width column where a cell is ~85px, and `truncate` then did
+ * exactly what it was asked to: "REMAINING TO COLLECT" came out "REMAINING TO COLL…" and
+ * the note under it lost its tail. That was the client's "the numbers are truncated".
+ *
+ * So the count now follows the strip's own width, and a label that still does not fit wraps
+ * onto a second line instead of being cut. A strip one line taller costs nothing; a figure
+ * a superintendent cannot read costs the card its purpose.
+ */
 export function MetricStrip({
   items,
   cols = 4,
@@ -349,35 +373,39 @@ export function MetricStrip({
     negative: "text-action",
     neutral: "text-ink",
   };
+  // Container breakpoints, not viewport ones: the strip goes wide only when the card it
+  // sits in is wide enough to spell every label out.
   const GRID = {
-    3: "sm:grid-cols-3",
-    4: "sm:grid-cols-4",
-    5: "sm:grid-cols-5",
+    3: "@xs:grid-cols-3",
+    4: "@sm:grid-cols-4",
+    5: "@md:grid-cols-5",
   } as const;
   return (
-    <dl
-      className={cn(
-        "grid grid-cols-2 divide-x divide-line-soft rounded-lg border border-line-soft",
-        GRID[cols],
-        className,
-      )}
-    >
-      {items.map((i) => (
-        <div key={i.label} className="min-w-0 px-3 py-2.5">
-          <dt className="truncate text-[9.5px] font-semibold uppercase tracking-[0.05em] text-muted-2">
-            {i.label}
-          </dt>
-          <dd
-            className={cn(
-              "mt-1 truncate text-[15px] font-semibold tabular-nums",
-              TONE[i.tone ?? "neutral"],
-            )}
-          >
-            {i.value}
-          </dd>
-          {i.note && <dd className="mt-0.5 truncate text-[10.5px] text-muted-2">{i.note}</dd>}
-        </div>
-      ))}
-    </dl>
+    <div className="@container">
+      <dl
+        className={cn(
+          "grid grid-cols-2 divide-x divide-line-soft rounded-lg border border-line-soft",
+          GRID[cols],
+          className,
+        )}
+      >
+        {items.map((i) => (
+          <div key={i.label} className="min-w-0 px-3 py-2.5">
+            <dt className="text-[9.5px] font-semibold uppercase leading-tight tracking-[0.05em] text-muted-2">
+              {i.label}
+            </dt>
+            <dd
+              className={cn(
+                "mt-1 text-[15px] font-semibold leading-tight tabular-nums",
+                TONE[i.tone ?? "neutral"],
+              )}
+            >
+              {i.value}
+            </dd>
+            {i.note && <dd className="mt-0.5 text-[10.5px] leading-snug text-muted-2">{i.note}</dd>}
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

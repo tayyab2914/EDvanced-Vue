@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { NameForm, PasswordForm } from "@/components/account/account-forms";
+import { DisplayForm } from "@/components/account/display-form";
+import { labelMode } from "@/lib/dashboard/label-mode";
 
 /**
  * Closes the Spec's §5.1 known gap. Any signed-in user reaches this — it is about them,
@@ -37,6 +39,8 @@ export default async function AccountPage() {
         />
         <PasswordForm />
       </div>
+
+      <DisplayForm current={await labelMode()} />
 
       <Card>
         <h2 className="mb-3 text-[15px] font-semibold">Your access</h2>

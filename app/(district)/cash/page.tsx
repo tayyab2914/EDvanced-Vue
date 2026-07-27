@@ -14,6 +14,7 @@ import { trendNarrative } from "@/lib/alerts/insights";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
 import {
   compactMoney,
+  money,
   accounting,
   percent,
   signedPercent,
@@ -37,9 +38,27 @@ import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { Gauge } from "@/components/dashboard/charts/gauge";
 import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
 import { scopeOptions, alertFunds, scopeDescription } from "@/lib/dashboard/options";
+import { GO_TO, VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { CASH_COLORS, SERIES_SLOTS } from "@/lib/dashboard/palette";
 import { codeName } from "@/lib/text";
+import { labelMode } from "@/lib/dashboard/label-mode";
+import { DimLabel } from "@/components/dashboard/dim-label";
 import { CASH_VIEWS, resolveView } from "@/lib/dashboard/view";
+import {
+  PrintSheet,
+  SheetBand,
+  SheetCard,
+  SheetKpi,
+  SheetStats,
+} from "@/components/dashboard/print-sheet";
+import {
+  rungTone,
+  sheetTone,
+  sheetScope,
+  sheetAsOf,
+  SHEET_TABLE_ROWS,
+  SHEET_TABLE_NOTE,
+} from "@/lib/dashboard/summary";
 
 /**
  * The Cash Position dashboard (Spec §7) — availability, liquidity and flow.
@@ -70,13 +89,22 @@ import { CASH_VIEWS, resolveView } from "@/lib/dashboard/view";
 export default async function CashDashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ fy?: string; period?: string; fund?: string; groupBy?: string }>;
+  searchParams: Promise<{
+    fy?: string;
+    period?: string;
+    fund?: string;
+    groupBy?: string;
+    view?: string;
+  }>;
 }) {
   const { db, user, districtId } = await getTenantDb();
   if (!userCan(user, "view_dashboards")) redirect("/master-data");
 
   const sp = await searchParams;
-  const scope = await resolveScope(db, districtId, sp);
+  // Not `summary` — that name is taken by `cashSummary()` below, which is the figures
+  // themselves rather than the view they are being asked for.
+  const isSheet = sp.view === "summary";
+  const scope = await resolveScope(db, districtId, sp, await labelMode());
   const view = resolveView(CASH_VIEWS, sp.groupBy);
 
   if (scope.empty) {
@@ -131,7 +159,7 @@ export default async function CashDashboard({
    */
   const fundCash = fundRows
     .filter((f) => f.endingCash !== null && (!scope.fundId || f.fundId === scope.fundId))
-    .map((f) => ({ id: f.fundId, label: codeName(f.code, f.name), value: toNumber(f.endingCash) ?? 0 }))
+    .map((f) => ({ id: f.fundId, label: codeName(f.code, f.name, scope.labelMode), value: toNumber(f.endingCash) ?? 0 }))
     .sort((a, b) => b.value - a.value);
   // Six categorical slots, so five funds and a fold — the same rule `foldTail` applies to
   // the breakdowns (lib/finance/breakdown.ts). A seventh fund does not get a generated hue.
@@ -197,6 +225,242 @@ export default async function CashDashboard({
           daysVsTarget !== null && daysVsTarget < 0 ? "below" : "at or above"
         } the board target of ${cashT.warning} days, and sits in ${cashRung} status.`;
 
+  const summaryHref = options.query
+    ? `/cash?${options.query}&view=summary`
+    : "/cash?view=summary";
+
+  // ---------- the sheet's six headline figures ----------
+  const kpiData = [
+    {
+      key: "balance",
+      label: "Cash balance",
+      value: compactMoney(summary.endingCash),
+      sub: scope.fund ? scope.fund.name : "All funds",
+      note:
+        momPct === null
+          ? previous
+            ? undefined
+            : "no earlier period"
+          : `${accounting(momAmount, { compact: true })} (${signedPercent(momPct)})`,
+      tone: momPct === null ? ("neutral" as const) : sheetTone(deltaTone(momPct, "up")),
+    },
+    {
+      key: "days",
+      label: "Days cash on hand",
+      value: daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)}`,
+      sub: "days of operating cost covered",
+      note: `${cashRung} · policy ≥ ${cashT.warning} days`,
+      tone: rungTone(cashRung),
+    },
+    {
+      key: "net",
+      label: "Net cash flow (MTD)",
+      value: accounting(summary.netCashFlowMtd, { compact: true }),
+      sub: scope.label,
+      note:
+        summary.netCashFlowMtd === null
+          ? undefined
+          : summary.netCashFlowMtd.isNegative()
+            ? "Outflow"
+            : "Inflow",
+      tone:
+        summary.netCashFlowMtd === null
+          ? ("neutral" as const)
+          : sheetTone(deltaTone(toNumber(summary.netCashFlowMtd), "up")),
+    },
+    {
+      key: "receipts",
+      label: "Cash receipts (MTD)",
+      value: compactMoney(summary.receiptsMtd),
+      sub: "into the district's accounts",
+      tone: "neutral" as const,
+    },
+    {
+      key: "disbursements",
+      label: "Cash disbursements (MTD)",
+      value: compactMoney(summary.disbursementsMtd),
+      sub: "out of the district's accounts",
+      tone: "neutral" as const,
+    },
+    {
+      key: "status",
+      label: "Cash status",
+      value: cashRung === "N/A" ? "Not available" : cashRung,
+      sub: `Policy ≥ ${cashT.warning} days · critical below ${cashT.critical}`,
+      note:
+        daysVsTarget === null
+          ? undefined
+          : `${daysVsTarget < 0 ? "" : "+"}${Math.round(daysVsTarget)} days vs target`,
+      tone: rungTone(cashRung),
+    },
+  ];
+
+  // ===================== the one-page landscape summary =====================
+  if (isSheet) {
+    return (
+      <PrintSheet
+        title="Cash Position Summary"
+        district={user.districtName ?? "District"}
+        scope={sheetScope(scope)}
+        asOf={sheetAsOf(scope.dataAsOf)}
+        backHref={options.query ? `/cash?${options.query}` : "/cash"}
+      >
+        <SheetBand cols="1fr 1fr 1fr 1fr 1fr 1fr">
+          {kpiData.map((k) => (
+            <SheetKpi
+              key={k.key}
+              label={k.label}
+              value={k.value}
+              sub={k.sub}
+              note={k.note}
+              tone={k.tone}
+            />
+          ))}
+        </SheetBand>
+
+        <SheetBand cols="1.4fr 1fr">
+          <SheetCard
+            title="Cash balance trend"
+            note={scope.fund ? scope.fund.name : "All funds"}
+          >
+            <LineChart
+              title="Cash balance trend"
+              summary={`Ending cash balance by month for fiscal year ${scope.fiscalYear}${forecast ? ", with a straight-line 30-day projection" : ""}.`}
+              categories={forecastLabels}
+              format={(v) => compactMoney(v, 0)}
+              height={230}
+              series={[
+                {
+                  key: "cash",
+                  label: "Ending cash balance",
+                  color: "var(--color-viz-actual)",
+                  labelLast: true,
+                  points: forecast ? [...trend, { value: null }] : trend,
+                },
+                ...(forecast
+                  ? [
+                      {
+                        key: "forecast",
+                        label: "30-day projection",
+                        color: "var(--color-viz-forecast)",
+                        dashed: true,
+                        points: forecastSeries,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+            <SheetStats
+              items={[
+                { label: "Period high", value: compactMoney(stats.high?.value) },
+                { label: "Period low", value: compactMoney(stats.low?.value) },
+                { label: "Average", value: compactMoney(stats.average) },
+                { label: "Volatility", value: stats.volatility ?? NOT_AVAILABLE },
+              ]}
+            />
+          </SheetCard>
+
+          <SheetCard title="Cash health" note={`Against a ${cashT.warning}-day policy`}>
+            <div className="flex items-center gap-3">
+              <div className="flex flex-none flex-col items-center">
+                <Gauge
+                  value={daysCash}
+                  bands={statusBands(cashT)}
+                  rung={cashRung}
+                  // No unit caption at this size: the gauge's unit line sits a fixed 15px
+                  // under the figure, which at 130px lands on the hub and the needle crosses
+                  // it. The card's own note says what the number is measured against.
+                  unit=""
+                  size={130}
+                  title="Days cash on hand"
+                  summary={
+                    daysCash === null
+                      ? "Days cash on hand cannot be computed for this period."
+                      : `${fmtDays(daysCash)} days of cash on hand, against a policy minimum of ${cashT.warning}.`
+                  }
+                />
+                <StatusBadge status={cashRung} size="sm" dot={false} className="mt-1" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <ShareBars
+                  title="Cash composition"
+                  summary="How the district's cash splits across its funds."
+                  rows={fundSlices.map((f, i) => ({
+                    id: f.id,
+                    label: f.label,
+                    value: f.value,
+                    display: compactMoney(f.value),
+                    share: percent(sharePercent(f.value, fundCashTotal), 1),
+                    color: SERIES_SLOTS[i % SERIES_SLOTS.length],
+                  }))}
+                />
+              </div>
+            </div>
+          </SheetCard>
+        </SheetBand>
+
+        <SheetBand cols="1.5fr 1fr">
+          <SheetCard title="Cash balance by fund" note={SHEET_TABLE_NOTE}>
+            <DataTable
+              dense
+              columns={[
+                { key: "fund", label: "Fund" },
+                { key: "cash", label: "Ending cash", align: "right" },
+                { key: "share", label: "Share", align: "right" },
+              ]}
+              rows={fundRows
+                .filter((f) => f.endingCash !== null)
+                .slice(0, SHEET_TABLE_ROWS)
+                .map((f) => ({
+                  id: f.fundId,
+                  cells: {
+                    fund: { value: codeName(f.code, f.name, scope.labelMode), strong: true },
+                    cash: compactMoney(f.endingCash),
+                    share: percent(sharePercent(f.endingCash, point?.endingCash ?? null), 1),
+                  },
+                }))}
+              total={{
+                id: "total",
+                total: true,
+                cells: {
+                  fund: "Total cash",
+                  cash: compactMoney(totalCash),
+                  share: "100.0%",
+                },
+              }}
+              empty="No cash position committed for this period."
+            />
+          </SheetCard>
+
+          <div className="flex min-w-0 flex-col gap-[7px]">
+            {/* The narrative as plain prose, not a `KeyInsightBar` — the bar prints its own
+                "KEY INSIGHT" eyebrow, which under a card already titled that read as the
+                heading having been printed twice. */}
+            <SheetCard title="Key insight" note="Cash movement and coverage">
+              <p className="text-[9.5px] leading-[1.45] text-ink-muted">
+                {movement ? `${movement} ` : ""}
+                {coverage}
+              </p>
+            </SheetCard>
+
+            <SheetCard title={`Cash alerts (${cashAlerts.length})`}>
+              <AlertList
+                mode={scope.labelMode}
+                alerts={cashAlerts.slice(0, 2).map((a) => ({
+                  id: a.id,
+                  severity: a.severity,
+                  title: a.title,
+                  message: a.message,
+                }))}
+                empty="No cash thresholds crossed."
+              />
+            </SheetCard>
+          </div>
+        </SheetBand>
+      </PrintSheet>
+    );
+  }
+
   return (
     <div className="animate-fade-up space-y-[18px]">
       <PageHeader
@@ -206,6 +470,7 @@ export default async function CashDashboard({
           <DashboardFilters
             scope={scope}
             exportHref={options.exportHref("/cash/export")}
+            summaryHref={summaryHref}
           />
         }
       />
@@ -307,7 +572,7 @@ export default async function CashDashboard({
         <SectionCard
           title="Cash balance trend"
           subtitle={scope.fund ? scope.fund.name : "All funds"}
-          footer="View full cash analysis"
+          footer={VIEW_DETAILS.cashPosition}
           footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
           <LineChart
@@ -364,7 +629,7 @@ export default async function CashDashboard({
         <SectionCard
           title="Cash balance by fund"
           subtitle={scope.fund ? scope.fund.name : "All funds"}
-          footer="View all funds"
+          footer={VIEW_DETAILS.cashPosition}
           footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
           <DataTable
@@ -379,9 +644,12 @@ export default async function CashDashboard({
                 id: f.fundId,
                 flag: f.endingCash!.isNegative() ? ("negative" as const) : undefined,
                 cells: {
-                  fund: { value: codeName(f.code, f.name), strong: true },
+                  fund: {
+                    value: <DimLabel code={f.code} name={f.name} mode={scope.labelMode} />,
+                    strong: true,
+                  },
                   cash: {
-                    value: compactMoney(f.endingCash),
+                    value: money(f.endingCash),
                     strong: true,
                     tone: f.endingCash!.isNegative() ? ("negative" as const) : undefined,
                   },
@@ -393,7 +661,7 @@ export default async function CashDashboard({
               total: true,
               cells: {
                 fund: "Total all funds",
-                cash: compactMoney(point?.endingCash),
+                cash: money(point?.endingCash),
                 share: "100.0%",
               },
             }}
@@ -474,7 +742,7 @@ export default async function CashDashboard({
         <SectionCard
           title="Monthly cash summary"
           subtitle={`${scope.label} · ${scope.fund ? scope.fund.name : "All funds"}`}
-          footer="View cash flow details"
+          footer={VIEW_DETAILS.cashPosition}
           footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
           {/*
@@ -525,10 +793,11 @@ export default async function CashDashboard({
 
         <SectionCard
           title={`Cash alerts (${cashAlerts.length})`}
-          footer="View all alerts"
+          footer={GO_TO.alerts}
           footerHref="/alerts"
         >
           <AlertList
+            mode={scope.labelMode}
             alerts={cashAlerts}
             href="/alerts"
             empty="No cash thresholds have been crossed this period."
@@ -562,7 +831,7 @@ export default async function CashDashboard({
           }
           info="Where the balance is held, as reported on the cash file."
           control={<ViewBy options={CASH_VIEWS} value={view} />}
-          footer="View account details"
+          footer={VIEW_DETAILS.cashPosition}
           footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
           {view === "bankAccount" ? (

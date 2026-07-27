@@ -251,6 +251,45 @@ export function displayName(raw: string | null | undefined, fallback = ""): stri
   return formatted || fallback;
 }
 
+// ===================== how much of a dimension to show =====================
+
+/**
+ * The client, on Fund / Function / Object / Cost Center / Project:
+ *
+ *   "I recommend displaying both the code and description (e.g., 1000 – General Fund) rather
+ *   than codes alone. This provides context for executives while still allowing finance staff
+ *   to quickly identify the accounting codes. If needed, we can also consider a user
+ *   preference for Codes Only, Names Only, or Codes + Names, with Codes + Names as the
+ *   default."
+ *
+ * So this is one setting with three values, and the DEFAULT IS THE RECOMMENDATION — a
+ * district that never opens the setting sees the code and the name, everywhere.
+ *
+ * It is a preference about READING, not about data, which is why it lives in a cookie rather
+ * than on the User row (lib/dashboard/label-mode.ts). Two people looking at the same district
+ * may want different amounts of text, and neither choice changes a figure, an export or a
+ * saved view. See that module for why it is not a URL parameter either.
+ */
+export type LabelMode = "code-name" | "code" | "name";
+
+export const DEFAULT_LABEL_MODE: LabelMode = "code-name";
+
+/** The setting, in the client's own words. Drives the control on the account page. */
+export const LABEL_MODES: readonly { value: LabelMode; label: string; hint: string }[] = [
+  { value: "code-name", label: "Codes + Names", hint: "1000 — General Fund" },
+  { value: "code", label: "Codes Only", hint: "1000" },
+  { value: "name", label: "Names Only", hint: "General Fund" },
+];
+
+export function isLabelMode(v: unknown): v is LabelMode {
+  return v === "code-name" || v === "code" || v === "name";
+}
+
+/** Anything unrecognised — an old cookie, a hand-edited one — falls back to the default. */
+export function resolveLabelMode(raw: string | null | undefined): LabelMode {
+  return isLabelMode(raw) ? raw : DEFAULT_LABEL_MODE;
+}
+
 /**
  * `1000 — General Fund`, or just the name when the dimension has no code.
  *
@@ -258,10 +297,60 @@ export function displayName(raw: string | null | undefined, fallback = ""): stri
  * longhand in fourteen places — every one of them free to drift into a hyphen, a colon, or a
  * code shown without its name. The code itself is NEVER re-cased: it is the district's key
  * into their own chart of accounts, and `3xx` is not `3XX`.
+ *
+ * `mode` NARROWS what is shown, it never invents. A dimension carrying only one of the two
+ * renders that one whichever mode is set: "Codes Only" on a project with no number would
+ * otherwise blank the cell, and an empty cell reads as missing data rather than as a
+ * display preference. Same rule as `displayName`'s fallback.
  */
-export function codeName(code: string | null | undefined, name: string | null | undefined): string {
+export function codeName(
+  code: string | null | undefined,
+  name: string | null | undefined,
+  mode: LabelMode = DEFAULT_LABEL_MODE,
+): string {
   const label = displayName(name);
   const c = code?.trim() ?? "";
   if (!c) return label;
-  return label ? `${c} — ${label}` : c;
+  if (!label) return c;
+  if (mode === "code") return c;
+  if (mode === "name") return label;
+  return `${c} — ${label}`;
+}
+
+// ===================== fitting it in a column =====================
+
+/**
+ * The character budget for a dimension label — the client's "approximately 25–35 characters
+ * (or whatever fits the column width)".
+ *
+ * In the DOM the column width wins: components/dashboard/dim-label.tsx sets this as a `ch`
+ * ceiling and lets CSS ellipsise at whatever is narrower, so a label never truncates earlier
+ * than it has to. This constant is the ceiling, and the hard limit in the one place CSS
+ * cannot help — SVG text, which neither wraps nor ellipsises.
+ */
+export const LABEL_CHARS = 32;
+
+/**
+ * `1000 — Student and Instructional Support` → `1000 — Student and…`.
+ *
+ * For plain-text and SVG contexts only. Anything rendering into the DOM should use
+ * `<DimLabel>` instead: CSS knows the actual column width and this does not, so a hard
+ * character cut in a wide column truncates text that would have fitted.
+ *
+ * Cuts on a word boundary when one is close enough to the limit — `Student and…` reads as a
+ * shortened phrase, `Student an…` reads as a bug. Never truncates the CODE off the front:
+ * the budget is well past any chart-of-accounts code, and the code is the half a finance
+ * officer scans for.
+ */
+export function clip(raw: string, max: number = LABEL_CHARS): string {
+  const s = raw.trim();
+  if (s.length <= max) return s;
+
+  const cut = s.slice(0, max - 1);
+  const space = cut.lastIndexOf(" ");
+  // Back off to the last space only if it costs less than a quarter of the budget; beyond
+  // that the label loses more than the ellipsis is worth.
+  const body = space > 0 && space >= max - 1 - Math.floor(max / 4) ? cut.slice(0, space) : cut;
+
+  return `${body.replace(/[\s,;:.—–-]+$/u, "")}…`;
 }

@@ -236,30 +236,440 @@ body {
   a[href]::after {
     content: "";
   }
+}
 
-  /* ---------- the one-page Executive Summary ----------
-     A different artefact from the multi-page print above: the client asked for "one-page
-     landscape PDF … intended for board meetings and executive leadership", and one page is
-     the requirement, not the aspiration. Six KPI tiles, three charts, a five-row table and
-     three insights do not fit an A4 landscape at screen sizes, so this trims the padding
-     and steps the type down rather than letting the page silently become two.
+/* ===================== the one-page sheet =====================
+   Every dashboard has a `?view=summary` that prints to ONE landscape page — the client's
+   "one-page landscape PDF … intended for board meetings and executive leadership".
 
-     The @page landscape rule is injected by the route itself, so the detailed print of the
-     same dashboard stays portrait. */
-  [data-summary] {
-    font-size: 93%;
+   These rules are NOT inside `@media print`, and that is the whole design. The sheet is a
+   fixed 990px canvas with no viewport breakpoint inside it, so what is on screen is what
+   comes out of the printer, and the height can therefore be measured before printing (see
+   components/dashboard/print-sheet.tsx for the full argument, and print-sheet-fit.tsx for
+   what is done with the measurement).
+
+   990px is narrower than the printable width of A4 landscape (1062px) AND of US Letter
+   landscape (995px) at 8mm margins, so the sheet fits whichever paper the dialogue is on. */
+
+.sheet-shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.sheet-notice {
+  display: flex;
+  width: min(100%, 990px);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 8px;
+  border: 1px solid #d5e3fb;
+  background: #f2f7ff;
+  padding: 9px 14px;
+  font-size: 12px;
+  color: #33507a;
+}
+.sheet-notice strong {
+  font-weight: 600;
+}
+.sheet-back {
+  flex: none;
+  border-radius: 7px;
+  border: 1px solid var(--color-line);
+  background: #ffffff;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-ink-soft);
+}
+
+.sheet-page {
+  width: 990px;
+  max-width: 100%;
+  background: #ffffff;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  box-shadow: 0 2px 14px rgba(15, 32, 56, 0.07);
+  /* The canvas does not reflow, so a viewport narrower than it scrolls rather than
+     rearranging into a layout that is not the one being printed. */
+  overflow: auto;
+}
+
+.sheet-fit {
+  display: flex;
+  width: 990px;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  color: var(--color-ink);
+}
+
+/* ---------- masthead and colophon ---------- */
+.sheet-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1.5px solid var(--color-line);
+  padding-bottom: 6px;
+}
+.sheet-district {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-muted-2);
+}
+.sheet-title {
+  margin-top: 1px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  line-height: 1.1;
+}
+.sheet-meta {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  font-size: 10.5px;
+  color: var(--color-muted);
+}
+.sheet-asof {
+  color: var(--color-muted-2);
+}
+.sheet-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--color-line-soft);
+  padding-top: 4px;
+  font-size: 9px;
+  color: var(--color-muted-2);
+}
+
+/* ---------- bands and cards ---------- */
+.sheet-band {
+  display: grid;
+  gap: 7px;
+  align-items: stretch;
+}
+
+.sheet-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  padding: 7px 8px;
+}
+.sheet-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.sheet-card-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  color: var(--color-heading);
+}
+.sheet-card-note {
+  flex: none;
+  font-size: 9px;
+  color: var(--color-muted-2);
+}
+.sheet-card-body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  /* Top-aligned, not centred. Cards in a band stretch to the tallest of them, and centring
+     the short ones drops their first row half an inch below its neighbour's — two tables
+     side by side then have their column headers at different heights, which reads as a
+     mistake. Slack goes to the bottom of the card, where nobody is comparing anything. */
+  justify-content: flex-start;
+  gap: 5px;
+}
+
+/* ---------- the KPI strip ---------- */
+.sheet-kpi {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  border-left-width: 3px;
+  padding: 6px 7px;
+}
+.sheet-kpi[data-tone="neutral"] {
+  border-left-color: var(--color-line);
+}
+.sheet-kpi[data-tone="positive"] {
+  border-left-color: var(--color-strong-mark);
+}
+.sheet-kpi[data-tone="monitor"] {
+  border-left-color: var(--color-monitor-mark);
+}
+.sheet-kpi[data-tone="negative"] {
+  border-left-color: var(--color-action-mark);
+}
+.sheet-kpi-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  color: var(--color-muted-2);
+}
+.sheet-kpi-value {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
+  font-variant-numeric: proportional-nums;
+}
+.sheet-kpi-sub,
+.sheet-kpi-note {
+  font-size: 8.5px;
+  line-height: 1.3;
+  color: var(--color-muted-2);
+}
+.sheet-kpi-note {
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+/* ---------- the key/value strip under a chart ---------- */
+.sheet-stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  border: 1px solid var(--color-line-soft);
+  border-radius: 6px;
+}
+.sheet-stats > div {
+  min-width: 0;
+  padding: 3px 6px;
+}
+.sheet-stats > div + div {
+  border-left: 1px solid var(--color-line-soft);
+}
+.sheet-stats dt {
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-muted-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet-stats dd {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sheet-stats dd[data-tone="positive"] {
+  color: var(--color-strong);
+}
+.sheet-stats dd[data-tone="negative"] {
+  color: var(--color-action);
+}
+
+/* ---------- density for the shared components the sheet reuses ----------
+   The charts and the health table are the SAME components the dashboards render, so a
+   figure on the sheet cannot disagree with the figure on screen. What they cannot bring
+   with them is their screen spacing: a 65px chart row and a 3.5px-padded table cell are
+   right at 1440px and are the difference between one page and three at 990px. */
+
+[data-sheet] [data-bars-legend] {
+  margin-bottom: 4px;
+  gap: 4px 10px;
+  font-size: 8.5px;
+}
+[data-sheet] [data-bars-legend] > li {
+  font-size: 8.5px;
+  gap: 4px;
+}
+[data-sheet] [data-bars-axis] {
+  margin-bottom: 0;
+  font-size: 8px;
+}
+[data-sheet] [data-bars-row] {
+  padding-top: 3px;
+  padding-bottom: 3px;
+  gap: 6px;
+}
+[data-sheet] [data-bars-label] {
+  width: 84px;
+  font-size: 9px;
+  line-height: 1.15;
+}
+[data-sheet] [data-bars-ref] {
+  width: 54px;
+  font-size: 9px;
+}
+[data-sheet] [data-bars-badge] {
+  width: 66px;
+}
+[data-sheet] [data-bars-axis] > [data-bars-label],
+[data-sheet] [data-bars-axis] > [data-bars-ref],
+[data-sheet] [data-bars-axis] > [data-bars-badge] {
+  flex: none;
+}
+[data-sheet] [data-bars-value] {
+  height: 10px;
+  font-size: 8.5px;
+}
+[data-sheet] [data-bars-track] {
+  height: 8px;
+}
+
+[data-sheet] [data-chart-legend] {
+  gap: 3px 10px;
+  font-size: 8.5px;
+}
+[data-sheet] [data-chart-legend] > li {
+  font-size: 8.5px;
+}
+
+[data-sheet] table td,
+[data-sheet] table th {
+  padding: 2.5px 5px !important;
+  font-size: 9.5px !important;
+}
+
+[data-sheet] [data-insight-list] > li > * {
+  gap: 5px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+[data-sheet] [data-insight-list] [data-insight-glyph] {
+  height: 16px;
+  width: 16px;
+  border-radius: 4px;
+}
+[data-sheet] [data-insight-list] [data-insight-text] {
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+[data-sheet] [data-insight-list] [data-insight-detail] {
+  font-size: 8.5px;
+  line-height: 1.25;
+}
+
+[data-sheet] [data-mover-row] {
+  padding-top: 2.5px;
+  padding-bottom: 2.5px;
+  gap: 6px;
+}
+[data-sheet] [data-mover-row] span {
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+[data-sheet] [data-mover-name] {
+  font-size: 9.5px;
+}
+
+[data-sheet] [data-alert-list] > li > * {
+  padding-top: 3px !important;
+  padding-bottom: 3px !important;
+  gap: 5px;
+}
+[data-sheet] [data-alert-chip] {
+  height: 15px;
+  width: 15px;
+}
+[data-sheet] [data-alert-chip] svg {
+  height: 9px;
+  width: 9px;
+}
+[data-sheet] [data-alert-message] {
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+[data-sheet] [data-alert-title] {
+  font-size: 8.5px;
+  line-height: 1.2;
+}
+
+[data-sheet] [data-insight-bar] {
+  gap: 6px;
+  border-radius: 6px;
+  padding: 5px 7px;
+}
+[data-sheet] [data-insight-bar] [data-insight-bar-chip] {
+  height: 15px;
+  width: 15px;
+}
+[data-sheet] [data-insight-bar] [data-insight-bar-text] {
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+/* Status badges are the sheet's only colour-coded judgement, so they shrink but never
+   disappear — a rung nobody can read is a rung that is not there. */
+[data-sheet] [data-status-badge] {
+  padding: 1px 4px;
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+/* No card on a sheet may cast a shadow: at 990px they read as smudges and they cost ink. */
+[data-sheet] * {
+  box-shadow: none !important;
+}
+[data-sheet] .animate-fade-up {
+  animation: none !important;
+}
+
+@media print {
+  .sheet-shell {
+    display: block;
   }
-  [data-summary] section,
-  [data-summary] [class*="rounded-xl"] {
-    box-shadow: none !important;
+
+  /* The app shell stretches itself to the viewport so a short page still fills the screen.
+     In print the "viewport" is the sheet of paper, so that stretch makes the document
+     exactly one page tall — and a document exactly one page tall spills a blank second page
+     the moment anything rounds up. Nothing on a sheet needs a minimum height. */
+  .min-h-screen,
+  body,
+  html {
+    min-height: 0 !important;
   }
-  [data-summary] section {
-    padding: 9px !important;
-  }
-  [data-summary] figure svg {
-    max-height: 150px;
-  }
-  [data-summary] > * {
+
+  .sheet-page {
+    /* `100vh` in print media IS the printable height of whatever paper the dialogue settled
+       on, so capping there — with the fitter already holding content under 720px — is what
+       makes one page one page. `max-height` rather than `height`, so the box takes only the
+       ink it needs and never reports itself as a full page. */
+    width: 990px;
+    height: auto;
+    max-height: calc(100vh - 2px);
+    max-width: none;
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
     break-inside: avoid;
+  }
+  .sheet-fit {
+    padding: 0;
   }
 }
