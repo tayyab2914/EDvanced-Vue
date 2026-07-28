@@ -1,6 +1,6 @@
 import { scopeHref, type DashboardScope } from "@/lib/dashboard/scope";
 import { fundLabel } from "@/lib/finance/funds";
-import { writeFilterParams } from "@/lib/dashboard/filter-params";
+import { writeFilterParams, withScope } from "@/lib/dashboard/filter-params";
 
 /**
  * The scope selectors' options, derived once from a resolved scope.
@@ -14,7 +14,14 @@ import { writeFilterParams } from "@/lib/dashboard/filter-params";
  * requirements fall out of one line rather than needing machinery. An export link carrying
  * it downloads the slice on screen; a nav link carrying it lands the next dashboard on the
  * same slice, which is "applied filters remain in place when the user moves between
- * dashboards". See components/dashboard/filter-link.tsx.
+ * dashboards".
+ *
+ * `link` is that second one, for the links INSIDE a page — the KPI tile whose whole card is
+ * a "Go to Dashboard", the card footers, the alert group cards. The sidebar has carried the
+ * scope since it was built (components/sidebar-nav.tsx), but a reader who has filtered the
+ * Executive dashboard to two funds and clicks the Revenues tile is asking the same question
+ * of the same slice, and a bare `/revenues` answered it for the whole district instead. Same
+ * `withScope` the sidebar uses, so the two cannot drift.
  */
 export function scopeOptions(scope: DashboardScope) {
   const periods = scope.available.map((a) => ({
@@ -38,6 +45,14 @@ export function scopeOptions(scope: DashboardScope) {
     funds,
     /** Carries the current scope onto an export route, so it exports what is on screen. */
     exportHref: (base: string) => (qs ? `${base}?${qs}` : base),
+    /**
+     * Carries the current scope onto an in-page link to another dashboard.
+     *
+     * A no-op on anything that is not a filtered route, so it is safe to wrap a link whose
+     * destination is a settings or upload page — and it leaves a parameter the href sets
+     * ITSELF alone, so a deep-link that has deliberately chosen a period keeps it.
+     */
+    link: (href: string) => withScope(href, params),
     query: qs,
   };
 }

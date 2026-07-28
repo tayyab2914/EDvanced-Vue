@@ -328,6 +328,66 @@ export async function expenditureByFunction(db: TenantDb, args: BreakdownArgs): 
   return { rows, total: totalOf(rows, args.periodsElapsed, "Total expenditures") };
 }
 
+/**
+ * Spending folded up to FunctionType — the composition card's "View By → Function".
+ *
+ * The client, on the grouped Expenditures by Object card: "Function — hide Function Number
+ * leaving Function Type, sort ascending by Function Number like Objects". A composition card
+ * asks "where does the money go", and a district's function list answers that at the wrong
+ * altitude: thirty-odd accounts, ranked by size, reshuffling every month. Instruction ·
+ * Instructional Support · General Support is the answer, and it is the same shape
+ * `expenditureByObjectType` already gives the Object view.
+ *
+ * The FULL function list is untouched and still sits below the card as the reference table,
+ * in Function Type Code order with every account named. This is the summary; that is the
+ * detail. Losing one to gain the other was never the ask.
+ */
+export async function expenditureByFunctionType(
+  db: TenantDb,
+  args: BreakdownArgs,
+): Promise<Breakdown> {
+  const [grouped, types] = await Promise.all([
+    db.expenditureActual.groupBy({
+      by: ["functionId"],
+      where: { versionId: args.versionId, ...detailWhere(args.filter) },
+      _sum: { budget: true, actualYtd: true, actualMtd: true, encumbrances: true },
+    }),
+    db.functionType.findMany({ select: { id: true, code: true, name: true, sortOrder: true } }),
+  ]);
+
+  const functions = await db.accountFunction.findMany({
+    where: { id: { in: grouped.map((g) => g.functionId) } },
+    select: { id: true, functionTypeId: true },
+  });
+  const typeOfFunction = new Map(functions.map((f) => [f.id, f.functionTypeId]));
+  const typeById = new Map(types.map((t) => [t.id, t]));
+
+  const folded = foldSums(
+    grouped,
+    (g) => typeOfFunction.get(g.functionId) ?? UNASSIGNED,
+    (g) => g._sum,
+  );
+
+  const rows = [...folded.entries()]
+    .map(([id, s]) => {
+      const t = typeById.get(id);
+      return makeRow(
+        id,
+        t?.code ?? "",
+        t?.name ?? "Unclassified",
+        s,
+        args.periodsElapsed,
+        // A function TYPE is its own classification, so it groups by itself — which is what
+        // lets `order: "chart"` sort by the type's own order rather than by size. Same
+        // argument as `expenditureByObjectType`.
+        t ? { code: t.code, name: t.name, sortOrder: t.sortOrder } : null,
+      );
+    })
+    .sort(sorter(args.order));
+
+  return { rows, total: totalOf(rows, args.periodsElapsed, "Total expenditures") };
+}
+
 export async function expenditureByObject(db: TenantDb, args: BreakdownArgs): Promise<Breakdown> {
   const grouped = await db.expenditureActual.groupBy({
     by: ["objectId"],
@@ -1002,4 +1062,25 @@ export function foldTail(breakdown: Breakdown, periodsElapsed: number, keep = 5)
   );
 
   return { rows: [...head, other], total: breakdown.total };
+}
+
+/**
+ * Re-orders a breakdown by chart of accounts, AFTER its tail has been folded.
+ *
+ * The client's rule for the grouped composition card — "sort ascending by Project Number
+ * like Objects" — applied to a dimension that also has to be capped. Ranking picks WHICH
+ * rows the card shows (the biggest, so "Other" is genuinely the small ones); this decides
+ * what order it shows them in, which the reader is the one who cares about. Doing it the
+ * other way round — chart order, then fold — would fold whatever the numbering happens to
+ * list last, which is not "the small ones". Rank, fold, then order.
+ *
+ * "Other" is a fold rather than a dimension value, so it never competes for a place in the
+ * sequence and always sits at the end. A row whose dimension was left blank on the import
+ * ("No Project") has no number to sort by, so it follows the numbered rows rather than
+ * leading them — same reasoning as `byChartOrder` putting unclassified rows last.
+ */
+export function inChartOrder(breakdown: Breakdown): Breakdown {
+  const tier = (r: BreakdownRow) => (r.id === "__other" ? 2 : r.code ? 0 : 1);
+  const rows = [...breakdown.rows].sort((a, b) => tier(a) - tier(b) || byChartOrder(a, b));
+  return { rows, total: breakdown.total };
 }

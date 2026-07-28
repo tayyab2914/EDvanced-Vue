@@ -30,6 +30,32 @@ interface ShellContextValue {
    */
   collapsed: boolean;
   toggleCollapsed: () => void;
+  /**
+   * True while the main column is waiting on a server render it has already asked for.
+   *
+   * ---------------------------------------------------------------------------
+   * WHY THIS IS A SHELL CONCERN AND NOT A PAGE ONE
+   *
+   * `app/(district)/loading.tsx` covers a change of ROUTE. It does not fire when only the
+   * query string changes, and applying a dashboard filter is exactly that — same segment,
+   * new `?funds=…`. So the most expensive navigation in the product was the one with no
+   * feedback at all: every figure on screen silently went stale for the length of a
+   * `loadCore`, and the only way to tell the click had registered was that it eventually
+   * changed something.
+   *
+   * The control that starts that navigation (the filter bar) sits INSIDE the main column,
+   * and the content it invalidates is everything around it. Neither can see the other, so
+   * the flag is held here — the nearest place above both — and `ShellMain` dims against it.
+   * ---------------------------------------------------------------------------
+   */
+  busy: boolean;
+  /**
+   * Reference-COUNTED, not a plain setter: `setBusy(true)` on entering a pending state and
+   * `setBusy(false)` on leaving it. Two controls can be mid-navigation at once (the filter
+   * bar and the saved-views menu both navigate), and with a boolean the first one to finish
+   * would clear the flag while the other was still waiting.
+   */
+  setBusy: (on: boolean) => void;
 }
 
 // The no-op default lets SidebarNav render outside a provider.
@@ -39,6 +65,8 @@ const ShellContext = createContext<ShellContextValue>({
   closeSidebar: () => {},
   collapsed: false,
   toggleCollapsed: () => {},
+  busy: false,
+  setBusy: () => {},
 });
 
 export function useShell(): ShellContextValue {
@@ -55,8 +83,16 @@ export function ShellProvider({
 }) {
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(initialCollapsed);
+  const [busyCount, setBusyCount] = useState(0);
   const pathname = usePathname();
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+
+  // Clamped at zero so an extra release — a component unmounting mid-navigation after its
+  // transition already settled — cannot drive the count negative and wedge the shell busy.
+  const setBusy = useCallback(
+    (on: boolean) => setBusyCount((n) => Math.max(0, n + (on ? 1 : -1))),
+    [],
+  );
 
   const openSidebar = useCallback(() => {
     restoreFocusRef.current = document.activeElement as HTMLElement | null;
@@ -113,12 +149,43 @@ export function ShellProvider({
     restoreFocusRef.current = null;
   }, [open]);
 
+  const busy = busyCount > 0;
+
   return (
     <ShellContext.Provider
-      value={{ open, openSidebar, closeSidebar, collapsed, toggleCollapsed }}
+      value={{ open, openSidebar, closeSidebar, collapsed, toggleCollapsed, busy, setBusy }}
     >
       {children}
+      {/* Outside the main column, so the one element that says "working" is the one element
+          that does not dim while it says it. */}
+      <BusyBar show={busy} />
     </ShellContext.Provider>
+  );
+}
+
+/**
+ * The progress strip across the top of the window, and the only announcement of the wait.
+ *
+ * FIXED TO THE VIEWPORT, not to the top of the page. A reader who has scrolled down to the
+ * expenditure tables and unticks a fund is looking at the bottom of the document; a bar
+ * drawn at the top of it would be feedback they never see.
+ *
+ * Always rendered, opacity-toggled, so the browser is not asked to insert an animating
+ * element at the exact moment the main thread is busiest — it fades rather than appearing
+ * mid-stutter. It is `aria-hidden`: the announcement belongs to `ShellMain`'s `aria-busy`,
+ * and a live region here would say the same thing a second time.
+ */
+function BusyBar({ show }: { show: boolean }) {
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        "pointer-events-none fixed inset-x-0 top-0 z-[60] h-[2.5px] overflow-hidden transition-opacity duration-150 print:hidden",
+        show ? "opacity-100" : "opacity-0",
+      )}
+    >
+      {show && <span className="animate-busy-sweep absolute inset-y-0 bg-brand" />}
+    </div>
   );
 }
 
@@ -255,12 +322,27 @@ export function SidebarPanel({ children }: { children: ReactNode }) {
  * same 1200px of content 90px further left.
  */
 export function ShellMain({ children }: { children: ReactNode }) {
-  const { collapsed } = useShell();
+  const { collapsed, busy } = useShell();
   return (
     <main
+      /**
+       * DIMMED, NOT REPLACED, while a filter is applying.
+       *
+       * Everything in here is the PREVIOUS slice until the server answers — including the
+       * filter chips, which still name the filter being replaced. Fading it says so. Swapping
+       * in a skeleton would be worse: the figures are still true of the period, the reader
+       * may well be mid-sentence reading one, and throwing the page away to redraw the same
+       * layout a moment later is the jump `loading.tsx` was written to avoid.
+       *
+       * `aria-busy` is the same statement for a screen reader, which cannot see the fade.
+       * Pointer events are deliberately LEFT ON: a transition is interruptible, and a reader
+       * who picked the wrong fund should be able to say so without waiting out the wait.
+       */
+      aria-busy={busy || undefined}
       className={cn(
-        "mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 transition-[max-width] duration-200 ease-out sm:px-6 sm:py-6 lg:px-7 lg:py-7",
+        "mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 transition-[max-width,opacity] duration-200 ease-out sm:px-6 sm:py-6 lg:px-7 lg:py-7",
         collapsed && "lg:max-w-[1440px]",
+        busy && "opacity-55",
       )}
     >
       {children}

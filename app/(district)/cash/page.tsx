@@ -794,58 +794,41 @@ export default async function CashDashboard({
         <SectionCard
           title={`Cash alerts (${cashAlerts.length})`}
           footer={GO_TO.alerts}
-          footerHref="/alerts"
+          footerHref={options.link("/alerts")}
         >
           <AlertList
             mode={scope.labelMode}
             alerts={cashAlerts}
-            href="/alerts"
+            href={options.link("/alerts")}
             empty="No cash thresholds have been crossed this period."
           />
         </SectionCard>
 
         {/*
           THE "VIEW BY" CARD — "Cash Composition … View By → Fund, Bank Account, Cash
-          Category", per the client's M5 note.
+          Category", per the client's M5 note, minus Bank Account, which the M6 note asked to
+          hide for now.
 
-          TWO OF THE THREE ARE REAL, AND THE THIRD SAYS SO. The cash position import is one
+          The two that remain are the two the file can draw. The cash position import is one
           row per FUND carrying beginning, receipts, disbursements and ending, plus optional
           investment / restricted / unrestricted balances. So Cash Category is that optional
-          split (the card's original view) and Fund is the file's own grain.
-
-          There is no bank account anywhere — not on the file, not on `CashPosition`, not in
-          the schema. The option is offered because the client asked for it and it states
-          plainly what a district would have to start uploading to get it, which is more
-          useful than the option silently not existing. What it does NOT do is relabel
-          Operating / Investment / Restricted as three bank accounts: that would put three
-          accounts on a board's screen that no district ever reported.
+          split (the card's original view) and Fund is the file's own grain. Bank Account had
+          no column behind it anywhere in the schema — see the note on `CASH_VIEWS` in
+          lib/dashboard/view.ts for what bringing it back would take.
         */}
         <SectionCard
           title="Cash composition"
           subtitle={
             view === "fund"
               ? `By fund · ${scope.fund ? scope.fund.name : "all funds"}`
-              : view === "bankAccount"
-                ? "By bank account"
-                : `By cash category · ${scope.fund ? scope.fund.name : "all funds"}`
+              : `By cash category · ${scope.fund ? scope.fund.name : "all funds"}`
           }
           info="Where the balance is held, as reported on the cash file."
           control={<ViewBy options={CASH_VIEWS} value={view} />}
           footer={VIEW_DETAILS.cashPosition}
           footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
-          {view === "bankAccount" ? (
-            <div className="py-6 text-center">
-              <p className="text-[12.5px] text-muted-2">
-                The cash position file does not carry a bank account. It reports one row per
-                fund, so the platform has no account-level balance to break down.
-              </p>
-              <p className="mt-2 text-[11.5px] text-faint">
-                Switch to Fund or Cash Category for the splits this period&apos;s file does
-                support.
-              </p>
-            </div>
-          ) : view === "fund" ? (
+          {view === "fund" ? (
             fundSlices.length > 0 ? (
               <ShareBars
                 title="Cash composition by fund"

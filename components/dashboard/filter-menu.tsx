@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useMemo, useId } from "re
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons";
+import { Spinner } from "@/components/dashboard/scope-navigation";
 import type { ScopeOption } from "@/components/dashboard/scope-bar";
 import type {
   FilterOptions,
@@ -117,6 +118,7 @@ export function FilterMenu({
   options,
   selection,
   onApply,
+  pending = false,
 }: {
   periods: ScopeOption[];
   /** "<fy>:<period>" */
@@ -126,6 +128,13 @@ export function FilterMenu({
   selection: FilterSelection;
   /** Called once, with the whole staged scope. One navigation, not one per dimension. */
   onApply: (next: { selection: FilterSelection; period: string }) => void;
+  /**
+   * True while a scope change this button started is still being rendered on the server.
+   *
+   * The panel closes on Apply, so its own Apply button is gone by the time the wait begins —
+   * this trigger is the only part of the control still on screen to carry it.
+   */
+  pending?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [section, setSection] = useState<string | null>(null);
@@ -513,26 +522,32 @@ export function FilterMenu({
         ref={btnRef}
         type="button"
         onClick={() => (open ? close(true) : openPanel())}
+        // Re-opening the panel mid-navigation would seed the draft from a selection the
+        // server is in the middle of replacing — the reader would stage their next change
+        // on top of a state that is about to change under them.
+        disabled={pending}
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         className={cn(
-          "flex h-9 items-center gap-2 rounded-lg border bg-white px-3 text-[12.5px] font-medium transition-colors",
+          "flex h-9 items-center gap-2 rounded-lg border bg-white px-3 text-[12.5px] font-medium transition-colors disabled:cursor-not-allowed",
           activeCount > 0
             ? "border-brand/40 text-brand"
             : "border-line text-ink-soft hover:border-[#c8d3e4]",
         )}
       >
-        <Icon name="filter" size={14} />
-        Filters
-        {activeCount > 0 && (
+        {pending ? <Spinner size={13} /> : <Icon name="filter" size={14} />}
+        {pending ? "Applying…" : "Filters"}
+        {activeCount > 0 && !pending && (
           <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1 text-[10.5px] font-semibold text-white">
             {activeCount}
           </span>
         )}
-        <span aria-hidden className="text-[9px] text-muted-2">
-          ▼
-        </span>
+        {!pending && (
+          <span aria-hidden className="text-[9px] text-muted-2">
+            ▼
+          </span>
+        )}
       </button>
 
       {open &&

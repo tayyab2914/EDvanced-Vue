@@ -142,11 +142,17 @@ async function buildAlertReport(
     // Skipped on a ONE-fund page only. With several funds selected the "where to look"
     // line is doing more work than it ever did on All Funds — it is the only thing on
     // screen that says which of the three the movement came from.
+    //
+    // THE FILTER GOES IN. The facts above are computed over `scope.filter`, and for a while
+    // this call was not — so a dashboard narrowed to one fund type still listed the funds
+    // that filter excludes under every alert. See the header of lib/alerts/attribution.ts.
     soleFundId(scope.filter)
       ? Promise.resolve(null)
-      : attributeAlerts(db, { fiscalYear: scope.fiscalYear, period: scope.period }).catch(
-          () => null,
-        ),
+      : attributeAlerts(db, {
+          fiscalYear: scope.fiscalYear,
+          period: scope.period,
+          filter: scope.filter,
+        }).catch(() => null),
   ]);
 
   const alerts: Alert[] = [];

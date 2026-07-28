@@ -5,7 +5,7 @@ import { labelMode } from "@/lib/dashboard/label-mode";
 import { loadCore } from "@/lib/dashboard/load";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { AlertList } from "@/components/dashboard/alert-list";
-import { alertFunds } from "@/lib/dashboard/options";
+import { alertFunds, scopeOptions } from "@/lib/dashboard/options";
 import { GO_TO } from "@/lib/dashboard/cta";
 import { FundBalanceShell } from "../shell";
 
@@ -25,6 +25,7 @@ export default async function FundBalanceAlertsTab({
 
   const current = fbAlerts.filter((a) => !a.id.startsWith("FORECAST"));
   const forecast = fbAlerts.filter((a) => a.id.startsWith("FORECAST"));
+  const options = scopeOptions(scope);
 
   return (
     <FundBalanceShell scope={scope} active="/fund-balance/alerts" alertCount={fbAlerts.length}>
@@ -57,7 +58,9 @@ export default async function FundBalanceAlertsTab({
         title="Forecast"
         subtitle="Raised from the projected year-end reserve"
         footer={GO_TO.forecast}
-        footerHref={`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`}
+        footerHref={options.link(
+          `/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`,
+        )}
       >
         <AlertList
           mode={scope.labelMode}

@@ -25,6 +25,7 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { EmptyState, Row } from "@/components/dashboard/shared";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { Icon } from "@/components/icons";
+import { scopeOptions } from "@/lib/dashboard/options";
 import { FundBalanceShell } from "../shell";
 import { AssumptionsForm } from "./assumptions-form";
 import { PageHeader } from "@/components/page-header";
@@ -78,6 +79,7 @@ export default async function ForecastPage({
   const core = await loadCore(db, districtId, scope);
   const { policy, alerts, codes } = core;
   const fbAlerts = (alerts?.alerts ?? []).filter((a) => a.group === "fundBalance");
+  const options = scopeOptions(scope);
 
   // The multi-year projection is General-Fund-only, per the workbook's own note. Without a
   // General Fund there is no coherent reserve percentage to project.
@@ -504,13 +506,13 @@ export default async function ForecastPage({
           />
         </SectionCard>
 
-        <SectionCard title="Forecast alerts" footer={GO_TO.alerts} footerHref="/alerts">
+        <SectionCard title="Forecast alerts" footer={GO_TO.alerts} footerHref={options.link("/alerts")}>
           <AlertList
             mode={scope.labelMode}
             alerts={fbAlerts
               .filter((a) => a.id.startsWith("FORECAST"))
               .map((a) => ({ id: a.id, severity: a.severity, title: a.title, message: a.message }))}
-            href="/alerts"
+            href={options.link("/alerts")}
             empty="The projected reserve stays within your thresholds across the plan."
           />
 

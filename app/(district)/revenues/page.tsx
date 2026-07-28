@@ -901,7 +901,7 @@ export default async function RevenueDashboard({
           <SectionCard
             title={`Revenue alerts (${revenueAlerts.length})`}
             footer={GO_TO.alerts}
-            footerHref="/alerts"
+            footerHref={options.link("/alerts")}
           >
             <AlertList
               mode={scope.labelMode}
@@ -914,7 +914,7 @@ export default async function RevenueDashboard({
                 // figure; these say where to look, and link back to this page scoped there.
                 funds: alertFunds(scope, "/revenues", a.funds),
               }))}
-              href="/alerts"
+              href={options.link("/alerts")}
               empty="No revenue thresholds have been crossed this period."
             />
           </SectionCard>

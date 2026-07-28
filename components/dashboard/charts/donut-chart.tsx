@@ -30,6 +30,7 @@ export function DonutChart({
   summary,
   size = 190,
   legendLayout = "column",
+  shareOf,
 }: {
   slices: DonutSlice[];
   centerValue: string;
@@ -38,6 +39,22 @@ export function DonutChart({
   summary: string;
   size?: number;
   legendLayout?: "row" | "column";
+  /**
+   * The denominator the legend's percentages are read against, when it is not simply the
+   * sum of the slices.
+   *
+   * The budget-status donut needs this and it is the reason the prop exists. Its three
+   * slices — expended, encumbered, remaining — sum to the budget in the ordinary case, so
+   * nothing changes. But a district that has committed MORE than it budgeted has no
+   * remaining slice at all, and the two that are left would then read 55% / 45%: a donut
+   * whose centre says $48.6M of budget while its legend quietly renormalises to the
+   * overspend. Given the budget explicitly, those same slices read 60% and 55% — over 100%
+   * together, which is precisely the thing the reader must not be shielded from.
+   *
+   * Geometry still divides the circle by the slice sum, because a circle is 360° whatever
+   * the budget says.
+   */
+  shareOf?: number;
 }) {
   const positive = slices.filter((s) => s.value > 0);
   const total = positive.reduce((a, s) => a + s.value, 0);
@@ -57,11 +74,12 @@ export function DonutChart({
 
   // A running angle is sequential state, so it gets a plain loop rather than a `map` with
   // a mutated closure variable — the same reason as in waterfall-chart.tsx.
+  const denominator = shareOf && shareOf > 0 ? shareOf : total;
   const drawn: (DonutSlice & { start: number; end: number; share: number })[] = [];
   let angle = 0;
   for (const s of positive) {
     const sweep = (s.value / total) * 360;
-    drawn.push({ ...s, start: angle, end: angle + sweep, share: (s.value / total) * 100 });
+    drawn.push({ ...s, start: angle, end: angle + sweep, share: (s.value / denominator) * 100 });
     angle += sweep;
   }
 

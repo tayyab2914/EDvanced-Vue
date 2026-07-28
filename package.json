@@ -37,7 +37,9 @@
     "verify:dashboard": "tsx --conditions=react-server scripts/verify-dashboard.mts",
     "verify:queries": "tsx --conditions=react-server scripts/verify-queries.mts",
     "verify:print": "tsx scripts/verify-print.mts",
-    "verify:sidebar": "tsx scripts/verify-sidebar.mts"
+    "verify:widgets": "tsx scripts/verify-widgets.mts",
+    "verify:sidebar": "tsx scripts/verify-sidebar.mts",
+    "verify:filters": "tsx scripts/verify-filter-loading.mts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

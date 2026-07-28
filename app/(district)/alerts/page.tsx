@@ -8,7 +8,7 @@ import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/sec
 import { AlertList, AlertSummary } from "@/components/dashboard/alert-list";
 import { EmptyState, SubstitutionNotice, Row } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
-import { alertFunds, scopeDescription } from "@/lib/dashboard/options";
+import { alertFunds, scopeDescription, scopeOptions } from "@/lib/dashboard/options";
 import { GO_TO } from "@/lib/dashboard/cta";
 import type { AlertGroup } from "@/lib/alerts/catalog";
 
@@ -53,6 +53,7 @@ export default async function AlertsPage({
 
   const core = await loadCore(db, districtId, scope);
   const alerts = core.alerts;
+  const options = scopeOptions(scope);
 
   return (
     <div className="animate-fade-up space-y-[18px]">
@@ -107,7 +108,7 @@ export default async function AlertsPage({
               key={g.key}
               title={`${g.title} (${group.length})`}
               footer={g.cta}
-              footerHref={g.href}
+              footerHref={options.link(g.href)}
             >
               <AlertList
                 mode={scope.labelMode}

@@ -628,7 +628,9 @@ export default async function FundBalancePage({
           subtitle={scope.fund ? scope.fund.name : "All funds"}
           badge={<StatusBadge status={reserveRung} size="sm" />}
           footer={GO_TO.forecast}
-          footerHref={`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`}
+          footerHref={options.link(
+            `/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`,
+          )}
           footerNote="All amounts are unaudited"
         >
           <LineChart
@@ -824,7 +826,10 @@ export default async function FundBalancePage({
         </SectionCard>
       </Row>
 
-      <FooterInfoBar action={GO_TO.forecast} href={`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`}>
+      <FooterInfoBar
+        action={GO_TO.forecast}
+        href={options.link(`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`)}
+      >
         Want to see the future? Build a three-year projection from your own growth assumptions
         and see how reserves hold up.
       </FooterInfoBar>

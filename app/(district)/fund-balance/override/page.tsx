@@ -7,6 +7,7 @@ import { loadCore } from "@/lib/dashboard/load";
 import { money } from "@/lib/dashboard/format";
 import { formatDateTime } from "@/lib/format";
 import { fundLabel } from "@/lib/finance/funds";
+import { scopeOptions } from "@/lib/dashboard/options";
 import { PageHeader } from "@/components/page-header";
 import { SectionCard } from "@/components/dashboard/section-card";
 import { OverrideForm } from "./override-form";
@@ -64,7 +65,9 @@ export default async function OverridePage({
         description={`${fundLabel(scope.fund, scope.labelMode)} · ${scope.label}`}
         actions={
           <Link
-            href={`/fund-balance?fy=${scope.fiscalYear}&period=${scope.period}`}
+            href={scopeOptions(scope).link(
+              `/fund-balance?fy=${scope.fiscalYear}&period=${scope.period}`,
+            )}
             className="text-[12.5px] font-medium text-brand hover:underline"
           >
             Back to fund balance

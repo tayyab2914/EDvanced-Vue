@@ -6,6 +6,13 @@ import { listFunds } from "@/lib/finance/funds";
 import { pace, utilisation, availableBudget } from "@/lib/finance/variance";
 import { memo, dbKey } from "@/lib/request-cache";
 import { compactMoney } from "@/lib/dashboard/format";
+import {
+  detailWhere,
+  fundWhere,
+  narrows,
+  filterKey,
+  type FinanceFilter,
+} from "@/lib/finance/filter";
 
 /**
  * WHICH FUND — the "where do I go?" line under an alert.
@@ -39,11 +46,26 @@ import { compactMoney } from "@/lib/dashboard/format";
  *
  * WHAT IT COSTS
  *
- * Three grouped aggregates, and only when the page is scoped to All Funds — with a single
- * fund selected the alert already names its own scope and this is never called. Each query
+ * Three grouped aggregates, and never on a ONE-fund page — there the alert already names its
+ * own scope and lib/alerts/engine.ts does not call this at all. Each query
  * covers BOTH the scoped period and the one before it (`versionId: { in: [now, prev] }`,
  * grouped by fund AND version), which is what lets the month-over-month lenses be
  * attributed without doubling the query count.
+ *
+ * IT IS COMPUTED OVER THE SAME SLICE AS THE ALERT
+ *
+ * The client, on the global filters: "when filtering for General Fund the alerts for Debt Svc
+ * and Food Svc was still visible." They were — the alert SENTENCES honoured the filter (every
+ * figure in `gatherFacts` is computed over `scope.filter`) but this file took only a fiscal
+ * year and a period, so the "where to look" chips underneath were always district-wide. A
+ * reader who had narrowed to one fund type was shown funds that filter excludes, and an alert
+ * that says one thing while the row under it names another fund is worse than no attribution.
+ *
+ * So the filter comes in and reaches every query. The two detail tables take the whole
+ * narrowing; `CashPosition` and the adopted-budget lines take the fund half only, because
+ * neither carries a cost centre — the same split `detailWhere` / `fundWhere` enforce
+ * everywhere else, and the same one `daysCash()` in lib/alerts/engine.ts applies so that the
+ * per-fund days-cash figures still reconcile with the district figure in the alert above them.
  *
  * WHAT IT DELIBERATELY LEAVES ALONE
  *
@@ -157,16 +179,18 @@ interface FundFigures {
 
 export const attributeAlerts = memo(
   "attributeAlerts",
-  (db: TenantDb, scope: { fiscalYear: string; period: number }) => {
+  (db: TenantDb, scope: { fiscalYear: string; period: number; filter?: FinanceFilter }) => {
     const k = dbKey(db);
-    return k === null ? null : `${k}|${scope.fiscalYear}|${scope.period}`;
+    return k === null
+      ? null
+      : `${k}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}`;
   },
   buildAttribution,
 );
 
 async function buildAttribution(
   db: TenantDb,
-  scope: { fiscalYear: string; period: number },
+  scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
 ): Promise<AlertAttribution> {
   const [now, before, annual] = await Promise.all([
     currentVersionIds(db, { fiscalYear: scope.fiscalYear, period: scope.period }),
@@ -188,32 +212,39 @@ async function buildAttribution(
   const cashVersions = versionsOf("CASH_POSITION");
   const adoptedVersion = annual.get("EXPENDITURE_BUDGET");
 
+  // The page's slice, applied at the grain each table can honour. See the header.
+  const slice = detailWhere(scope.filter);
+  const fundSlice = fundWhere(scope.filter);
+
   const [revenue, spending, cash, adopted, funds] = await Promise.all([
     revenueVersions.length
       ? db.revenueActual.groupBy({
           by: ["fundId", "versionId"],
-          where: { versionId: { in: revenueVersions } },
+          where: { versionId: { in: revenueVersions }, ...slice },
           _sum: { budget: true, actualYtd: true, actualMtd: true },
         })
       : Promise.resolve([]),
     spendVersions.length
       ? db.expenditureActual.groupBy({
           by: ["fundId", "versionId"],
-          where: { versionId: { in: spendVersions } },
+          where: { versionId: { in: spendVersions }, ...slice },
           _sum: { budget: true, actualYtd: true, actualMtd: true, encumbrances: true },
         })
       : Promise.resolve([]),
     cashVersions.length
       ? db.cashPosition.groupBy({
           by: ["fundId", "versionId"],
-          where: { versionId: { in: cashVersions } },
+          where: { versionId: { in: cashVersions }, ...fundSlice },
           _sum: { endingCash: true },
         })
       : Promise.resolve([]),
     adoptedVersion
       ? db.budgetLine.groupBy({
           by: ["fundId"],
-          where: { versionId: adoptedVersion, kind: "EXPENDITURE" },
+          // FUND-level, matching `daysCash()`'s `fundOnly` — this is the divisor behind the
+          // per-fund days-cash figures, and narrowing it by cost centre while the numerator
+          // (cash) cannot be narrowed would report years of runway for one department.
+          where: { versionId: adoptedVersion, kind: "EXPENDITURE", ...fundSlice },
           _sum: { amount: true },
         })
       : Promise.resolve([]),
@@ -325,20 +356,23 @@ async function buildAttribution(
    * asked which funds are driving that. Answering "none" is worse than not answering.
    *
    * So the measure is dollars committed ABOVE what this fund would have committed at the
-   * district's own rate. It is meaningful in every month, it is in dollars (so a $40k
-   * activity fund cannot top the list), and it sums to zero across the district — which is
-   * the property that makes "these three are pulling it up" a true statement rather than a
-   * turn of phrase.
+   * overall rate. It is meaningful in every month, it is in dollars (so a $40k activity fund
+   * cannot top the list), and it sums to zero across the slice — which is the property that
+   * makes "these three are pulling it up" a true statement rather than a turn of phrase.
+   *
+   * The rate is the rate of what is ON SCREEN, so with a filter applied it is the selection's
+   * and the chip says so. The alert it explains was evaluated over the same slice, and
+   * measuring against a district-wide rate would rank funds by a baseline no figure on the
+   * page is computed from.
    */
-  const districtBudget = all.reduce((a, f) => a.plus(f.spendBudget), ZERO);
-  const districtCommitted = all.reduce((a, f) => a.plus(f.spendYtd).plus(f.encumbrances), ZERO);
-  const districtRate = districtBudget.isZero()
-    ? null
-    : districtCommitted.dividedBy(districtBudget);
+  const sliceBudget = all.reduce((a, f) => a.plus(f.spendBudget), ZERO);
+  const sliceCommitted = all.reduce((a, f) => a.plus(f.spendYtd).plus(f.encumbrances), ZERO);
+  const sliceRate = sliceBudget.isZero() ? null : sliceCommitted.dividedBy(sliceBudget);
+  const rateLabel = narrows(scope.filter) ? "the selection's rate" : "the district's rate";
 
-  const committedAboveDistrict = (f: FundFigures): Prisma.Decimal | null => {
-    if (districtRate === null || f.spendBudget.isZero()) return null;
-    return f.spendYtd.plus(f.encumbrances).minus(f.spendBudget.times(districtRate));
+  const committedAboveRate = (f: FundFigures): Prisma.Decimal | null => {
+    if (sliceRate === null || f.spendBudget.isZero()) return null;
+    return f.spendYtd.plus(f.encumbrances).minus(f.spendBudget.times(sliceRate));
   };
 
   /**
@@ -388,11 +422,11 @@ async function buildAttribution(
           f.revenueMtdBefore !== null && f.revenueMtd.lessThan(f.revenueMtdBefore) ? "down" : "up"
         } on last month`,
     ),
-    spendAhead: rank(committedAboveDistrict, (a, f) => {
+    spendAhead: rank(committedAboveRate, (a, f) => {
       const u = utilisation(f.spendYtd, f.encumbrances, f.spendBudget).percent;
       return u === null
-        ? `${compactMoney(a)} above the district's rate`
-        : `${u.toFixed(1)}% committed · ${compactMoney(a)} above the district's rate`;
+        ? `${compactMoney(a)} above ${rateLabel}`
+        : `${u.toFixed(1)}% committed · ${compactMoney(a)} above ${rateLabel}`;
     }),
     spendOverBudget: rank(
       (f) => utilisation(f.spendYtd, f.encumbrances, f.spendBudget).amount,

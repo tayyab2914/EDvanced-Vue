@@ -18,6 +18,7 @@ import {
   revenueBySource,
   revenueByType,
   expenditureByFunction,
+  expenditureByFunctionType,
   expenditureByObject,
   expenditureByObjectType,
   revenueBySourceAndFund,
@@ -247,6 +248,23 @@ async function main() {
       "and agree with the folding by function",
     );
 
+    // The Expenditures "view by" card folds functions to their TYPE, the same altitude the
+    // Object view reads at. A roll-up that drops the spending of an unclassified function is
+    // the one way this can go wrong quietly, so it is checked against the grain below it —
+    // `expenditureByFunctionType` keys those rows Unclassified rather than skipping them.
+    const byFunctionType = await expenditureByFunctionType(db, {
+      versionId: expVersion,
+      ...args,
+    });
+    assert(
+      byFunctionType.total.actualYtd.equals(byFunction.total.actualYtd),
+      "spending folded by function TYPE totals the same as folded by function",
+    );
+    assert(
+      byFunctionType.total.encumbrances.equals(byFunction.total.encumbrances),
+      "and carries every encumbrance with it",
+    );
+
     // ---------- 3. folding the tail preserves the total ----------
     console.log("\nFolding a long tail");
     const folded = foldTail(bySource, P3, 2);
@@ -349,6 +367,35 @@ async function main() {
     assert(
       where.spendOverBudget.length === 0,
       "and nothing is attributed to a lens whose condition no fund meets",
+    );
+
+    /**
+     * AND THE ATTRIBUTION HONOURS THE GLOBAL FILTER.
+     *
+     * The client: "when filtering for General Fund the alerts for Debt Svc and Food Svc was
+     * still visible." The alert sentences were filtered all along — `gatherFacts` takes
+     * `scope.filter` — but `attributeAlerts` took only a year and a period, so the "where to
+     * look" chips under every alert stayed district-wide. Nothing caught it because this
+     * section only ever called it unfiltered.
+     */
+    const narrowed = await attributeAlerts(db, {
+      fiscalYear: FY,
+      period: P3,
+      filter: { fundIds: [made.emptyFundId] },
+    });
+    assert(
+      Object.values(narrowed).every((lens) => lens.length === 0),
+      "a filter that excludes the only fund with data attributes nothing to it",
+    );
+
+    const kept = await attributeAlerts(db, {
+      fiscalYear: FY,
+      period: P3,
+      filter: { fundIds: [made.fundId] },
+    });
+    assert(
+      kept.revenueAhead[0]?.detail === where.revenueAhead[0]?.detail,
+      "while a filter that keeps it reports the same figures — narrowed, not broken",
     );
 
     // ---------- 5. gaps: the skipped period ----------
@@ -669,8 +716,11 @@ async function seedMasterData(db: TenantDb) {
   await db.project.createMany({ data: scoped([{ projectNumber: "DSH-P1", name: "Project" }]) });
   await prisma.status.upsert({ where: { name: "Final" }, create: { name: "Final" }, update: {} });
 
-  const f1 = await db.fund.findFirst({ where: { code: "DSH-F1" } });
-  return { fundId: f1!.id };
+  const seeded = await db.fund.findMany({ where: { code: { startsWith: "DSH-F" } } });
+  const byCode = new Map(seeded.map((f) => [f.code, f.id]));
+  // DSH-F2 is deliberately left without a single row of data — it is what a filter that
+  // excludes everything on screen is pointed at.
+  return { fundId: byCode.get("DSH-F1")!, emptyFundId: byCode.get("DSH-F2")! };
 }
 
 async function teardownMasterData() {

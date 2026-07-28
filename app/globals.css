@@ -185,6 +185,49 @@ body {
   animation: fadeUp 0.35s ease both;
 }
 
+/* ===================== the "working" strip =====================
+   Applying a dashboard filter is a navigation, and Next's own `loading.tsx` does not fire
+   for one that only changes the query string — so this is the whole of the page-level
+   feedback for the most expensive click in the product. See `busy` in
+   components/sidebar-shell.tsx.
+
+   Animated on `left`/`right` rather than on a transform: the strip is a child of the shell
+   provider, and a transform on an ancestor would turn its `position: fixed` into a
+   containing-block-relative one — the same trap documented in components/dashboard/filter-menu.tsx.
+   These two properties cannot be caught by it.
+
+   INDETERMINATE ON PURPOSE. The wait is a server render whose length nothing on the client
+   can know, and a bar that fills to 90% and stops is a progress claim the page cannot make. */
+@keyframes busySweep {
+  0% {
+    left: -35%;
+    right: 100%;
+  }
+  60% {
+    left: 100%;
+    right: -35%;
+  }
+  100% {
+    left: 100%;
+    right: -35%;
+  }
+}
+
+.animate-busy-sweep {
+  animation: busySweep 1.15s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+/* A moving strip is exactly what this setting is asking not to see. It stays visible and
+   stops travelling: the fact that the page is working still has to reach the reader. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-busy-sweep {
+    animation: none;
+    left: 0;
+    right: 0;
+    opacity: 0.55;
+  }
+}
+
 /* ===================== PDF export =====================
    Spec §8.5: "PDF — the dashboard rendered to a print stylesheet. No headless browser at
    MVP scale." So the browser's own Print / Save as PDF IS the export, and this is what

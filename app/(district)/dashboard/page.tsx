@@ -49,7 +49,10 @@ import {
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { BudgetBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
+import { DonutChart } from "@/components/dashboard/charts/donut-chart";
+import { HalfDonut } from "@/components/dashboard/charts/half-donut";
 import { Gauge } from "@/components/dashboard/charts/gauge";
+import { VIZ } from "@/lib/dashboard/palette";
 import { Sparkline } from "@/components/dashboard/charts/sparkline";
 import { scopeOptions, alertFunds, scopeDescription } from "@/lib/dashboard/options";
 import {
@@ -207,7 +210,7 @@ export default async function ExecutiveDashboard({
     },
     {
       id: "utilisation",
-      indicator: "Budget utilisation (spend + enc.)",
+      indicator: "Budget utilization (spend + enc.)",
       current: percent(facts?.utilizationPercent),
       target: `≤ ${utilT.warning.toFixed(2)}%`,
       rung: ladder(utilPct, utilT),
@@ -281,6 +284,34 @@ export default async function ExecutiveDashboard({
     budgetFullYearDisplay: compactMoney(r.budget),
     status: expenditurePace(toNumber(r.pace.percent), expT),
   }));
+
+  /**
+   * ---------- the two composition widgets the client asked for ----------
+   *
+   * Both read from `facts`, not from the breakdowns loaded above, and that is deliberate:
+   * these say the same thing the KPI row says, in a shape a superintendent can take in
+   * without reading six tiles. `facts.availableBudget` IS the Available Budget tile and
+   * `facts.expenditureYtd` IS the Total Expenditures tile, so the donut cannot disagree
+   * with the numbers three inches above it. A second derivation from `byObjectType` would
+   * have been the same figure by a different route, which is the same figure until the day
+   * a filter drifts and it is not.
+   *
+   * Remaining is FLOORED AT ZERO for drawing, because a negative slice has no angle. It is
+   * not floored for reading: `overcommitted` below puts the real, negative figure in words
+   * under the chart, and `shareOf` keeps the two remaining slices reading as their true
+   * share of budget rather than renormalising to each other. A district that has committed
+   * more than it has must not see a tidy circle.
+   */
+  const budgetTotal = toNumber(facts?.expenditureBudget) ?? 0;
+  const expended = toNumber(facts?.expenditureYtd) ?? 0;
+  const encumbered = toNumber(facts?.encumbrances) ?? 0;
+  const availableBudget = toNumber(facts?.availableBudget) ?? 0;
+  const overcommitted = Boolean(facts) && budgetTotal > 0 && availableBudget < 0;
+
+  const revenueBudgetTotal = toNumber(facts?.revenueBudget) ?? 0;
+  const collected = toNumber(facts?.revenueYtd) ?? 0;
+  const uncollected = Math.max(0, revenueBudgetTotal - collected);
+  const collectedPct = revenueBudgetTotal > 0 ? (collected / revenueBudgetTotal) * 100 : null;
 
   // ---------- §3.2b fund balance trend ----------
   // The client split this card in two: with the General Fund selected it shows the policy
@@ -547,7 +578,10 @@ export default async function ExecutiveDashboard({
           status={k.status}
           statusNote={k.statusNote}
           unavailableReason={k.unavailableReason}
-          href={k.href}
+          // The tile is the client's "Go to Dashboard", and it carries the slice the tile
+          // was computed over — a figure filtered to two funds must open a dashboard
+          // filtered to the same two, or the drill-down contradicts the number clicked.
+          href={k.href ? options.link(k.href) : undefined}
           hrefLabel={k.href ? GO_TO_DASHBOARD_SHORT : undefined}
         />
       ))}
@@ -559,7 +593,7 @@ export default async function ExecutiveDashboard({
       title="Revenues vs budget (YTD)"
       subtitle="Five largest sources, against the budget expected by now"
       footer={GO_TO.revenues}
-      footerHref="/revenues"
+      footerHref={options.link("/revenues")}
       info={`Status is judged against your revenue variance policy: warning at ${revT.warning.toFixed(2)}%, critical at ${revT.critical.toFixed(2)}%.`}
     >
       <BudgetBars
@@ -576,7 +610,7 @@ export default async function ExecutiveDashboard({
       title="Expenditures vs budget (YTD)"
       subtitle="By object, against the budget expected by now"
       footer={GO_TO.expenditures}
-      footerHref="/expenditures"
+      footerHref={options.link("/expenditures")}
       info={`Status is judged against your expenditure variance policy: warning at ${expT.warning.toFixed(2)}%, critical at ${expT.critical.toFixed(2)}%.`}
     >
       <BudgetBars
@@ -584,6 +618,115 @@ export default async function ExecutiveDashboard({
         summary="Actual year-to-date spending against the budget expected by now and the full-year budget, by object type."
         rows={expenditureRows}
         format={(v) => compactMoney(v, 0)}
+      />
+    </SectionCard>
+  );
+
+  /**
+   * The budget donut — where the full-year expenditure budget currently stands.
+   *
+   * Three states, one figure each, and the client's word for the middle one is ENCUMBERED
+   * rather than "committed". Worth honouring precisely: "committed" is already a fund
+   * balance CLASSIFICATION in this product (see COMPONENT_COLORS in lib/dashboard/palette.ts
+   * and the Fund Balance dashboard), so a donut labelling purchase orders "Committed" would
+   * collide with a term the same reader meets two screens away meaning something else.
+   */
+  const budgetStatusCard = (
+    <SectionCard
+      title="Budget status"
+      subtitle="The full-year expenditure budget, and what is left of it"
+      info="Expended is spending to date, Encumbered is committed but not yet paid, and Remaining is the budget still uncommitted. The three sum to the full-year budget."
+      footer={GO_TO.expenditures}
+      footerHref={options.link("/expenditures")}
+    >
+      <DonutChart
+        title="Budget status"
+        summary={
+          budgetTotal > 0
+            ? `Of a ${compactMoney(budgetTotal)} expenditure budget, ${compactMoney(expended)} has been expended and ${compactMoney(encumbered)} encumbered, leaving ${accounting(availableBudget, { compact: true })} remaining.`
+            : "No expenditure budget has been adopted for this period."
+        }
+        size={210}
+        centerValue={budgetTotal > 0 ? compactMoney(budgetTotal) : NOT_AVAILABLE}
+        centerLabel="Total budget"
+        shareOf={budgetTotal}
+        slices={[
+          {
+            label: "Expended",
+            value: expended,
+            color: VIZ.actual,
+            display: compactMoney(expended),
+          },
+          {
+            label: "Encumbered",
+            value: encumbered,
+            // The purple the Encumbrances tile on the Expenditures dashboard already wears.
+            color: "var(--color-viz-4)",
+            display: compactMoney(encumbered),
+          },
+          {
+            label: "Remaining",
+            value: Math.max(0, availableBudget),
+            color: VIZ.reference,
+            display: accounting(availableBudget, { compact: true }),
+          },
+        ]}
+      />
+      {overcommitted && (
+        <div className="mt-4">
+          <KeyInsightBar tone="action">
+            Spending and encumbrances exceed the full-year budget by{" "}
+            {compactMoney(Math.abs(availableBudget))}, so there is no remaining budget to draw.
+          </KeyInsightBar>
+        </div>
+      )}
+    </SectionCard>
+  );
+
+  /**
+   * Revenues collected — the same shape, cut in half because it measures PROGRESS.
+   *
+   * Against the full-year revenue budget, not the budget expected by now. The two questions
+   * sit side by side on this page and must not be confused: the Revenues KPI tile and the
+   * "Revenues vs budget (YTD)" card both judge PACE, which is what the district's variance
+   * policy is set against and what raises an alert. This widget answers the simpler thing a
+   * board asks — how much of the year's money is in — and 79% in month nine is a fact, not a
+   * verdict, which is why nothing here is coloured by a threshold.
+   */
+  const revenueCollectedCard = (
+    <SectionCard
+      title="Revenues collected"
+      subtitle="Against the full-year revenue budget"
+      info="Collections to date as a share of the adopted revenue budget for the whole year. This is not the pace comparison — see Revenues vs budget for whether collections are on track for the point in the year."
+      footer={GO_TO.revenues}
+      footerHref={options.link("/revenues")}
+    >
+      <HalfDonut
+        title="Revenues collected"
+        summary={
+          collectedPct === null
+            ? "No revenue budget has been adopted for this period."
+            : `${compactMoney(collected)} collected of a ${compactMoney(revenueBudgetTotal)} revenue budget, or ${percent(collectedPct)}.`
+        }
+        size={225}
+        centerValue={compactMoney(collected)}
+        centerNote={revenueBudgetTotal > 0 ? `of ${compactMoney(revenueBudgetTotal)}` : undefined}
+        centerPercent={collectedPct === null ? undefined : percent(collectedPct, 0)}
+        shareOf={revenueBudgetTotal}
+        segments={[
+          {
+            label: "Collected",
+            value: collected,
+            color: VIZ.actual,
+            display: compactMoney(collected),
+          },
+          {
+            label: "Remaining",
+            value: uncollected,
+            color: VIZ.reference,
+            display: compactMoney(uncollected),
+          },
+        ]}
       />
     </SectionCard>
   );
@@ -604,7 +747,7 @@ export default async function ExecutiveDashboard({
         )
       }
       footer={GO_TO.fundBalance}
-      footerHref="/fund-balance"
+      footerHref={options.link("/fund-balance")}
       footerNote="All amounts are unaudited"
     >
       <LineChart
@@ -651,7 +794,7 @@ export default async function ExecutiveDashboard({
       subtitle={`As of ${scope.label} (FY ${scope.fiscalYear})`}
       badge={scope.fundLevelOnly ? <FundLevelOnly what="Cash is" /> : undefined}
       footer={GO_TO.cash}
-      footerHref="/cash"
+      footerHref={options.link("/cash")}
     >
       <MetricStrip
         cols={5}
@@ -750,7 +893,7 @@ export default async function ExecutiveDashboard({
   );
 
   const insightsCard = (
-    <SectionCard title="Key insights" footer={GO_TO.alerts} footerHref="/alerts">
+    <SectionCard title="Key insights" footer={GO_TO.alerts} footerHref={options.link("/alerts")}>
       {insights.length > 0 ? (
         <InsightList insights={insights} layout="column" />
       ) : (
@@ -766,14 +909,14 @@ export default async function ExecutiveDashboard({
     <SectionCard
       title={`Alert summary (${alerts?.alerts.length ?? 0})`}
       footer={GO_TO.alerts}
-      footerHref="/alerts"
+      footerHref={options.link("/alerts")}
     >
       <AlertSummary
         alerts={alertRows}
         critical={alerts?.criticalCount ?? 0}
         warning={alerts?.warningCount ?? 0}
         informational={alerts?.informationalCount ?? 0}
-        href="/alerts"
+        href={options.link("/alerts")}
       />
     </SectionCard>
   );
@@ -946,6 +1089,18 @@ export default async function ExecutiveDashboard({
 
       {/* ---------- §3.1 KPI row ---------- */}
       {kpis}
+
+      {/*
+        The two composition widgets, directly under the tiles they restate. Placed here and
+        not further down because they are the same altitude as the KPI row — one figure each,
+        no drill-down — and a reader who has just taken in six tiles is answering "so where
+        does that leave us?", which is what these two say. The analysis cards below start
+        asking narrower questions.
+      */}
+      <Row cols="2">
+        {budgetStatusCard}
+        {revenueCollectedCard}
+      </Row>
 
       {/* ---------- §3.2/3.3 the budget comparisons ---------- */}
       <Row cols="2">

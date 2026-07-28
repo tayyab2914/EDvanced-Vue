@@ -1,10 +1,11 @@
 "use client";
 
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
 import { ExportMenu, type ScopeOption } from "@/components/dashboard/scope-bar";
 import { FilterMenu } from "@/components/dashboard/filter-menu";
 import { SavedViews, type SavedViewItem } from "@/components/dashboard/saved-views";
+import { useScopeNavigation, Spinner } from "@/components/dashboard/scope-navigation";
 import {
   writeFilterParams,
   clearFilters,
@@ -70,15 +71,17 @@ export function FilterBar({
   /** Only the Executive dashboard has a one-page summary view. */
   summaryHref?: string;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  /**
+   * `pending` is true from the click until the re-rendered page lands. Every control below
+   * reads it, and the main column dims against it — see components/dashboard/scope-navigation.tsx.
+   */
+  const { pending, go } = useScopeNavigation();
 
   const push = (next: URLSearchParams, replace = false) => {
     const qs = next.toString();
-    const href = qs ? `${pathname}?${qs}` : pathname;
-    if (replace) router.replace(href);
-    else router.push(href);
+    go(qs ? `${pathname}?${qs}` : pathname, { replace });
   };
 
   /** Writes a whole selection at once — every control commits through here. */
@@ -152,6 +155,7 @@ export function FilterBar({
           options={options}
           selection={selection}
           onApply={applyScope}
+          pending={pending}
         />
 
         <div className="ml-auto flex items-center gap-2">
@@ -198,11 +202,15 @@ export function FilterBar({
                 {chip.values.slice(0, 3).join(", ")}
                 {chip.values.length > 3 && ` +${chip.values.length - 3}`}
               </span>
+              {/* Disabled mid-navigation: the chips still name the OUTGOING filter until
+                  the server answers, so a second × would subtract from a selection that is
+                  already being replaced. */}
               <button
                 type="button"
                 onClick={() => removeChip(chip)}
+                disabled={pending}
                 aria-label={`Remove the ${chip.dimension} filter`}
-                className="flex-none rounded-full px-1 text-[13px] leading-none text-brand/70 transition-colors hover:text-brand print:hidden"
+                className="flex-none rounded-full px-1 text-[13px] leading-none text-brand/70 transition-colors hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 print:hidden"
               >
                 ×
               </button>
@@ -218,11 +226,22 @@ export function FilterBar({
           <button
             type="button"
             onClick={reset}
-            className="rounded-md px-1.5 py-1 text-[11.5px] font-medium text-brand transition-opacity hover:opacity-80 print:hidden"
+            disabled={pending}
+            className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11.5px] font-medium text-brand transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 print:hidden"
           >
-            Clear filters
+            {pending && <Spinner size={11} />}
+            {pending ? "Clearing…" : "Clear filters"}
           </button>
         )}
+
+        {/*
+          The wait, in words, for a reader who cannot see the fade.
+          `role="status"` announces politely — it never interrupts what a screen reader is
+          already saying, which matters because this fires on every filter change.
+        */}
+        <span role="status" aria-live="polite" className="sr-only">
+          {pending ? "Applying filters, loading the dashboard." : ""}
+        </span>
       </div>
     </div>
   );

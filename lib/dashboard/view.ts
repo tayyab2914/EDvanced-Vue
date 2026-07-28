@@ -90,23 +90,22 @@ export type RevenueView = (typeof REVENUE_VIEWS)[number]["value"];
 /**
  * Cash composition — "Fund, Bank Account, Cash Category".
  *
- * Two of the three are real. The cash position import is one row per FUND carrying
+ * Two of the three ship. The cash position import is one row per FUND carrying
  * beginning/receipts/disbursements/ending plus optional investment, restricted and
  * unrestricted balances — so "Cash Category" is that optional split and "Fund" is the grain
  * itself.
  *
- * BANK ACCOUNT HAS NO DATA BEHIND IT. There is no bank account on the cash file, on
- * `CashPosition`, or anywhere else in the schema. It is offered because the client asked
- * for it, and it says plainly that the file carries no account detail — a more useful
- * message than the option simply not being there, because it names exactly what a district
- * would have to start uploading to get it. It is NOT wired to a guess: splitting
- * "Operating / Investment / Restricted" and calling those bank accounts would be inventing
- * three accounts no district reported.
+ * BANK ACCOUNT IS HIDDEN FOR NOW, per the client's M6 note. It briefly shipped as an option
+ * that rendered an explanation instead of a chart, because there is no bank account on the
+ * cash file, on `CashPosition`, or anywhere else in the schema. The client would rather the
+ * control offer only what it can draw. Restoring it means adding an account column to the
+ * cash position import first — the option was never wired to a guess, and relabelling
+ * Operating / Investment / Restricted as three bank accounts would invent accounts no
+ * district reported.
  */
 export const CASH_VIEWS = [
   { value: "category", label: "Cash Category" },
   { value: "fund", label: "Fund" },
-  { value: "bankAccount", label: "Bank Account" },
 ] as const;
 export type CashView = (typeof CASH_VIEWS)[number]["value"];
 

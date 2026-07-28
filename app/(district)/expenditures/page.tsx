@@ -10,13 +10,14 @@ import {
 import {
   expenditureByFunction,
   expenditureByFunctionAndFund,
+  expenditureByFunctionType,
   expenditureByObjectType,
   expenditureByCostCenterType,
   expenditureByProject,
   topMovers,
   foldTail,
   rankBySize,
-  type Breakdown,
+  inChartOrder,
   type BreakdownRow,
 } from "@/lib/finance/breakdown";
 import { ladder } from "@/lib/dashboard/status";
@@ -63,7 +64,7 @@ import {
   SHEET_TABLE_ROWS,
   SHEET_TABLE_NOTE,
 } from "@/lib/dashboard/summary";
-import { codeName, type LabelMode } from "@/lib/text";
+import { codeName } from "@/lib/text";
 import { labelMode } from "@/lib/dashboard/label-mode";
 import { DimLabel } from "@/components/dashboard/dim-label";
 import { EXPENDITURE_VIEWS, resolveView, type ExpenditureView } from "@/lib/dashboard/view";
@@ -71,21 +72,43 @@ import { EXPENDITURE_VIEWS, resolveView, type ExpenditureView } from "@/lib/dash
 /**
  * How the "view by" card presents each perspective.
  *
- * `ranked` is the only entry doing real work. Object types and cost centre types are BOUNDED
- * classification lookups — seven and a couple of dozen at most — so they read best in their
- * own chart order, complete, exactly as this card has always drawn object types. Functions
- * and projects are UNBOUNDED: a district can carry thirty of one and hundreds of the other,
- * and a composition card is not a reference table. Those two rank biggest-first and fold
- * their tail into "Other", which is also what keeps the six categorical colour slots honest.
+ * ---------------------------------------------------------------------------
+ * THE CLIENT'S RULE FOR THIS CARD, IN THEIR OWN WORDS
+ *
+ *   "Object — good, no change. Function — hide Function Number leaving Function Type, sort
+ *   ascending by Function Number like Objects. Cost Center Type — hide Cost Center Number
+ *   leaving Type, sort ascending by Cost Center Number like Objects. Project — hide Project
+ *   Number, sort ascending by Project Number like Objects."
+ *
+ * Object was already right, and the three notes are all asking the other three to become it.
+ * So the rule is one rule, applied four times: THIS CARD GROUPS, NAMES THE GROUP, AND ORDERS
+ * ASCENDING BY THE NUMBER IT DOES NOT SHOW.
+ *
+ *   Grouped — `function` folds to Function Type the way `object` folds to Object Type
+ *   (lib/finance/breakdown.ts `expenditureByFunctionType`). "Hide the number leaving the
+ *   type" is not a formatting request on a table of thirty accounts; it is a request for the
+ *   altitude the Object view already reads at.
+ *
+ *   Named — the number is dropped from the visible label (`SHOW_CODE`, below) and kept in
+ *   the hover, so a composition card reads as words and the ordering can still be checked.
+ *
+ *   Ascending — chart-of-accounts order, never by size, so the sequence is the same every
+ *   month. That is what `order: "chart"` buys, and for the one dimension that must also be
+ *   capped it is `inChartOrder` applied after the fold.
+ * ---------------------------------------------------------------------------
+ *
+ * `ranked` is the only entry still doing real work, and only Project sets it. Object types,
+ * function types and cost centre types are BOUNDED classification lookups — seven, a handful
+ * and a couple of dozen — so each reads best complete, in its own order. Projects are
+ * UNBOUNDED: a district can carry hundreds, and a composition card with hundreds of bars is
+ * not a card. That view ranks by size to choose WHICH rows it shows, folds the tail into
+ * "Other" (which is also what keeps the six categorical colour slots honest), and then puts
+ * what survived back into ascending project-number order, because the choosing and the
+ * ordering are answering two different questions.
  *
  * The full function list is untouched and still sits two rows down, in Function Type Code
- * order, because that is the reference table the client asked for and this is not it.
- *
- * There is no per-view `label` any more. Object types and cost centre types used to render
- * their bare name while functions and projects rendered `code — name`, so the same card
- * changed convention as the reader moved the selector. All four are dimensions and all four
- * carry a code (lib/finance/breakdown.ts builds every one of these rows through `makeRow`),
- * so all four go through `codeName` and honour the reader's Codes / Names setting.
+ * order with every account and its number named, because that is the reference table the
+ * client asked for and this is not it.
  */
 const VIEW_META: Record<
   ExpenditureView,
@@ -100,10 +123,10 @@ const VIEW_META: Record<
   },
   function: {
     title: "Expenditures by function (YTD)",
-    subtitle: "Largest first — the full list, in code order, is below",
-    info: "The biggest spending functions by budget, with the remainder folded into Other. The complete table follows in Function Type Code order.",
+    subtitle: "Grouped by function type — the full list, in code order, is below",
+    info: "Function types in chart-of-accounts order, not by size, so the list reads the same every month. The complete function table, with every account number, follows in Function Type Code order.",
     column: "Function",
-    ranked: true,
+    ranked: false,
   },
   costCenterType: {
     title: "Expenditures by cost center type (YTD)",
@@ -115,14 +138,29 @@ const VIEW_META: Record<
   project: {
     title: "Expenditures by project (YTD)",
     subtitle: "The Project / Grant column on the expenditure detail",
-    info: "The largest projects by budget, with the remainder folded into Other. Grant-funded spending arrives tagged here.",
+    info: "The largest projects by budget, in ascending project-number order, with the remainder folded into Other. Grant-funded spending arrives tagged here.",
     column: "Project",
     ranked: true,
   },
 };
 
-/** A breakdown row's dimension, as text — for the chart labels, which are not DOM nodes. */
-const rowLabel = (r: BreakdownRow, mode: LabelMode) => codeName(r.code, r.name, mode);
+/**
+ * A row's dimension as THIS CARD labels it — the name, never the number.
+ *
+ * One helper for all four views rather than a per-view `hideCode`, because the client's note
+ * was not four separate requests: Object already read as a list of names, and Function, Cost
+ * Center Type and Project were each asked to match it. A per-view flag would let a fifth
+ * perspective be added that quietly disagrees with the other four, which is drift this card
+ * has already been through once — the views used to disagree about `code — name` versus the
+ * bare name, and the reader watched the convention change as they moved the selector.
+ *
+ * The number is not thrown away, only unshown: it orders the rows, and it is on the hover
+ * (`note` on the `<DimLabel>` below), so a reader asking "why is this row here" has an
+ * answer. The REFERENCE tables further down this page are untouched and still lead with the
+ * code, because that is where a finance officer goes to scan for one — and they honour the
+ * reader's Codes / Names setting, which a card showing no codes at all cannot.
+ */
+const rowLabel = (r: BreakdownRow) => r.name;
 
 /**
  * The Expenditures dashboard (Spec §5) — spending against budget.
@@ -194,17 +232,21 @@ export default async function ExpenditureDashboard({
   const [byFunction, regrouped, byFunctionAndFund] = await Promise.all([
     // Chart-of-accounts order, at the client's request.
     expenditureByFunction(db, { ...args, order: "chart" }),
-    // The "view by" card's aggregate. `function` is deliberately absent: the by-function
-    // breakdown is already being loaded beside this for the KPIs and the reference table,
-    // and issuing it a second time to re-sort it in the database would be a query bought
-    // with a district's latency budget for nothing.
+    // The "view by" card's aggregate — one grouped query per perspective, chart-ordered in
+    // the database rather than re-sorted here.
+    //
+    // `function` is no longer served by re-sorting the by-function breakdown loaded above it:
+    // that breakdown is the account-grain REFERENCE table, and this card now folds to
+    // Function Type at the client's request. Two different altitudes, so two queries — the
+    // roll-up is one grouped aggregate plus a lookup of a handful of types, which is the
+    // cheapest thing on this page.
     view === "object"
       ? expenditureByObjectType(db, { ...args, order: "chart" })
-      : view === "costCenterType"
-        ? expenditureByCostCenterType(db, { ...args, order: "chart" })
-        : view === "project"
-          ? expenditureByProject(db, args)
-          : Promise.resolve<Breakdown | null>(null),
+      : view === "function"
+        ? expenditureByFunctionType(db, { ...args, order: "chart" })
+        : view === "costCenterType"
+          ? expenditureByCostCenterType(db, { ...args, order: "chart" })
+          : expenditureByProject(db, args),
     /**
      * The movers' own aggregate, at fund × function grain — and only on the All Funds view.
      *
@@ -216,9 +258,18 @@ export default async function ExpenditureDashboard({
     scope.fundId ? Promise.resolve(null) : expenditureByFunctionAndFund(db, args),
   ]);
 
-  // Rank-then-fold, never fold-then-rank — see `rankBySize` in lib/finance/breakdown.ts.
-  const source = regrouped ?? byFunction;
-  const grouped = meta.ranked ? foldTail(rankBySize(source), scope.period, 5) : source;
+  /**
+   * Rank, fold, THEN order — see `rankBySize` and `inChartOrder` in lib/finance/breakdown.ts.
+   *
+   * Only the unbounded dimension takes this path, and it takes all three steps because the
+   * client asked for two things a single sort cannot give: a card short enough to read, and
+   * rows in ascending number order. Ranking chooses which rows survive (so "Other" really is
+   * the small ones), folding caps the list, and ordering decides how the survivors read. The
+   * bounded dimensions are already complete and chart-ordered by the query.
+   */
+  const grouped = meta.ranked
+    ? inChartOrder(foldTail(rankBySize(regrouped), scope.period, 5))
+    : regrouped;
   // Movers still rank by size — that card exists to answer "what moved most", and chart
   // order would answer "what comes first in the ledger", which nobody asked.
   const movers = topMovers(byFunctionAndFund ?? byFunction, 4);
@@ -255,7 +306,7 @@ export default async function ExpenditureDashboard({
     },
     {
       key: "utilisation",
-      label: "Budget utilisation",
+      label: "Budget utilization",
       value: percent(byFunction.total.utilisation.percent),
       sub: "spend plus encumbrances",
       note: `${utilRung} · warning ${utilT.warning.toFixed(2)}%`,
@@ -393,18 +444,28 @@ export default async function ExpenditureDashboard({
               summary={`Share of year-to-date spending by ${meta.column.toLowerCase()}.`}
               rows={grouped.rows.map((r, i) => ({
                 id: r.id,
-                label: rowLabel(r, scope.labelMode),
+                label: rowLabel(r),
                 value: toNumber(r.actualYtd) ?? 0,
                 display: compactMoney(r.actualYtd),
                 share: percent(sharePercent(r.actualYtd, grouped.total.actualYtd), 1),
                 color: SERIES_SLOTS[i % SERIES_SLOTS.length],
               }))}
             />
+            {/* Encumbered and Available carried onto the sheet as well, so the printed
+                summary of this card says what the screen version of it now says. */}
             <SheetStats
               items={[
                 { label: "Total actual", value: compactMoney(grouped.total.actualYtd) },
                 { label: "Total budget", value: compactMoney(grouped.total.budget) },
-                { label: "Utilised", value: percent(grouped.total.utilisation.percent) },
+                { label: "Encumbered", value: compactMoney(grouped.total.encumbrances) },
+                {
+                  label: "Available",
+                  value: accounting(grouped.total.available, { compact: true }),
+                  tone: grouped.total.available.isNegative()
+                    ? ("negative" as const)
+                    : ("neutral" as const),
+                },
+                { label: "Utilized", value: percent(grouped.total.utilisation.percent) },
               ]}
             />
           </SheetCard>
@@ -420,7 +481,7 @@ export default async function ExpenditureDashboard({
                 { key: "actual", label: "Actual (YTD)", align: "right" },
                 { key: "enc", label: "Encumbered", align: "right" },
                 { key: "avail", label: "Available", align: "right" },
-                { key: "util", label: "Utilised", align: "right" },
+                { key: "util", label: "Utilized", align: "right" },
                 { key: "status", label: "Status", align: "right" },
               ]}
               rows={byFunction.rows.slice(0, SHEET_TABLE_ROWS).map((r) => {
@@ -546,7 +607,7 @@ export default async function ExpenditureDashboard({
         <KpiTile
           icon="gauge"
           tone={utilRung === "Action Required" ? "red" : utilRung === "Monitor" ? "amber" : "green"}
-          label="Budget utilisation"
+          label="Budget utilization"
           caption="Spend plus encumbrances"
           value={percent(byFunction.total.utilisation.percent)}
           sub={`Warning at ${utilT.warning.toFixed(2)}% · critical at ${utilT.critical.toFixed(2)}%`}
@@ -702,13 +763,20 @@ export default async function ExpenditureDashboard({
           subtitle={meta.subtitle}
           info={meta.info}
           control={<ViewBy options={EXPENDITURE_VIEWS} value={view} />}
+          // The same drill-down the by-function table two rows down already carries, at the
+          // client's request. It is the same destination whichever perspective the selector
+          // is on, because all four are foldings of the one expenditure detail — a card that
+          // could show a figure with no way through to the rows behind it was the odd one
+          // out on this page.
+          footer={VIEW_DETAILS.expenditureDetail}
+          footerHref={`/data/expenditure-detail?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
           <ShareBars
             title={meta.title}
             summary={`Share of year-to-date spending by ${meta.column.toLowerCase()}.`}
             rows={grouped.rows.map((r, i) => ({
               id: r.id,
-              label: rowLabel(r, scope.labelMode),
+              label: rowLabel(r),
               value: toNumber(r.actualYtd) ?? 0,
               display: compactMoney(r.actualYtd),
               share: percent(sharePercent(r.actualYtd, grouped.total.actualYtd), 1),
@@ -718,11 +786,23 @@ export default async function ExpenditureDashboard({
           <div className="mt-4">
             <DataTable
               dense
+              /*
+               * Encumbered and Available, at the client's request — and the pair is the
+               * request, not two of them. Utilized already counts encumbrances (see
+               * `utilisation` in lib/finance/variance.ts), so a reader looking at a row at
+               * 96% could not tell whether the money was spent or merely committed, and had
+               * no figure at all for what was left. The columns now run in the order the
+               * arithmetic does: Budget − Actual − Encumbered = Available, with Utilized the
+               * same relationship as a percentage. It is also the column order the
+               * by-function table below already uses, so the two read alike.
+               */
               columns={[
                 { key: "group", label: meta.column },
                 { key: "budget", label: "Budget", align: "right" },
                 { key: "actual", label: "Actual (YTD)", align: "right" },
-                { key: "util", label: "Utilised", align: "right" },
+                { key: "enc", label: "Encumbered", align: "right" },
+                { key: "avail", label: "Available", align: "right" },
+                { key: "util", label: "Utilized", align: "right" },
                 { key: "status", label: "Status", align: "right" },
               ]}
               rows={grouped.rows.map((r) => {
@@ -738,11 +818,23 @@ export default async function ExpenditureDashboard({
                         : undefined,
                   cells: {
                     group: {
-                      value: <DimLabel code={r.code} name={r.name} mode={scope.labelMode} />,
+                      // No code on screen, the code on hover — see `rowLabel`. The number
+                      // is what put this row where it is, so it belongs in the tooltip
+                      // even though the client asked for it out of the label.
+                      value: <DimLabel code={null} name={r.name} note={r.code || undefined} />,
                       strong: true,
                     },
                     budget: money(r.budget),
                     actual: money(r.actualYtd),
+                    enc: money(r.encumbrances),
+                    avail: {
+                      // Accounting form and a red tint on a negative, the same as every
+                      // other Available figure on this page: a group that has committed
+                      // more than it was given is the one thing this column exists to say.
+                      value: accounting(r.available),
+                      tone: r.available.isNegative() ? ("negative" as const) : ("neutral" as const),
+                      strong: r.available.isNegative(),
+                    },
                     util: {
                       value: percent(r.utilisation.percent),
                       tone:
@@ -771,6 +863,13 @@ export default async function ExpenditureDashboard({
                   group: "Total expenditures",
                   budget: money(grouped.total.budget),
                   actual: money(grouped.total.actualYtd),
+                  enc: money(grouped.total.encumbrances),
+                  avail: {
+                    value: accounting(grouped.total.available),
+                    tone: grouped.total.available.isNegative()
+                      ? ("negative" as const)
+                      : ("neutral" as const),
+                  },
                   util: percent(grouped.total.utilisation.percent),
                   status: null,
                 },
@@ -788,8 +887,8 @@ export default async function ExpenditureDashboard({
           >
             <PolicyEchoCard
               rows={[
-                { label: "Budget utilisation — warning", value: `${Number(policy.expenditure.utilizationWarning).toFixed(2)}%` },
-                { label: "Budget utilisation — critical", value: `${Number(policy.expenditure.utilizationCritical).toFixed(2)}%` },
+                { label: "Budget utilization — warning", value: `${Number(policy.expenditure.utilizationWarning).toFixed(2)}%` },
+                { label: "Budget utilization — critical", value: `${Number(policy.expenditure.utilizationCritical).toFixed(2)}%` },
                 { label: "Variance — warning", value: `± ${Number(policy.expenditure.forecastVarianceWarning).toFixed(2)}%` },
                 { label: "Variance — critical", value: `± ${Number(policy.expenditure.forecastVarianceCritical).toFixed(2)}%` },
                 { label: "Month-over-month — warning", value: `${Number(policy.expenditure.momIncreaseWarning).toFixed(2)}%` },
@@ -832,12 +931,12 @@ export default async function ExpenditureDashboard({
       {/* ---------- ROW 3: utilisation trend · by function · underspends + alerts ---------- */}
       <Row cols="2-2-1">
         <SectionCard
-          title="Budget utilisation trend"
+          title="Budget utilization trend"
           subtitle="Spend plus encumbrances, against your thresholds"
         >
           <ColumnChart
-            title="Budget utilisation by month"
-            summary={`Budget utilisation each month against warning at ${utilT.warning}% and critical at ${utilT.critical}%.`}
+            title="Budget utilization by month"
+            summary={`Budget utilization each month against warning at ${utilT.warning}% and critical at ${utilT.critical}%.`}
             mode="threshold"
             format={(v) => `${v.toFixed(0)}%`}
             height={280}
@@ -861,7 +960,7 @@ export default async function ExpenditureDashboard({
         <SectionCard
           title="Expenditures by function (YTD)"
           subtitle="In Function Type Code order"
-          info="A tinted row is overspent or past its utilisation ceiling. An amber row is approaching it."
+          info="A tinted row is overspent or past its utilization ceiling. An amber row is approaching it."
           footer={VIEW_DETAILS.expenditureDetail}
           footerHref={`/data/expenditure-detail?fy=${scope.fiscalYear}&period=${scope.period}`}
         >
@@ -873,7 +972,7 @@ export default async function ExpenditureDashboard({
               { key: "actual", label: "Actual (YTD)", align: "right" },
               { key: "enc", label: "Encumbered", align: "right" },
               { key: "avail", label: "Available", align: "right" },
-              { key: "util", label: "Utilised", align: "right" },
+              { key: "util", label: "Utilized", align: "right" },
               { key: "status", label: "Status", align: "right" },
             ]}
             rows={byFunction.rows.map((r) => {
@@ -988,7 +1087,7 @@ export default async function ExpenditureDashboard({
           <SectionCard
             title={`Expenditure alerts (${expenditureAlerts.length})`}
             footer={GO_TO.alerts}
-            footerHref="/alerts"
+            footerHref={options.link("/alerts")}
           >
             <AlertList
               mode={scope.labelMode}
@@ -1001,14 +1100,14 @@ export default async function ExpenditureDashboard({
                 // where to look, and link back to this page scoped to that fund.
                 funds: alertFunds(scope, "/expenditures", a.funds),
               }))}
-              href="/alerts"
+              href={options.link("/alerts")}
               empty="No expenditure thresholds have been crossed this period."
             />
           </SectionCard>
         </div>
       </Row>
 
-      <FooterInfoBar action={GO_TO.forecast} href="/fund-balance/forecast">
+      <FooterInfoBar action={GO_TO.forecast} href={options.link("/fund-balance/forecast")}>
         Adjust your growth assumptions to see how changes in spending flow through to fund
         balance and reserves over the next three years.
       </FooterInfoBar>

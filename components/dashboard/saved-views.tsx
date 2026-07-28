@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect, useActionState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { saveView, deleteView } from "@/app/actions/saved-views";
 import { EMPTY_FORM_STATE } from "@/lib/forms";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/icons";
+import { useScopeNavigation, Spinner } from "@/components/dashboard/scope-navigation";
 
 export interface SavedViewItem {
   id: string;
@@ -49,8 +50,9 @@ export function SavedViews({
   periodQuery: string;
   hasFilters: boolean;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
+  // Applying a view IS a filter change, so it waits the same way and dims the same page.
+  const { pending, go } = useScopeNavigation();
   const [open, setOpen] = useState(false);
   const [naming, setNaming] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
@@ -75,7 +77,7 @@ export function SavedViews({
   const apply = (filters: string) => {
     const qs = [periodQuery, filters].filter(Boolean).join("&");
     setOpen(false);
-    router.push(qs ? `${pathname}?${qs}` : pathname);
+    go(qs ? `${pathname}?${qs}` : pathname);
   };
 
   /** Highlights the view whose filters are exactly what is applied. */
@@ -87,15 +89,18 @@ export function SavedViews({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        disabled={pending}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-white px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-[#c8d3e4]"
+        className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-white px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-[#c8d3e4] disabled:cursor-not-allowed"
       >
-        <Icon name="eye" size={14} className="text-muted-2" />
-        Views
-        <span aria-hidden className="text-[9px] text-muted-2">
-          ▼
-        </span>
+        {pending ? <Spinner size={13} /> : <Icon name="eye" size={14} className="text-muted-2" />}
+        {pending ? "Applying…" : "Views"}
+        {!pending && (
+          <span aria-hidden className="text-[9px] text-muted-2">
+            ▼
+          </span>
+        )}
       </button>
 
       {open && (
