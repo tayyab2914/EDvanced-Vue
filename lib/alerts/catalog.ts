@@ -95,6 +95,142 @@ const lt = (v: Prisma.Decimal | null, t: number) => v !== null && v.lessThan(t);
 const warn = (message: string): AlertHit => ({ severity: "WARNING", message });
 const crit = (message: string): AlertHit => ({ severity: "CRITICAL", message });
 
+/**
+ * ---------------------------------------------------------------------------
+ * SAYING IT ONCE — why two alerts step aside from a third.
+ *
+ * The client, on the alert summary: two rows, one fact. "Collections are 23.7% below
+ * budget" sat directly above "On current pace, year-end revenue lands 23.7% below budget",
+ * with the same three funds listed under each.
+ *
+ * That was not a coincidence in one district's data, it is arithmetic. Pace variance is
+ * (ytd − budget·p/12) ÷ (budget·p/12); the straight-line forecast's variance is
+ * (ytd·12/p − budget) ÷ budget. Both reduce to (ytd·12)/(p·budget) − 1. With no growth
+ * assumption applied to the district-level projection — and lib/alerts/engine.ts applies
+ * none — the current-performance alert and the forecast alert CANNOT report different
+ * numbers. The forecast thresholds also sit below the current ones (3/5 against 5/10), so
+ * the pace alert could never fire without the forecast alert firing beside it.
+ *
+ * THIS IS NOT A MERGE. Between 3% and 5% off pace the current-performance alert is silent
+ * and the forecast alert is the only signal there is — it still fires, alone, exactly as
+ * before. It steps aside only where the alert beside it is already reporting its number.
+ *
+ * NO SEVERITY IS LOST IN THE FOLD. The two ladders are set differently on purpose: at 7%
+ * off, pace reads WARNING (5/10) while the forecast policy reads CRITICAL (3/5). Dropping
+ * the forecast row on its own would quietly stop enforcing the district's forecast-critical
+ * threshold, so the surviving row is RAISED to the louder of the two. One row, the dollars
+ * kept, the urgency kept.
+ *
+ * AND IT COMPARES FIGURES, NOT JUST THRESHOLDS — see `revenueReadingsAgree` for how, which
+ * is subtler than it looks. Should the district-level forecast ever be given the growth
+ * assumptions `projectRevenueByCategory` already understands, the two numbers would
+ * genuinely diverge and both alerts would return on their own, without anyone having to
+ * remember to come back here and undo this.
+ * ---------------------------------------------------------------------------
+ */
+const RANK: Record<AlertSeverity, number> = { WARNING: 1, CRITICAL: 2 };
+
+/** Louder than, or as loud as. */
+const drownsOut = (other: AlertSeverity | null, mine: AlertSeverity) =>
+  other !== null && RANK[other] >= RANK[mine];
+
+/**
+ * The severity REVENUE_BELOW_BUDGET / REVENUE_ABOVE_BUDGET reports for a variance, or null
+ * for silence. One ladder, read both by the alerts themselves and by the forecast pair
+ * deciding whether to keep quiet — two copies of it would eventually disagree.
+ */
+function revenueVarianceSeverity(
+  v: Prisma.Decimal | null,
+  p: PolicyValues,
+): AlertSeverity | null {
+  if (v === null || v.isZero()) return null;
+  const off = v.abs();
+  if (off.lessThan(n(p.revenue.varianceWarning))) return null;
+  // Over-collection is never critical: the spec's own example of a valid state that must be
+  // surfaced rather than treated as a failure.
+  if (v.isPositive()) return "WARNING";
+  return off.greaterThanOrEqualTo(n(p.revenue.varianceCritical)) ? "CRITICAL" : "WARNING";
+}
+
+/**
+ * The severity MATERIAL_FORECAST_VARIANCE reports, or null for silence.
+ *
+ * Read by FORECAST_EXCEEDS_BUDGET too, which describes the SAME projection in dollars.
+ * Both fire off `expenditureForecast`, so above the material threshold a district was told
+ * twice that the year lands over budget — once as a percentage and once as a figure.
+ */
+function expenditureForecastSeverity(
+  v: Prisma.Decimal | null,
+  p: PolicyValues,
+): AlertSeverity | null {
+  if (v === null) return null;
+  const off = v.abs();
+  if (off.greaterThanOrEqualTo(n(p.expenditure.forecastVarianceCritical))) return "CRITICAL";
+  if (off.greaterThanOrEqualTo(n(p.expenditure.forecastVarianceWarning))) return "WARNING";
+  return null;
+}
+
+/**
+ * The severity the REVENUE_FORECAST_* pair reports, against the Forecast Variance policy.
+ *
+ * A separate ladder from `revenueVarianceSeverity` because the thresholds are separate —
+ * the district sets Current Performance and Forecast Performance independently, and this is
+ * the one that decides how loud the folded row gets.
+ */
+function revenueForecastSeverity(
+  v: Prisma.Decimal | null,
+  p: PolicyValues,
+): AlertSeverity | null {
+  if (v === null || v.isZero()) return null;
+  const off = v.abs();
+  if (off.lessThan(n(p.revenue.forecastVarianceWarning))) return null;
+  // Landing ABOVE budget is never critical, the same judgement the current-performance pair
+  // makes about over-collection.
+  if (v.isPositive()) return "WARNING";
+  return off.greaterThanOrEqualTo(n(p.revenue.forecastVarianceCritical)) ? "CRITICAL" : "WARNING";
+}
+
+/**
+ * The two revenue readings are the same statement — they READ the same.
+ *
+ * Compared through `pct`, at the one decimal the sentences show, and NOT with `equals`.
+ * An exact comparison is the obvious way to write this and it never once matched in
+ * production: the two facts reach the same value by different routes — pace divides by the
+ * pro-rated budget, the forecast divides by the full-year one — and Decimal rounds each
+ * division to 20 significant digits, so they agree to nineteen and differ in the twentieth.
+ * On one district: -88.017233125897558641 against -88.01723312589755864. Both rows printed
+ * "88.0% below budget"; `equals` called them different numbers and neither stepped aside.
+ *
+ * Comparing what the reader actually sees is also the more honest test. The complaint was
+ * two rows saying the same thing, and two rows say the same thing when they read the same.
+ */
+const revenueReadingsAgree = (f: AlertFacts): boolean =>
+  f.revenueVariancePercent !== null &&
+  f.revenueForecastVariancePercent !== null &&
+  pct(f.revenueVariancePercent) === pct(f.revenueForecastVariancePercent);
+
+/** The louder of two severities, where the second may be absent. */
+const louder = (a: AlertSeverity, b: AlertSeverity | null): AlertSeverity =>
+  b !== null && RANK[b] > RANK[a] ? b : a;
+
+/**
+ * What a current-performance revenue alert reports once the forecast alert beside it has
+ * been folded in: its own severity, raised to the forecast's when the two agree on the
+ * figure. Null when it should stay quiet — including the 3–5% band, where the forecast
+ * alert is left to speak for itself.
+ */
+function revenueCurrentSeverity(f: AlertFacts, p: PolicyValues): AlertSeverity | null {
+  const own = revenueVarianceSeverity(f.revenueVariancePercent, p);
+  if (own === null) return null;
+  return revenueReadingsAgree(f)
+    ? louder(own, revenueForecastSeverity(f.revenueForecastVariancePercent, p))
+    : own;
+}
+
+/** Whether the current-performance alert has already made this exact statement. */
+const revenueAlreadySaid = (f: AlertFacts, p: PolicyValues): boolean =>
+  revenueReadingsAgree(f) && revenueVarianceSeverity(f.revenueVariancePercent, p) !== null;
+
 export const ALERTS: AlertDef[] = [
   // ===================== Revenue (5) =====================
   {
@@ -104,11 +240,12 @@ export const ALERTS: AlertDef[] = [
     evaluate: (f, p) => {
       const v = f.revenueVariancePercent;
       if (v === null || !v.isNegative()) return null;
-      const off = v.abs();
-      const msg = `Collections are ${pct(off)} below budget (${money(f.revenueYtd)} against ${money(f.revenueBudget)}).`;
-      if (off.greaterThanOrEqualTo(n(p.revenue.varianceCritical))) return crit(msg);
-      if (off.greaterThanOrEqualTo(n(p.revenue.varianceWarning))) return warn(msg);
-      return null;
+      const severity = revenueCurrentSeverity(f, p);
+      if (severity === null) return null;
+      return {
+        severity,
+        message: `Collections are ${pct(v.abs())} below budget (${money(f.revenueYtd)} against ${money(f.revenueBudget)}).`,
+      };
     },
   },
   {
@@ -117,13 +254,14 @@ export const ALERTS: AlertDef[] = [
     title: "Revenue above budget",
     evaluate: (f, p) => {
       const v = f.revenueVariancePercent;
-      if (v === null || v.isNegative() || v.isZero()) return null;
-      // Never critical: over-collection is the spec's own example of a valid state that
-      // must be surfaced rather than treated as a failure.
-      if (v.lessThan(n(p.revenue.varianceWarning))) return null;
-      return warn(
-        `Collections are ${pct(v)} above budget (${money(f.revenueYtd)} against ${money(f.revenueBudget)}). Worth confirming the budget is current.`,
-      );
+      if (v === null || !v.isPositive()) return null;
+      // Never critical — see `revenueVarianceSeverity`, which owns that rule.
+      const severity = revenueCurrentSeverity(f, p);
+      if (severity === null) return null;
+      return {
+        severity,
+        message: `Collections are ${pct(v)} above budget (${money(f.revenueYtd)} against ${money(f.revenueBudget)}). Worth confirming the budget is current.`,
+      };
     },
   },
   {
@@ -133,11 +271,15 @@ export const ALERTS: AlertDef[] = [
     evaluate: (f, p) => {
       const v = f.revenueForecastVariancePercent;
       if (v === null || !v.isNegative()) return null;
-      const off = v.abs();
-      const msg = `On current pace, year-end revenue lands ${pct(off)} below budget.`;
-      if (off.greaterThanOrEqualTo(n(p.revenue.forecastVarianceCritical))) return crit(msg);
-      if (off.greaterThanOrEqualTo(n(p.revenue.forecastVarianceWarning))) return warn(msg);
-      return null;
+      const severity = revenueForecastSeverity(v, p);
+      if (severity === null) return null;
+      // The same number as REVENUE_BELOW_BUDGET, and that alert is firing? It has said it,
+      // with the dollars this sentence lacks, and it carried this severity across.
+      if (revenueAlreadySaid(f, p)) return null;
+      return {
+        severity,
+        message: `On current pace, year-end revenue lands ${pct(v.abs())} below budget.`,
+      };
     },
   },
   {
@@ -146,9 +288,11 @@ export const ALERTS: AlertDef[] = [
     title: "Forecast revenue above budget",
     evaluate: (f, p) => {
       const v = f.revenueForecastVariancePercent;
-      if (v === null || v.isNegative() || v.isZero()) return null;
-      if (v.lessThan(n(p.revenue.forecastVarianceWarning))) return null;
-      return warn(`On current pace, year-end revenue lands ${pct(v)} above budget.`);
+      if (v === null || !v.isPositive()) return null;
+      const severity = revenueForecastSeverity(v, p);
+      if (severity === null) return null;
+      if (revenueAlreadySaid(f, p)) return null;
+      return { severity, message: `On current pace, year-end revenue lands ${pct(v)} above budget.` };
     },
   },
   {
@@ -228,9 +372,16 @@ export const ALERTS: AlertDef[] = [
     id: "FORECAST_EXCEEDS_BUDGET",
     group: "expenditure",
     title: "Forecast exceeds budget",
-    evaluate: (f) => {
+    evaluate: (f, p) => {
       if (f.expenditureForecast === null) return null;
       if (!f.expenditureForecast.greaterThan(f.expenditureBudget)) return null;
+      // MATERIAL_FORECAST_VARIANCE now carries this same landing figure AND says how far
+      // off it is, so above the material threshold this row would only repeat it. Below
+      // that threshold it is the only warning that the year is heading over at all, which
+      // is where it earns its place — the alert has no threshold of its own.
+      const v = f.expenditureForecastVariancePercent;
+      const material = v !== null && v.isPositive() ? expenditureForecastSeverity(v, p) : null;
+      if (drownsOut(material, "WARNING")) return null;
       return warn(
         `On current pace, year-end spend reaches ${money(f.expenditureForecast)} against a budget of ${money(f.expenditureBudget)}.`,
       );
@@ -244,12 +395,17 @@ export const ALERTS: AlertDef[] = [
     // critical threshold".
     evaluate: (f, p) => {
       const v = f.expenditureForecastVariancePercent;
-      if (v === null) return null;
-      const off = v.abs();
-      const msg = `Projected year-end spend is ${pct(off)} off budget.`;
-      if (off.greaterThanOrEqualTo(n(p.expenditure.forecastVarianceCritical))) return crit(msg);
-      if (off.greaterThanOrEqualTo(n(p.expenditure.forecastVarianceWarning))) return warn(msg);
-      return null;
+      const severity = expenditureForecastSeverity(v, p);
+      if (severity === null) return null;
+      // The landing figure, inherited from FORECAST_EXCEEDS_BUDGET now that it steps aside
+      // here: "7.9% off budget" on its own is a percentage the reader has to go and price.
+      // "off budget", not "over" — the workbook fires this in both directions, and the two
+      // figures say which way without the sentence having to.
+      const against =
+        f.expenditureForecast === null
+          ? ""
+          : ` (${money(f.expenditureForecast)} against ${money(f.expenditureBudget)})`;
+      return { severity, message: `Projected year-end spend is ${pct(v!.abs())} off budget${against}.` };
     },
   },
   {

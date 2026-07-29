@@ -154,6 +154,89 @@ assert(
   fires("REVENUE_FORECAST_ABOVE_BUDGET", { ...healthy(), revenueForecastVariancePercent: d("4") }),
   "and 4% above fires its own alert",
 );
+
+/*
+ * The forecast pair steps aside when the current-performance alert is already saying it.
+ *
+ * Straight-line pro-rating makes pace variance and forecast variance the SAME expression,
+ * so in production these two facts arrive equal and the district was shown one number
+ * twice. See the note above RANK in the catalogue.
+ */
+console.log("\nThe forecast alerts don't restate the pace alert");
+const bothBehind = (off: string): AlertFacts => ({
+  ...healthy(),
+  revenueVariancePercent: d(off),
+  revenueForecastVariancePercent: d(off),
+});
+assert(
+  fires("REVENUE_BELOW_BUDGET", bothBehind("-23.7")) &&
+    !fires("REVENUE_FORECAST_BELOW_BUDGET", bothBehind("-23.7")),
+  "23.7% behind fires the pace alert once, not twice — both are critical, so the forecast row goes",
+);
+assert(
+  fires("REVENUE_ABOVE_BUDGET", bothBehind("7")) && !fires("REVENUE_FORECAST_ABOVE_BUDGET", bothBehind("7")),
+  "and the same on the over-collection side",
+);
+assert(
+  !fires("REVENUE_BELOW_BUDGET", bothBehind("-4")) &&
+    fires("REVENUE_FORECAST_BELOW_BUDGET", bothBehind("-4")),
+  "but at 4% off — under the 5% pace threshold — the forecast alert is the only signal and still fires",
+);
+assert(
+  fires("REVENUE_FORECAST_BELOW_BUDGET", {
+    ...healthy(),
+    revenueVariancePercent: d("-6"),
+    revenueForecastVariancePercent: d("-12"),
+  }),
+  "and a forecast that genuinely differs from pace is never suppressed — it compares figures, not thresholds",
+);
+// The ladders disagree here on purpose: 7% is a WARNING by Current Performance (5/10) and
+// CRITICAL by Forecast Performance (3/5). Folding the rows must not quietly stop enforcing
+// the forecast-critical threshold.
+assert(
+  severityOf("REVENUE_BELOW_BUDGET", bothBehind("-7")) === "CRITICAL" &&
+    !fires("REVENUE_FORECAST_BELOW_BUDGET", bothBehind("-7")),
+  "at 7% off the surviving row is raised to CRITICAL — the fold keeps the louder severity",
+);
+assert(
+  severityOf("REVENUE_BELOW_BUDGET", { ...healthy(), revenueVariancePercent: d("-7") }) ===
+    "WARNING",
+  "but a 7% pace figure with no matching forecast stays a WARNING on its own ladder",
+);
+
+/*
+ * THE FIXTURES ABOVE SET BOTH FACTS TO THE SAME LITERAL. Real data never does.
+ *
+ * lib/alerts/engine.ts divides by the pro-rated budget; lib/forecast/engine.ts divides by
+ * the full-year one. Decimal rounds each division to 20 significant digits, so the two land
+ * one ulp apart — -88.017233125897558641 against -88.01723312589755864 — and the first
+ * version of this rule compared them with `equals` and suppressed nothing at all. Every
+ * assertion above passed while the district still saw two identical rows.
+ *
+ * So these build the facts the way the engine builds them, from a district's figures.
+ */
+const asEngineWould = (ytd: string, budget: string, period: number): AlertFacts => {
+  const Y = d(ytd);
+  const B = d(budget);
+  const expected = B.times(period).dividedBy(12);
+  const projected = Y.dividedBy(period).times(12);
+  return {
+    ...healthy(),
+    revenueBudget: B,
+    revenueYtd: Y,
+    revenueVariancePercent: Y.minus(expected).dividedBy(expected).times(100),
+    revenueForecastVariancePercent: projected.minus(B).dividedBy(B).times(100),
+  };
+};
+const real = asEngineWould("10430000", "208900000", 5);
+assert(
+  !real.revenueVariancePercent!.equals(real.revenueForecastVariancePercent!),
+  "the two facts really are unequal to the last digit — this is the trap the rule has to survive",
+);
+assert(
+  fires("REVENUE_BELOW_BUDGET", real) && !fires("REVENUE_FORECAST_BELOW_BUDGET", real),
+  "and one row still fires, not two — the readings are compared as they READ, not to 20 digits",
+);
 assert(
   fires("REVENUE_SIGNIFICANT_CHANGE", { ...healthy(), revenueMomChangePercent: d("-20") }),
   "a 20% month-over-month fall fires",

@@ -486,7 +486,7 @@ export default async function CashDashboard({
           label="Cash balance"
           caption={scope.fund ? scope.fund.name : "All funds"}
           value={compactMoney(summary.endingCash)}
-          sub={previous ? `vs period ${previous.period}` : "no earlier period"}
+          sub="Ending cash balance"
           delta={
             momPct === null
               ? undefined
@@ -505,7 +505,7 @@ export default async function CashDashboard({
           label="Days cash on hand"
           caption={scope.fund ? scope.fund.name : "All funds"}
           value={daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)} days`}
-          sub="of operating cost covered"
+          sub="Operating days supported by available cash"
           status={cashRung}
           statusNote={`Policy ≥ ${cashT.warning} days`}
           unavailableReason="Needs a cash file and an adopted expenditure budget."
@@ -517,11 +517,7 @@ export default async function CashDashboard({
           label="Net cash flow (MTD)"
           caption={scope.label}
           value={accounting(summary.netCashFlowMtd, { compact: true })}
-          sub={
-            summary.receiptsMtd !== null
-              ? `Receipts ${compactMoney(summary.receiptsMtd)} · Paid ${compactMoney(summary.disbursementsMtd)}`
-              : undefined
-          }
+          sub="Net cash generated this month"
           delta={
             summary.netCashFlowMtd === null
               ? undefined
@@ -539,7 +535,7 @@ export default async function CashDashboard({
           label="Cash receipts (MTD)"
           caption="Collected this period"
           value={compactMoney(summary.receiptsMtd)}
-          sub="into the district's accounts"
+          sub="Cash received during the current month"
         />
 
         <KpiTile
@@ -548,7 +544,7 @@ export default async function CashDashboard({
           label="Cash disbursements (MTD)"
           caption="Paid out this period"
           value={compactMoney(summary.disbursementsMtd)}
-          sub="out of the district's accounts"
+          sub="Cash paid during the current month"
         />
 
         <KpiTile
@@ -558,7 +554,7 @@ export default async function CashDashboard({
           caption={scope.fund ? scope.fund.name : "All funds"}
           value={cashRung === "N/A" ? "Not available" : cashRung}
           valueStatus={cashRung}
-          sub={`Policy ≥ ${cashT.warning} days · critical below ${cashT.critical}`}
+          sub="Compared to cash reserve policy"
           statusNote={
             daysVsTarget === null
               ? undefined
