@@ -441,7 +441,7 @@ export default async function ExecutiveDashboard({
       value: compactMoney(point?.revenueYtd),
       sub:
         point && toNumber(point.revenueBudget)
-          ? `${percent(((toNumber(point.revenueYtd) ?? 0) / (toNumber(point.revenueBudget) || 1)) * 100)} of full-year budget`
+          ? `${percent(((toNumber(point.revenueYtd) ?? 0) / (toNumber(point.revenueBudget) || 1)) * 100)} of annual budget collected`
           : "No revenue budget uploaded",
       note: revVarPct === null ? undefined : `${signedPercent(revVarPct)} vs budget to date`,
       tone: revVarPct === null ? ("neutral" as const) : sheetTone(deltaTone(revVarPct, "up")),
@@ -467,7 +467,7 @@ export default async function ExecutiveDashboard({
       value: compactMoney(point?.expenditureYtd),
       sub:
         point && toNumber(point.expenditureBudget)
-          ? `${percent(((toNumber(point.expenditureYtd) ?? 0) / (toNumber(point.expenditureBudget) || 1)) * 100)} of full-year budget`
+          ? `${percent(((toNumber(point.expenditureYtd) ?? 0) / (toNumber(point.expenditureBudget) || 1)) * 100)} of annual budget expended`
           : "No expenditure budget uploaded",
       note: utilPct === null ? undefined : `${percent(utilPct)} committed`,
       tone: "neutral" as const,
@@ -483,8 +483,10 @@ export default async function ExecutiveDashboard({
       key: "reserve",
       label: "Unassigned fund balance %",
       value: percent(reserve?.percent),
+      // The fund is usually named "General", occasionally "General Fund" — either way the
+      // sentence should read "…budgeted General Fund expenditures", never "General Fund Fund".
       sub: core.generalFund
-        ? `of budgeted ${core.generalFund.name} expenditures`
+        ? `As a % of budgeted ${core.generalFund.name.replace(/\s*fund$/i, "")} Fund expenditures`
         : "no General Fund identified",
       note: `${reserveRung} · target ≥ ${reserveT.target.toFixed(2)}%`,
       tone: rungTone(reserveRung),
@@ -500,7 +502,7 @@ export default async function ExecutiveDashboard({
       key: "days-cash",
       label: "Days of operating cash",
       value: daysCash === null ? NOT_AVAILABLE : fmtDays(daysCash),
-      sub: "days in reserve",
+      sub: "Days of cash on hand",
       note: `${cashRung} · policy ≥ ${cashT.warning} days`,
       tone: rungTone(cashRung),
       icon: "clock" as const,
@@ -514,7 +516,7 @@ export default async function ExecutiveDashboard({
       key: "available",
       label: "Available budget",
       value: accounting(facts?.availableBudget, { compact: true }),
-      sub: "budget less spend and encumbrances",
+      sub: "Remaining budget available to spend",
       note:
         facts && toNumber(facts.availableBudget) !== null
           ? toNumber(facts.availableBudget)! < 0
@@ -539,7 +541,7 @@ export default async function ExecutiveDashboard({
       key: "alerts",
       label: "Alerts",
       value: String(alerts?.alerts.length ?? 0),
-      sub: "require attention",
+      sub: "Active financial alerts",
       note:
         alerts && alerts.criticalCount > 0
           ? `${alerts.criticalCount} critical`
@@ -591,7 +593,7 @@ export default async function ExecutiveDashboard({
   const revenueCard = (
     <SectionCard
       title="Revenues vs budget (YTD)"
-      subtitle="Five largest sources, against the budget expected by now"
+      subtitle="Top five revenue sources compared to expected YTD collections"
       footer={GO_TO.revenues}
       footerHref={options.link("/revenues")}
       info={`Status is judged against your revenue variance policy: warning at ${revT.warning.toFixed(2)}%, critical at ${revT.critical.toFixed(2)}%.`}
@@ -608,7 +610,7 @@ export default async function ExecutiveDashboard({
   const expenditureCard = (
     <SectionCard
       title="Expenditures vs budget (YTD)"
-      subtitle="By object, against the budget expected by now"
+      subtitle="By object, compared to expected YTD expenses"
       footer={GO_TO.expenditures}
       footerHref={options.link("/expenditures")}
       info={`Status is judged against your expenditure variance policy: warning at ${expT.warning.toFixed(2)}%, critical at ${expT.critical.toFixed(2)}%.`}

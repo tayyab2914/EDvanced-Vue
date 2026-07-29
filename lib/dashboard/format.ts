@@ -95,9 +95,15 @@ export function number(v: Numeric | null | undefined, dp?: number): string {
  * The headline form: $426.85M, $41.6M, $890K, $1,240.
  *
  * A district's general fund runs to hundreds of millions, and "$426,845,120" on a KPI tile
- * is a number nobody reads — they count digits instead. Compact is the right form for a
- * tile or an axis tick, and ONLY for those; `money()` below is for tables and drill-downs,
- * where the exact figure with its thousands separators is the point.
+ * is a number nobody reads — they count digits instead. That argument is not confined to
+ * tiles, and the client made it about the rest of the product: the Revenue and Expenditure
+ * dashboards and every alert sentence now abbreviate too, because a column of nine-digit
+ * figures is a column nobody reads either, and the abbreviated form is what lets a summary
+ * row fit on one line.
+ *
+ * `money()` below stays the form for the DRILL-DOWNS — the dataset browser, the fund
+ * balance override screen, anywhere the reader has clicked through specifically to see what
+ * a figure actually is and rounding it away would defeat the trip.
  *
  * The mantissa is trimmed of trailing zeros, so the decimals that survive are the ones
  * carrying information: $426.85M keeps both, $41.6M keeps the one that matters, $890K

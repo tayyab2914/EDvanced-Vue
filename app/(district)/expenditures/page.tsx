@@ -25,7 +25,6 @@ import { expenditurePace, approachingCeiling } from "@/lib/dashboard/pace";
 import { daysIntoFiscalYear } from "@/lib/finance/variance";
 import {
   compactMoney,
-  money,
   accounting,
   percent,
   signedPercent,
@@ -597,7 +596,7 @@ export default async function ExpenditureDashboard({
           label="Total expenditures"
           caption="Year to date"
           value={compactMoney(byFunction.total.actualYtd)}
-          sub={`${percent(byFunction.total.consumption.percent)} of full-year budget`}
+          sub={`${percent(byFunction.total.consumption.percent)} of annual budget expended`}
           delta={{
             text: `${percent(byFunction.total.consumption.percent)} spent`,
             tone: "neutral",
@@ -610,8 +609,11 @@ export default async function ExpenditureDashboard({
           label="Budget utilization"
           caption="Spend plus encumbrances"
           value={percent(byFunction.total.utilisation.percent)}
-          sub={`Warning at ${utilT.warning.toFixed(2)}% · critical at ${utilT.critical.toFixed(2)}%`}
+          sub="Includes expenditures and encumbrances"
           status={utilRung}
+          // The sub now says what the figure counts, so the policy it is judged against moves
+          // to the footer beside the badge — the same place every other judged tile keeps it.
+          statusNote={`Warning at ${utilT.warning.toFixed(2)}% · critical at ${utilT.critical.toFixed(2)}%`}
         />
 
         <KpiTile
@@ -620,7 +622,7 @@ export default async function ExpenditureDashboard({
           label="Available budget"
           caption="Budget less spend and encumbrances"
           value={accounting(byFunction.total.available, { compact: true })}
-          sub={`of ${compactMoney(byFunction.total.budget)} budgeted`}
+          sub="Remaining budget available to spend"
           delta={
             byFunction.total.available.isNegative()
               ? { text: "Overcommitted", tone: "negative", direction: "down" }
@@ -634,7 +636,7 @@ export default async function ExpenditureDashboard({
           label="Encumbrances"
           caption="Committed, not yet spent"
           value={compactMoney(byFunction.total.encumbrances)}
-          sub="purchase orders and contracts outstanding"
+          sub="Committed but not yet expended"
           delta={{
             text: `${percent(sharePercent(byFunction.total.encumbrances, byFunction.total.budget), 1)} of budget`,
             tone: "neutral",
@@ -647,7 +649,7 @@ export default async function ExpenditureDashboard({
           label="Month over month change"
           caption={previous ? `vs period ${previous.period}` : "no earlier period"}
           value={compactMoney(point?.expenditureMtd)}
-          sub="spent this period"
+          sub="Change from prior period"
           delta={
             momPct === null
               ? undefined
@@ -671,7 +673,10 @@ export default async function ExpenditureDashboard({
           sub={
             varPct === null
               ? "needs an expenditure budget for the year"
-              : `${signedPercent(varPct)} against the budget expected by now`
+              : // The sign is carried by the word, not a glyph: "below" reads faster than "−".
+                varPct === 0
+                ? "In line with expected spending"
+                : `${percent(Math.abs(varPct))} ${varPct < 0 ? "below" : "above"} expected spending`
           }
           statusNote={`Policy ± ${fcT.warning.toFixed(2)}%`}
         />
@@ -824,14 +829,14 @@ export default async function ExpenditureDashboard({
                       value: <DimLabel code={null} name={r.name} note={r.code || undefined} />,
                       strong: true,
                     },
-                    budget: money(r.budget),
-                    actual: money(r.actualYtd),
-                    enc: money(r.encumbrances),
+                    budget: compactMoney(r.budget),
+                    actual: compactMoney(r.actualYtd),
+                    enc: compactMoney(r.encumbrances),
                     avail: {
                       // Accounting form and a red tint on a negative, the same as every
                       // other Available figure on this page: a group that has committed
                       // more than it was given is the one thing this column exists to say.
-                      value: accounting(r.available),
+                      value: accounting(r.available, { compact: true }),
                       tone: r.available.isNegative() ? ("negative" as const) : ("neutral" as const),
                       strong: r.available.isNegative(),
                     },
@@ -861,11 +866,11 @@ export default async function ExpenditureDashboard({
                 total: true,
                 cells: {
                   group: "Total expenditures",
-                  budget: money(grouped.total.budget),
-                  actual: money(grouped.total.actualYtd),
-                  enc: money(grouped.total.encumbrances),
+                  budget: compactMoney(grouped.total.budget),
+                  actual: compactMoney(grouped.total.actualYtd),
+                  enc: compactMoney(grouped.total.encumbrances),
                   avail: {
-                    value: accounting(grouped.total.available),
+                    value: accounting(grouped.total.available, { compact: true }),
                     tone: grouped.total.available.isNegative()
                       ? ("negative" as const)
                       : ("neutral" as const),
@@ -887,12 +892,12 @@ export default async function ExpenditureDashboard({
           >
             <PolicyEchoCard
               rows={[
-                { label: "Budget utilization — warning", value: `${Number(policy.expenditure.utilizationWarning).toFixed(2)}%` },
-                { label: "Budget utilization — critical", value: `${Number(policy.expenditure.utilizationCritical).toFixed(2)}%` },
-                { label: "Variance — warning", value: `± ${Number(policy.expenditure.forecastVarianceWarning).toFixed(2)}%` },
-                { label: "Variance — critical", value: `± ${Number(policy.expenditure.forecastVarianceCritical).toFixed(2)}%` },
-                { label: "Month-over-month — warning", value: `${Number(policy.expenditure.momIncreaseWarning).toFixed(2)}%` },
-                { label: "Month-over-month — critical", value: `${Number(policy.expenditure.momIncreaseCritical).toFixed(2)}%` },
+                { label: "Budget Utilization - Warning", value: `${Number(policy.expenditure.utilizationWarning).toFixed(2)}%` },
+                { label: "Budget Utilization - Critical", value: `${Number(policy.expenditure.utilizationCritical).toFixed(2)}%` },
+                { label: "Variance - Warning", value: `± ${Number(policy.expenditure.forecastVarianceWarning).toFixed(2)}%` },
+                { label: "Variance - Critical", value: `± ${Number(policy.expenditure.forecastVarianceCritical).toFixed(2)}%` },
+                { label: "Month-over-Month - Warning", value: `${Number(policy.expenditure.momIncreaseWarning).toFixed(2)}%` },
+                { label: "Month-over-Month - Critical", value: `${Number(policy.expenditure.momIncreaseCritical).toFixed(2)}%` },
               ]}
               manageHref={userCan(user, "configure_district") ? "/policies" : undefined}
               manageLabel={MANAGE.expenditurePolicies}
@@ -901,7 +906,7 @@ export default async function ExpenditureDashboard({
 
           <SectionCard
             title="Top positive variances"
-            subtitle="Spending ahead of pace"
+            subtitle="Categories spending below expected levels"
             bodyClassName="min-h-0"
           >
             <MoverList
@@ -932,7 +937,7 @@ export default async function ExpenditureDashboard({
       <Row cols="2-2-1">
         <SectionCard
           title="Budget utilization trend"
-          subtitle="Spend plus encumbrances, against your thresholds"
+          subtitle="Expenditures and encumbrances compared to your policy thresholds"
         >
           <ColumnChart
             title="Budget utilization by month"
@@ -1000,11 +1005,11 @@ export default async function ExpenditureDashboard({
                     ),
                     strong: true,
                   },
-                  budget: money(r.budget),
-                  actual: money(r.actualYtd),
-                  enc: money(r.encumbrances),
+                  budget: compactMoney(r.budget),
+                  actual: compactMoney(r.actualYtd),
+                  enc: compactMoney(r.encumbrances),
                   avail: {
-                    value: accounting(r.available),
+                    value: accounting(r.available, { compact: true }),
                     tone: r.available.isNegative() ? ("negative" as const) : ("neutral" as const),
                     strong: r.available.isNegative(),
                   },
@@ -1036,11 +1041,11 @@ export default async function ExpenditureDashboard({
               total: true,
               cells: {
                 fn: "Total expenditures",
-                budget: money(byFunction.total.budget),
-                actual: money(byFunction.total.actualYtd),
-                enc: money(byFunction.total.encumbrances),
+                budget: compactMoney(byFunction.total.budget),
+                actual: compactMoney(byFunction.total.actualYtd),
+                enc: compactMoney(byFunction.total.encumbrances),
                 avail: {
-                  value: accounting(byFunction.total.available),
+                  value: accounting(byFunction.total.available, { compact: true }),
                   tone: byFunction.total.available.isNegative()
                     ? ("negative" as const)
                     : ("neutral" as const),
@@ -1059,7 +1064,7 @@ export default async function ExpenditureDashboard({
         <div className="grid content-start gap-4">
           <SectionCard
             title="Top negative variances"
-            subtitle="Spending behind pace"
+            subtitle="Categories spending above expected levels"
             bodyClassName="min-h-0"
           >
             <MoverList

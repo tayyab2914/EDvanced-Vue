@@ -1,6 +1,6 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { PolicyValues } from "@/lib/policies/registry";
-import { money as fmtMoney } from "@/lib/dashboard/format";
+import { compactMoney } from "@/lib/dashboard/format";
 
 /**
  * The twenty-seven alerts, declared rather than coded.
@@ -67,10 +67,20 @@ export interface AlertDef {
   evaluate: (f: AlertFacts, p: PolicyValues) => AlertHit | null;
 }
 
-// Shared with the dashboards so an alert sentence and the tile it sits under group their
-// thousands the same way. `toLocaleString` used to do this and produced middle dots on a
-// runtime without full ICU — see the note in lib/dashboard/format.ts.
-const money = (v: Prisma.Decimal) => fmtMoney(v, 2);
+/**
+ * ABBREVIATED — $39.86M, not $39,859,391.29.
+ *
+ * An alert is a sentence, and a nine-digit figure written out in full is a number the
+ * reader counts digits through rather than reads. It also wraps: "Collections are 23.7%
+ * below budget ($39,859,391.29 against $208,900,000.00)" took two lines in the summary
+ * card where the abbreviated form takes one. The exact figure is a click away on the
+ * dashboard the alert links to, which is where an exact figure belongs.
+ *
+ * Shared with the dashboards so an alert sentence and the tile it sits under abbreviate
+ * the same way. `toLocaleString` used to do the grouping and produced middle dots on a
+ * runtime without full ICU — see the note in lib/dashboard/format.ts.
+ */
+const money = (v: Prisma.Decimal) => compactMoney(v);
 const pct = (v: Prisma.Decimal) => `${v.toFixed(1)}%`;
 const n = (v: number | boolean) => Number(v);
 

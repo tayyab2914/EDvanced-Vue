@@ -461,7 +461,7 @@ export default async function FundBalancePage({
           label="Total fund balance"
           caption={scope.fund ? scope.fund.name : "All funds"}
           value={compactMoney(totalNow)}
-          sub={previous ? `vs period ${previous.period}` : "no earlier period"}
+          sub={previous ? "from prior period" : "no earlier period"}
           delta={
             change === null
               ? undefined
@@ -480,7 +480,7 @@ export default async function FundBalancePage({
           label="Change from prior month"
           caption={previous ? `Since period ${previous.period}` : "No earlier period"}
           value={accounting(change, { compact: true })}
-          sub="movement in total fund balance"
+          sub="Monthly change in total fund balance"
           delta={
             change === null
               ? undefined
@@ -498,7 +498,7 @@ export default async function FundBalancePage({
           label="Unassigned fund balance"
           caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
           value={compactMoney(unassignedNow)}
-          sub="the reserve a board asks about"
+          sub="Available General Fund reserve"
           delta={
             unassignedChange === null
               ? undefined
@@ -517,7 +517,7 @@ export default async function FundBalancePage({
           label="Unassigned fund balance %"
           caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
           value={percent(reserve?.percent)}
-          sub="of budgeted general fund expenditures"
+          sub="As a % of budgeted General Fund expenditures"
           status={reserveRung}
           statusNote={`Target ≥ ${reserveT.target.toFixed(2)}%`}
           unavailableReason="Needs a fund typed General, an opening fund balance and an adopted expenditure budget."
@@ -530,7 +530,7 @@ export default async function FundBalancePage({
           caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
           value={reserveRung === "N/A" ? "Not available" : reserveRung}
           valueStatus={reserveRung}
-          sub={`Policy range: ${statutoryMinimum.toFixed(2)}% – ${reserveT.target.toFixed(2)}%`}
+          sub="Compared to Board reserve policy"
           statusNote={`Warning below ${reserveT.warning.toFixed(2)}%`}
         />
       </KpiRow>

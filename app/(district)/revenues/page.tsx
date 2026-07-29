@@ -17,7 +17,6 @@ import { revenuePace } from "@/lib/dashboard/pace";
 import { daysIntoFiscalYear } from "@/lib/finance/variance";
 import {
   compactMoney,
-  money,
   accounting,
   percent,
   signedPercent,
@@ -232,7 +231,7 @@ export default async function RevenueDashboard({
       key: "total",
       label: "Total revenues (YTD)",
       value: compactMoney(bySource.total.actualYtd),
-      sub: `${percent(bySource.total.consumption.percent)} of full-year budget`,
+      sub: `${percent(bySource.total.consumption.percent)} of budget collected`,
       note: collectedPct === null ? undefined : `${percent(collectedPct)} collected`,
       tone: "neutral" as const,
     },
@@ -240,7 +239,7 @@ export default async function RevenueDashboard({
       key: "variance",
       label: "Revenue variance (YTD)",
       value: accounting(bySource.total.pace.amount, { compact: true }),
-      sub: "against the budget expected by now",
+      sub: "Compared to expected YTD collections",
       note:
         varPct === null
           ? undefined
@@ -253,7 +252,7 @@ export default async function RevenueDashboard({
       value: compactMoney(overCollected ? remaining.abs() : remaining),
       sub: overCollected
         ? "collected above the full-year budget"
-        : `of ${compactMoney(bySource.total.budget)} budgeted`,
+        : "Remaining of annual revenue budget",
       note: overCollected
         ? "Over-collected"
         : `${percent(100 - (collectedPct ?? 0))} outstanding`,
@@ -263,7 +262,7 @@ export default async function RevenueDashboard({
       key: "mom",
       label: "Month over month change",
       value: compactMoney(point?.revenueMtd),
-      sub: "collected this period",
+      sub: "Revenue collected this period",
       note:
         momPct === null
           ? previous
@@ -280,8 +279,8 @@ export default async function RevenueDashboard({
         varPct === null
           ? "needs a revenue budget for the year"
           : Math.abs(varPct) < revT.warning
-            ? "within policy"
-            : "outside policy",
+            ? "within revenue collection target"
+            : "outside revenue collection target",
       note: `Policy ± ${revT.warning.toFixed(2)}%`,
       tone: rungTone(statusRung),
     },
@@ -289,7 +288,7 @@ export default async function RevenueDashboard({
       key: "days",
       label: "Days in fiscal year",
       value: String(daysIn.elapsed),
-      sub: `of ${daysIn.total} days`,
+      sub: "Fiscal year completed",
       note: `${((daysIn.elapsed / daysIn.total) * 100).toFixed(1)}% elapsed`,
       tone: "neutral" as const,
     },
@@ -511,7 +510,7 @@ export default async function RevenueDashboard({
           label="Total revenues"
           caption="Year to date"
           value={compactMoney(bySource.total.actualYtd)}
-          sub={`${percent(bySource.total.consumption.percent)} of full-year budget`}
+          sub={`${percent(bySource.total.consumption.percent)} of budget collected`}
           delta={
             collectedPct === null
               ? undefined
@@ -529,7 +528,7 @@ export default async function RevenueDashboard({
           caption="Year to date"
           info="Actual collections against the budget expected by now, pro-rated across the year."
           value={accounting(bySource.total.pace.amount, { compact: true })}
-          sub="against the budget expected by now"
+          sub="Compared to expected YTD collections"
           delta={
             varPct === null
               ? undefined
@@ -551,7 +550,7 @@ export default async function RevenueDashboard({
           sub={
             overCollected
               ? "collected above the full-year budget"
-              : `of ${compactMoney(bySource.total.budget)} budgeted`
+              : "Remaining of annual revenue budget"
           }
           delta={
             overCollected
@@ -566,7 +565,7 @@ export default async function RevenueDashboard({
           label="Month over month change"
           caption={previous ? `vs period ${previous.period}` : "no earlier period"}
           value={compactMoney(point?.revenueMtd)}
-          sub="collected this period"
+          sub="Revenue collected this period"
           delta={
             momPct === null
               ? undefined
@@ -589,8 +588,8 @@ export default async function RevenueDashboard({
             varPct === null
               ? "needs a revenue budget for the year"
               : Math.abs(varPct) < revT.warning
-                ? `Within policy (± ${revT.warning.toFixed(2)}%)`
-                : `Outside policy (± ${revT.warning.toFixed(2)}%)`
+                ? "Within revenue collection target"
+                : "Outside revenue collection target"
           }
           statusNote={`Policy ± ${revT.warning.toFixed(2)}%`}
         />
@@ -601,7 +600,7 @@ export default async function RevenueDashboard({
           label="Days in fiscal year"
           caption={`Through ${scope.label}`}
           value={String(daysIn.elapsed)}
-          sub={`of ${daysIn.total} days`}
+          sub="Fiscal year completed"
           delta={{
             text: `${((daysIn.elapsed / daysIn.total) * 100).toFixed(1)}% elapsed`,
             tone: "neutral",
@@ -700,11 +699,11 @@ export default async function RevenueDashboard({
                     value: <DimLabel code={r.code} name={r.name} mode={scope.labelMode} />,
                     strong: true,
                   },
-                  budget: money(r.budget),
-                  actual: money(r.actualYtd),
+                  budget: compactMoney(r.budget),
+                  actual: compactMoney(r.actualYtd),
                   pctBudget: percent(r.consumption.percent),
                   variance: {
-                    value: accounting(r.pace.amount),
+                    value: accounting(r.pace.amount, { compact: true }),
                     tone: negative ? ("negative" as const) : ("positive" as const),
                     strong: true,
                   },
@@ -725,11 +724,11 @@ export default async function RevenueDashboard({
               total: true,
               cells: {
                 source: "Total revenues",
-                budget: money(bySource.total.budget),
-                actual: money(bySource.total.actualYtd),
+                budget: compactMoney(bySource.total.budget),
+                actual: compactMoney(bySource.total.actualYtd),
                 pctBudget: percent(bySource.total.consumption.percent),
                 variance: {
-                  value: accounting(bySource.total.pace.amount),
+                  value: accounting(bySource.total.pace.amount, { compact: true }),
                   tone: bySource.total.pace.amount.isNegative()
                     ? ("negative" as const)
                     : ("positive" as const),
@@ -774,7 +773,11 @@ export default async function RevenueDashboard({
             />
           </SectionCard>
 
-          <SectionCard title="Top positive variances" bodyClassName="min-h-0">
+          <SectionCard
+            title="Top positive variances"
+            subtitle="Collections above expected levels"
+            bodyClassName="min-h-0"
+          >
             <MoverList
               items={movers.positive.map((r) => ({
                 id: r.id,
@@ -876,7 +879,11 @@ export default async function RevenueDashboard({
         </SectionCard>
 
         <div className="grid content-start gap-4">
-          <SectionCard title="Top negative variances" bodyClassName="min-h-0">
+          <SectionCard
+            title="Top negative variances"
+            subtitle="Collections below expected levels"
+            bodyClassName="min-h-0"
+          >
             <MoverList
               items={movers.negative.map((r) => ({
                 id: r.id,
