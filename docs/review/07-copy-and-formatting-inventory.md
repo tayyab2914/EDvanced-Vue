@@ -296,7 +296,7 @@ shortened form, in the "policy echo" cards beside the figures they judge.
 | Revenue | `Revenues` | `Define when revenue activity should generate alerts.` | |
 | Expenditure | `Expenditures` | `Define when spending activity should generate alerts.` | |
 | Cash | `Cash Policies` | `Define when cash and liquidity should generate alerts.` | |
-| Fund balance | `Fund Balance` | `The reserve level you aim to protect — unassigned fund balance as a share of the general fund budget.` | |
+| Fund balance | `Fund Balance` | `The reserve level you aim to protect — unassigned fund balance as a share of General Fund revenue.` | |
 
 > Three of the four are a verb phrase; the fourth is a noun phrase. Also, three group titles are
 > plain nouns and one is `Cash Policies`.
@@ -529,7 +529,7 @@ never called two different things.
 |---|---|---|---|
 | `Total revenues (YTD)` | `{82.4}% of full-year budget` / `No revenue budget uploaded` | `{+3.21%}` · `vs budget to date` | |
 | `Total expenditures (YTD)` | `{78.1}% of full-year budget` / `No expenditure budget uploaded` | `{82.40%} committed` | |
-| `Unassigned fund balance %` | `of budgeted {General Fund} expenditures` / `no General Fund identified` | `{Strong}` · `Target ≥ {5.00}%` | |
+| `Unassigned fund balance %` | `of projected General Fund revenue` / `no General Fund identified` | `{Strong}` · `Target ≥ {5.00}%` | |
 | `Days of operating cash` | `days in reserve` | `{Monitor}` · `Policy ≥ {60} days` | |
 | `Available budget` | `budget less spend and encumbrances` | `Remaining` / `Overcommitted` | |
 | `Alerts` | `require attention` | `{2} critical` / `{3} warning` / `All clear` | |
@@ -746,7 +746,7 @@ projection is straight-lined from recent months and no alert reads it.`
 | `Total fund balance` | *(fund or `All funds`)* | `vs period {10}` / `no earlier period` | |
 | `Change from prior month` | `Since period {10}` / `No earlier period` | `movement in total fund balance` | |
 | `Unassigned fund balance` | `{General Fund} only` | `the reserve a board asks about` | |
-| `Unassigned fund balance %` | `{General Fund} only` | `of budgeted general fund expenditures` | |
+| `Projected unassigned %` | `{General Fund} only` | `of projected General Fund revenue` | |
 | `Reserve status` | `{General Fund} only` | `Policy range: {3.00}% – {5.00}%` | |
 
 Status notes: `Target ≥ {5.00}%`, `Warning below {4.00}%`.
@@ -797,7 +797,7 @@ and see how reserves hold up.` → `Go to Forecasting & Planning`
 | Rows | `Current position — warning` (`From the reserve as it stands today.`), `Current position — critical`, `Forecast — warning` (`From the projected year-end reserve.`), `Forecast — critical` | |
 | Card | `Where you stand` — subtitle `Target ≥ {5}% · warning below {4}% · critical below {3}%` | |
 | | Tooltip: `The bands are your own thresholds — the same ones every badge and alert on these dashboards reads.` | |
-| Benchmark caption | `Unassigned fund balance as a share of budgeted general fund expenditures.` | |
+| Benchmark caption | `Projected unassigned fund balance as a share of projected General Fund revenue.` | |
 
 > Note that **this tab separates Board Policy Minimum and State Minimum correctly**, while the
 > Current Position tab and the Executive dashboard label the board figure "statutory minimum".

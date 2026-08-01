@@ -19,6 +19,12 @@ import {
 } from "@/lib/finance/breakdown";
 import { buildInsights, trendNarrative } from "@/lib/alerts/insights";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
+import {
+  reserveCaption,
+  reserveSubject,
+  reserveTileLabel,
+  reserveUnavailableReason,
+} from "@/lib/dashboard/reserve";
 import { GO_TO, GO_TO_DASHBOARD_SHORT } from "@/lib/dashboard/cta";
 import { revenuePace, expenditurePace } from "@/lib/dashboard/pace";
 import { cashFlowYtd, cashPercentOfExpenditures } from "@/lib/finance/cash";
@@ -146,6 +152,8 @@ export default async function ExecutiveDashboard({
   const expT = expenditureForecastThresholds(policy);
 
   const reservePct = toNumber(reserve?.percent);
+  // "of projected General Fund revenue" — the denominator, named rather than assumed.
+  const reserveOf = reserveCaption(reserve);
   const daysCash = toNumber(facts?.daysCashOnHand);
   const utilPct = toNumber(facts?.utilizationPercent);
   const revVarPct = toNumber(facts?.revenueVariancePercent);
@@ -335,7 +343,7 @@ export default async function ExecutiveDashboard({
         {
           label: "Unassigned fund balance",
           value: compactMoney(point?.unassignedFundBalance),
-          note: reservePct === null ? undefined : `${percent(reservePct)} of budget`,
+          note: reservePct === null ? undefined : `${percent(reservePct)} ${reserveOf}`,
         },
         {
           label: "Status",
@@ -370,7 +378,7 @@ export default async function ExecutiveDashboard({
   const fundBalanceInsight = isGeneralFund
     ? reservePct === null
       ? null
-      : `Unassigned fund balance is ${percent(reservePct)}, which is ${
+      : `${reserveSubject(reserve)} is ${percent(reservePct)} ${reserveOf}, which is ${
           reservePct >= statutoryMinimum ? "above" : "below"
         } the ${statutoryMinimum.toFixed(2)}% statutory minimum and ${
           reservePct >= reserveT.target ? "at or above" : "below"
@@ -481,13 +489,11 @@ export default async function ExecutiveDashboard({
     },
     {
       key: "reserve",
-      label: "Unassigned fund balance %",
+      label: reserveTileLabel(reserve),
       value: percent(reserve?.percent),
-      // The fund is usually named "General", occasionally "General Fund" — either way the
-      // sentence should read "…budgeted General Fund expenditures", never "General Fund Fund".
-      sub: core.generalFund
-        ? `As a % of budgeted ${core.generalFund.name.replace(/\s*fund$/i, "")} Fund expenditures`
-        : "no General Fund identified",
+      // The caption names the denominator rather than assuming it — see lib/dashboard/reserve.ts
+      // for why this is a function and not the string it used to be.
+      sub: core.generalFund ? `As a % ${reserveOf}` : "no General Fund identified",
       note: `${reserveRung} · target ≥ ${reserveT.target.toFixed(2)}%`,
       tone: rungTone(reserveRung),
       icon: "shield" as const,
@@ -495,8 +501,7 @@ export default async function ExecutiveDashboard({
       href: "/fund-balance",
       status: reserveRung,
       statusNote: `Target ≥ ${reserveT.target.toFixed(2)}%`,
-      unavailableReason:
-        "Needs a fund typed General, an opening fund balance and an adopted expenditure budget.",
+      unavailableReason: reserveUnavailableReason(reserve?.basis ?? "REVENUE"),
     },
     {
       key: "days-cash",

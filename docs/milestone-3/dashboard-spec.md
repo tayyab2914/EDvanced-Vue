@@ -97,7 +97,7 @@ an em-dash and a grey N/A badge with a reason on hover. It never shows `$0` or a
 |---|---|---|---|---|---|
 | 1 | TOTAL REVENUES (YTD) | money | `<pct>% of Budget` | ▲/▼ `$X vs Budget` | `activityTotals().totalRevenueYtd`, budget from detail rows |
 | 2 | TOTAL EXPENDITURES (YTD) | money | `<pct>% of Budget` | ▲/▼ `$X vs Budget` | `activityTotals().totalExpenditureYtd` |
-| 3 | UNASSIGNED FUND BALANCE % | percent | `of Total GF Expenditures` | badge + `Target ≥ X%` | `reservePercent()` + `policy.fundBalance.target` |
+| 3 | PROJECTED UNASSIGNED % | percent | `of projected General Fund revenue` (M6; `of budgeted General Fund expenditures` on the expenditure basis) | badge + `Target ≥ X%` | `reservePercent()` + `policy.fundBalance.target` |
 | 4 | DAYS OF OPERATING CASH | integer | `Days in Reserve` | badge + `Policy ≥ X Days` | `gatherFacts().daysCashOnHand` |
 | 5 | BUDGET VARIANCE | money, parenthesised when negative | `<pct>% Under/Over Budget` | tone by sign | expenditure YTD − pro-rated budget |
 | 6 | ALERTS | count | `Require Attention` | link "View All Alerts →" | `evaluateAlerts().alerts.length` |
@@ -306,7 +306,7 @@ Footnote explains positive vs negative.
 **3. FUND BALANCE FORECAST (FINANCIAL HEALTH VIEW)** — *"Will our reserves remain healthy?"* —
 same four columns. Rows: Beginning Fund Balance · Net Surplus/(Deficit) · Estimated Ending Fund
 Balance · Less: Nonspendable/Restricted/Assigned · Projected Unassigned Fund Balance ·
-Unassigned Fund Balance % of Expenditures · Reserve Status (badge per column).
+Unassigned Fund Balance % of Revenue · Reserve Status (badge per column).
 
 **4. FUND BALANCE FORECAST TREND** — line chart of projected reserve % across the four years,
 drawn over four horizontal threshold bands (Strong / Acceptable / Monitor / Action Required)

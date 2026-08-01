@@ -81,7 +81,8 @@ async function main() {
 
   const [fb, reserve, totals, cash] = await Promise.all([
     computeFundBalance(db, scope, codes),
-    reservePercent(db, scope, codes),
+    // Florida's defaults — the same basis a freshly created district gets.
+    reservePercent(db, scope, codes, { basis: "REVENUE", requiredPercent: 3 }),
     activityTotals(db, scope, codes),
     endingCash(db, scope),
   ]);
@@ -96,7 +97,11 @@ async function main() {
   console.log(`  Beginning fund balance ${money(fb.beginning)}`);
   console.log(`  Fund balance           ${money(fb.total)}`);
   console.log(
-    `  Unassigned reserve     ${reserve.percent ? `${reserve.percent.toFixed(1)}%` : "—"} of ${money(reserve.budget)}`,
+    `  Unassigned reserve     ${reserve.percent ? `${reserve.percent.toFixed(1)}%` : "—"} of ${money(reserve.budget)} (${reserve.denominator})`,
+  );
+  console.log(`  Required reserve       ${money(reserve.required)} (${reserve.requiredPercent}%)`);
+  console.log(
+    `  ${reserve.excess.isNegative() ? "Shortfall" : "Excess unassigned"}      ${money(reserve.excess.abs())}`,
   );
 
   const report = await evaluateAlerts(db, { districtId: district.id, ...scope }, codes);

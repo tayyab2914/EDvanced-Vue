@@ -54,6 +54,13 @@ function healthy(): AlertFacts {
 
     reservePercent: d("8"),
     forecastReservePercent: d("8"),
+    // The M6 basis fields. A healthy district is on the Florida default — revenue, mid-year,
+    // so the figures are a projection — and comfortably above its 3% required reserve.
+    reserveBasis: "REVENUE",
+    reserveDenominator: "AMENDED_REVENUE",
+    reserveIsActual: false,
+    requiredReserve: d("360000"),
+    excessUnassigned: d("600000"),
     changeInFundBalance: d("1000000"),
     componentsExceedTotal: false,
   };
@@ -373,6 +380,14 @@ assert(
 );
 
 // ===================== fund balance =====================
+/**
+ * The ladder is FLORIDA'S since M6: target 5%, warning 3%, critical 2%.
+ *
+ * The warning and critical bars moved down (from 4% and 3%) to sit on s. 1011.051's own
+ * triggers — 3% is where a district notifies the commissioner, 2% is the deeper one. The
+ * fixtures below are restated against those bars rather than nudged until they pass: a
+ * threshold test whose figures were chosen to fit is a test of nothing.
+ */
 console.log("\nFund balance");
 assert(
   fires("FUND_BALANCE_BELOW_TARGET", { ...healthy(), reservePercent: d("4.5") }),
@@ -380,31 +395,99 @@ assert(
 );
 assert(
   !fires("FUND_BALANCE_WARNING", { ...healthy(), reservePercent: d("4.5") }),
-  "but above the 4% warning, so only the nudge fires",
+  "but above the 3% warning, so only the nudge fires",
 );
 assert(
-  fires("FUND_BALANCE_WARNING", { ...healthy(), reservePercent: d("3.5") }),
-  "3.5% trips the warning",
+  fires("FUND_BALANCE_WARNING", { ...healthy(), reservePercent: d("2.5") }),
+  "2.5% trips the warning — below Florida's 3% notification trigger",
 );
 assert(
-  !fires("FUND_BALANCE_BELOW_TARGET", { ...healthy(), reservePercent: d("3.5") }),
+  !fires("FUND_BALANCE_BELOW_TARGET", { ...healthy(), reservePercent: d("2.5") }),
   "and the below-target nudge steps aside",
 );
 assert(
-  severityOf("FUND_BALANCE_CRITICAL", { ...healthy(), reservePercent: d("2") }) === "CRITICAL",
-  "2% is critical (critical is 3%)",
+  severityOf("FUND_BALANCE_CRITICAL", { ...healthy(), reservePercent: d("1.5") }) === "CRITICAL",
+  "1.5% is critical (critical is 2%)",
 );
 assert(
-  !fires("FUND_BALANCE_WARNING", { ...healthy(), reservePercent: d("2") }),
+  !fires("FUND_BALANCE_WARNING", { ...healthy(), reservePercent: d("1.5") }),
   "and only the critical fires",
 );
 assert(
   fires("FORECAST_BELOW_TARGET", { ...healthy(), forecastReservePercent: d("4.5") }),
-  "a projected reserve below target fires",
+  "a pace-projected reserve below target fires",
 );
 assert(
-  fires("FORECAST_CRITICAL", { ...healthy(), forecastReservePercent: d("2") }),
-  "a projected reserve of 2% is critical",
+  fires("FORECAST_CRITICAL", { ...healthy(), forecastReservePercent: d("1.5") }),
+  "a pace-projected reserve of 1.5% is critical",
+);
+
+/**
+ * ---- the sentence has to say WHAT the percentage is a percentage of ----
+ *
+ * Three reserve percentages can reach a district in one sitting: the budget projection, the
+ * pace projection, and last year's outturn. Before M6 every one of them rendered as a bare
+ * "Unassigned reserve is 3.5%", which is not a number a board can act on without being told
+ * the denominator and the tense.
+ */
+console.log("\nReserve alerts name their denominator and their tense");
+const projected = fire({ ...healthy(), reservePercent: d("2.5") }).find(
+  (x) => x.id === "FUND_BALANCE_WARNING",
+)!.hit!.message;
+assert(
+  projected.includes("Projected unassigned reserve"),
+  `a mid-year reserve alert says it is projected (got "${projected}")`,
+);
+assert(
+  projected.includes("of projected General Fund revenue"),
+  `and names the divisor (got "${projected}")`,
+);
+
+const outturn = fire({
+  ...healthy(),
+  reservePercent: d("2.5"),
+  reserveIsActual: true,
+  reserveDenominator: "ACTUAL_REVENUE",
+}).find((x) => x.id === "FUND_BALANCE_WARNING")!.hit!.message;
+assert(
+  !outturn.includes("Projected") && outturn.includes("actual General Fund revenue collected"),
+  `a closed year drops the projection wording (got "${outturn}")`,
+);
+
+const onExpenditure = fire({
+  ...healthy(),
+  reservePercent: d("2.5"),
+  reserveBasis: "EXPENDITURE",
+  reserveDenominator: "ADOPTED_EXPENDITURE",
+}).find((x) => x.id === "FUND_BALANCE_WARNING")!.hit!.message;
+assert(
+  onExpenditure.includes("budgeted General Fund expenditures"),
+  `an expenditure-basis district is told so (got "${onExpenditure}")`,
+);
+
+// The dollar gap, but only when there IS one.
+const short = fire({
+  ...healthy(),
+  reservePercent: d("1.5"),
+  excessUnassigned: d("-420000"),
+  requiredReserve: d("360000"),
+}).find((x) => x.id === "FUND_BALANCE_CRITICAL")!.hit!.message;
+assert(
+  short.includes("short of the"),
+  `a district below its required reserve is told the dollar gap (got "${short}")`,
+);
+assert(
+  !projected.includes("short of the"),
+  "and a district above it is not told about a shortfall it does not have",
+);
+
+// The pace alerts must not read as though they were the budget projection.
+const pace = fire({ ...healthy(), forecastReservePercent: d("2.5") }).find(
+  (x) => x.id === "FORECAST_WARNING",
+)!.hit!.message;
+assert(
+  pace.includes("On the current pace"),
+  `the pace alert distinguishes itself from the budget projection (got "${pace}")`,
 );
 assert(
   fires("NEGATIVE_CHANGE_IN_FUND_BALANCE", { ...healthy(), changeInFundBalance: d("-1") }),
@@ -432,7 +515,7 @@ loose.fundBalance.warning = 1;
 loose.fundBalance.critical = 0.5;
 loose.fundBalance.target = 2;
 assert(
-  !fires("FUND_BALANCE_WARNING", { ...healthy(), reservePercent: d("3.5") }, loose),
+  !fires("FUND_BALANCE_WARNING", { ...healthy(), reservePercent: d("2.5") }, loose),
   "and lowering the reserve thresholds silences an alert that fired on the defaults",
 );
 const off = defaultPolicy();
@@ -447,12 +530,12 @@ console.log("\nStatus labels come from the same thresholds");
 assert(reserveStatus(d("8"), P) === "Strong", "8% is Strong (at or above the 5% target)");
 assert(reserveStatus(d("5"), P) === "Strong", "5% — exactly the target — is Strong");
 assert(reserveStatus(d("4.5"), P) === "Acceptable", "4.5% is Acceptable (below target, above warning)");
-assert(reserveStatus(d("3.5"), P) === "Monitor", "3.5% is Monitor (below warning, above critical)");
-assert(reserveStatus(d("2"), P) === "Action Required", "2% is Action Required (below critical)");
+assert(reserveStatus(d("2.5"), P) === "Monitor", "2.5% is Monitor (below the 3% warning, above the 2% critical)");
+assert(reserveStatus(d("1.5"), P) === "Action Required", "1.5% is Action Required (below the 2% critical)");
 assert(reserveStatus(null, P) === null, "and no reserve figure gives no status, not a false Strong");
 
 // The ladder and the alerts must agree — they read the same numbers.
-const atCritical = { ...healthy(), reservePercent: d("2") };
+const atCritical = { ...healthy(), reservePercent: d("1.5") };
 assert(
   reserveStatus(atCritical.reservePercent, P) === "Action Required" &&
     fires("FUND_BALANCE_CRITICAL", atCritical),
@@ -484,11 +567,11 @@ const TRIPS: Record<string, Partial<AlertFacts>> = {
   DAYS_CASH_CRITICAL: { daysCashOnHand: d("40") },
   SIGNIFICANT_CASH_DECREASE: { cashDecreasePercent: d("12") },
   FUND_BALANCE_BELOW_TARGET: { reservePercent: d("4.5") },
-  FUND_BALANCE_WARNING: { reservePercent: d("3.5") },
-  FUND_BALANCE_CRITICAL: { reservePercent: d("2") },
+  FUND_BALANCE_WARNING: { reservePercent: d("2.5") },
+  FUND_BALANCE_CRITICAL: { reservePercent: d("1.5") },
   FORECAST_BELOW_TARGET: { forecastReservePercent: d("4.5") },
-  FORECAST_WARNING: { forecastReservePercent: d("3.5") },
-  FORECAST_CRITICAL: { forecastReservePercent: d("2") },
+  FORECAST_WARNING: { forecastReservePercent: d("2.5") },
+  FORECAST_CRITICAL: { forecastReservePercent: d("1.5") },
   NEGATIVE_CHANGE_IN_FUND_BALANCE: { changeInFundBalance: d("-1") },
   COMPONENTS_EXCEED_ENDING_BALANCE: { componentsExceedTotal: true },
 };

@@ -1,6 +1,7 @@
 import { Prisma } from "@/lib/generated/prisma/client";
 import type { PolicyValues } from "@/lib/policies/registry";
 import { compactMoney } from "@/lib/dashboard/format";
+import { RESERVE_DENOMINATOR_LABELS, type ReserveBasis, type ReserveDenominator } from "@/lib/enums";
 
 /**
  * The twenty-seven alerts, declared rather than coded.
@@ -54,8 +55,26 @@ export interface AlertFacts {
   daysCashOnHand: Prisma.Decimal | null;
   cashDecreasePercent: Prisma.Decimal | null;
 
+  /**
+   * The reserve as a share of the district's chosen basis.
+   *
+   * Since M6 this is the PROJECTED ENDING unassigned balance — beginning balance plus the
+   * amended budget's net change — over projected General Fund revenue, or over budgeted
+   * expenditures where the district has chosen that basis. At the year's final period both
+   * halves become the outturn. See the header of lib/finance/fund-balance.ts.
+   */
   reservePercent: Prisma.Decimal | null;
+  /** The same ratio, but with the year-end figures the CURRENT PACE implies. */
   forecastReservePercent: Prisma.Decimal | null;
+  /** Which basis the two percentages above are on, so an alert can name it. */
+  reserveBasis: ReserveBasis;
+  reserveDenominator: ReserveDenominator;
+  /** True once the figures are outturn rather than projection — changes the tense. */
+  reserveIsActual: boolean;
+  /** The statutory floor in dollars: the state minimum applied to the divisor. */
+  requiredReserve: Prisma.Decimal;
+  /** Unassigned above that floor. Negative is a shortfall against it. */
+  excessUnassigned: Prisma.Decimal;
   changeInFundBalance: Prisma.Decimal;
   componentsExceedTotal: boolean;
 }
@@ -94,6 +113,37 @@ const lt = (v: Prisma.Decimal | null, t: number) => v !== null && v.lessThan(t);
 
 const warn = (message: string): AlertHit => ({ severity: "WARNING", message });
 const crit = (message: string): AlertHit => ({ severity: "CRITICAL", message });
+
+/**
+ * ---------------------------------------------------------------------------
+ * NAMING THE DENOMINATOR IN THE SENTENCE — why these three helpers exist.
+ *
+ * There are now three reserve percentages a district can see in one sitting: the
+ * budget-driven projection, the pace-driven projection, and last year's outturn. They are
+ * all "the reserve", they are all a percentage, and two of them can be on screen together.
+ *
+ * A sentence reading "Unassigned reserve is 3.5%, below your 3% warning threshold" does not
+ * say which of the three it is or what it is 3.5% OF — and the district's own workbook
+ * measures against revenue while the platform used to measure against expenditures, so
+ * "3.5%" was already a figure two people could read two ways. Every reserve alert now says
+ * both: the tense, and the divisor.
+ * ---------------------------------------------------------------------------
+ */
+const reserveSubject = (f: AlertFacts) =>
+  f.reserveIsActual ? "Unassigned reserve" : "Projected unassigned reserve";
+
+const ofBasis = (f: AlertFacts) => `of ${RESERVE_DENOMINATOR_LABELS[f.reserveDenominator]}`;
+
+/**
+ * The dollar gap to the statutory floor, appended only when the district is actually short.
+ *
+ * A percentage below a threshold tells a board it has a problem; the dollars tell it how
+ * big. `excessUnassigned` is already the difference, so this costs nothing to say.
+ */
+const shortfall = (f: AlertFacts) =>
+  f.excessUnassigned.isNegative()
+    ? ` That is ${money(f.excessUnassigned.abs())} short of the ${money(f.requiredReserve)} required reserve.`
+    : "";
 
 /**
  * ---------------------------------------------------------------------------
@@ -470,7 +520,9 @@ export const ALERTS: AlertDef[] = [
       const target = n(p.fundBalance.target);
       // Below target but not yet at the warning bar — a nudge, not an alarm.
       if (!lt(v, target) || lt(v, n(p.fundBalance.warning))) return null;
-      return warn(`Unassigned reserve is ${pct(v!)}, below the ${target}% you aim to hold.`);
+      return warn(
+        `${reserveSubject(f)} is ${pct(v!)} ${ofBasis(f)}, below the ${target}% you aim to hold.`,
+      );
     },
   },
   {
@@ -481,7 +533,9 @@ export const ALERTS: AlertDef[] = [
       const v = f.reservePercent;
       const w = n(p.fundBalance.warning);
       if (!lt(v, w) || lt(v, n(p.fundBalance.critical))) return null;
-      return warn(`Unassigned reserve is ${pct(v!)}, below your ${w}% warning threshold.`);
+      return warn(
+        `${reserveSubject(f)} is ${pct(v!)} ${ofBasis(f)}, below your ${w}% warning threshold.${shortfall(f)}`,
+      );
     },
   },
   {
@@ -492,9 +546,20 @@ export const ALERTS: AlertDef[] = [
       const v = f.reservePercent;
       const c = n(p.fundBalance.critical);
       if (!lt(v, c)) return null;
-      return crit(`Unassigned reserve is ${pct(v!)}, below your ${c}% critical threshold.`);
+      return crit(
+        `${reserveSubject(f)} is ${pct(v!)} ${ofBasis(f)}, below your ${c}% critical threshold.${shortfall(f)}`,
+      );
     },
   },
+  /**
+   * The three forecast alerts read the PACE-driven projection, not the budget-driven one.
+   *
+   * Both are year-end figures since M6, so "Projected year-end reserve" no longer
+   * distinguishes them — and these three firing beside the ones above with a different
+   * number is exactly the situation the wording has to survive. "On the current pace" is
+   * what makes the pair readable: the board's budget says one thing, the district's actual
+   * rate of collection and spending says another, and the gap between them is the signal.
+   */
   {
     id: "FORECAST_BELOW_TARGET",
     group: "fundBalance",
@@ -503,7 +568,9 @@ export const ALERTS: AlertDef[] = [
       const v = f.forecastReservePercent;
       const target = n(p.fundBalance.target);
       if (!lt(v, target) || lt(v, n(p.fundBalance.forecastWarning))) return null;
-      return warn(`Projected year-end reserve is ${pct(v!)}, below your ${target}% target.`);
+      return warn(
+        `On the current pace, the year-end reserve is ${pct(v!)} ${ofBasis(f)}, below your ${target}% target.`,
+      );
     },
   },
   {
@@ -514,7 +581,9 @@ export const ALERTS: AlertDef[] = [
       const v = f.forecastReservePercent;
       const w = n(p.fundBalance.forecastWarning);
       if (!lt(v, w) || lt(v, n(p.fundBalance.forecastCritical))) return null;
-      return warn(`Projected year-end reserve is ${pct(v!)}, below your ${w}% forecast warning.`);
+      return warn(
+        `On the current pace, the year-end reserve is ${pct(v!)} ${ofBasis(f)}, below your ${w}% forecast warning.`,
+      );
     },
   },
   {
@@ -525,7 +594,9 @@ export const ALERTS: AlertDef[] = [
       const v = f.forecastReservePercent;
       const c = n(p.fundBalance.forecastCritical);
       if (!lt(v, c)) return null;
-      return crit(`Projected year-end reserve is ${pct(v!)}, below your ${c}% forecast critical threshold.`);
+      return crit(
+        `On the current pace, the year-end reserve is ${pct(v!)} ${ofBasis(f)}, below your ${c}% forecast critical threshold.`,
+      );
     },
   },
   {

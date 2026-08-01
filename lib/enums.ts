@@ -78,6 +78,63 @@ export const FORECAST_METHOD_HELP: Record<ForecastMethod, string> = {
   MANUAL_OVERRIDE: "Uses the figure you type for each projected year.",
 };
 
+// ===================== M6: the reserve measurement basis =====================
+//
+// WHAT A RESERVE PERCENTAGE IS A PERCENTAGE OF.
+//
+// Florida measures a district's general fund reserve against REVENUE — s. 1011.051 states
+// its 3% and 2% triggers as a share of general fund revenues, so a Florida district's board
+// policy, its state reporting and this platform have to agree on that denominator or the
+// number on screen is not the number they are held to.
+//
+// Other states commonly measure against EXPENDITURE, which is what the platform did before
+// this. Neither is more correct; they are different questions. So the basis is the
+// district's setting rather than the platform's opinion, defaulting to REVENUE because
+// Florida is the first market. See `fundBalance.measureAgainstRevenue` in
+// lib/policies/registry.ts, which is the stored form of this choice.
+//
+// A named type rather than a bare boolean because the labels move with it: every caption
+// that says "of projected General Fund revenue" has to say "of budgeted General Fund
+// expenditures" instead, and a boolean threaded through six modules is how one of them
+// ends up saying the wrong one.
+export const RESERVE_BASIS_VALUES = ["REVENUE", "EXPENDITURE"] as const;
+
+export type ReserveBasis = (typeof RESERVE_BASIS_VALUES)[number];
+
+/** For a sentence: "…as a share of {…}". */
+export const RESERVE_BASIS_LABELS: Record<ReserveBasis, string> = {
+  REVENUE: "General Fund revenue",
+  EXPENDITURE: "budgeted General Fund expenditures",
+};
+
+/**
+ * Where a denominator came from, so a caption can say so precisely.
+ *
+ * The distinction that matters to a reader is PROJECTED versus ACTUAL: a reserve of 5.26%
+ * against a budget the board may still amend is a different claim from 17.23% against the
+ * money a district actually collected, and a tile that renders both the same way invites a
+ * board to compare them as though they were.
+ */
+export const RESERVE_DENOMINATOR_VALUES = [
+  "AMENDED_REVENUE",
+  "ACTUAL_REVENUE",
+  "ADOPTED_REVENUE",
+  "ADOPTED_EXPENDITURE",
+] as const;
+
+export type ReserveDenominator = (typeof RESERVE_DENOMINATOR_VALUES)[number];
+
+export const RESERVE_DENOMINATOR_LABELS: Record<ReserveDenominator, string> = {
+  AMENDED_REVENUE: "projected General Fund revenue",
+  ACTUAL_REVENUE: "actual General Fund revenue collected",
+  ADOPTED_REVENUE: "adopted General Fund revenue budget",
+  ADOPTED_EXPENDITURE: "budgeted General Fund expenditures",
+};
+
+export function isReserveBasis(v: string): v is ReserveBasis {
+  return (RESERVE_BASIS_VALUES as readonly string[]).includes(v);
+}
+
 export function isForecastMethod(v: string): v is ForecastMethod {
   return (FORECAST_METHOD_VALUES as readonly string[]).includes(v);
 }

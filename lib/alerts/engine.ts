@@ -3,8 +3,12 @@ import type { TenantDb } from "@/lib/tenant-db";
 import type { ActivityCodes } from "@/lib/finance/transfers";
 import { codesKey } from "@/lib/finance/transfers";
 import { activityTotals, currentVersionIds, endingCash } from "@/lib/finance/engine";
-import { adoptedBudget } from "@/lib/finance/versions";
-import { computeFundBalance, reservePercent } from "@/lib/finance/fund-balance";
+import { adoptedBudget, currentBudgets } from "@/lib/finance/versions";
+import {
+  computeFundBalance,
+  reservePercent,
+  type ReserveOptions,
+} from "@/lib/finance/fund-balance";
 import { projectYearEnd } from "@/lib/forecast/engine";
 import { loadPolicy } from "@/lib/policies/load";
 import { memo, dbKey } from "@/lib/request-cache";
@@ -16,7 +20,11 @@ import {
   filterKey,
   type FinanceFilter,
 } from "@/lib/finance/filter";
-import type { PolicyValues } from "@/lib/policies/registry";
+import {
+  reserveBasis,
+  requiredReservePercent,
+  type PolicyValues,
+} from "@/lib/policies/registry";
 import { money as fmtMoney } from "@/lib/dashboard/format";
 import {
   ALERTS,
@@ -138,6 +146,9 @@ async function buildAlertReport(
   const [facts, attribution] = await Promise.all([
     gatherFacts(db, scope, codes, {
       ignoreSalaryObjectsMom: policy.expenditure.ignoreSalaryObjectsMom === true,
+      // The district's own measurement basis, not the platform's. See lib/enums.ts.
+      basis: reserveBasis(policy),
+      requiredPercent: requiredReservePercent(policy),
     }),
     // Skipped on a ONE-fund page only. With several funds selected the "where to look"
     // line is doing more work than it ever did on All Funds — it is the only thing on
@@ -232,20 +243,38 @@ const money = (v: Prisma.Decimal) => fmtMoney(v, 2);
  * file" and "spending didn't move" are different facts, and only one of them should keep
  * an alert quiet.
  */
+/**
+ * The reserve settings travel WITH the fact-gathering options.
+ *
+ * They are part of the memo key for the same reason the scope is: a basis or a required
+ * percentage that differs between calls is a different set of facts, and a cache that
+ * ignored them would hand revenue-basis alerts to an expenditure-basis district.
+ */
+export type FactOptions = Partial<ReserveOptions> & { ignoreSalaryObjectsMom?: boolean };
+
+/** Florida's defaults, for the callers that gather facts without a policy to hand. */
+const DEFAULT_RESERVE_OPTIONS: ReserveOptions = { basis: "REVENUE", requiredPercent: 3 };
+
+const reserveOptionsFrom = (opts: FactOptions): ReserveOptions => ({
+  basis: opts.basis ?? DEFAULT_RESERVE_OPTIONS.basis,
+  requiredPercent: opts.requiredPercent ?? DEFAULT_RESERVE_OPTIONS.requiredPercent,
+});
+
 export const gatherFacts = memo(
   "gatherFacts",
   (
     db: TenantDb,
     scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
     codes: ActivityCodes,
-    opts: { ignoreSalaryObjectsMom?: boolean } = {},
+    opts: FactOptions = {},
   ) => {
     const k = dbKey(db);
+    const reserve = reserveOptionsFrom(opts);
     return k === null
       ? null
       : `${k}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}|${codesKey(codes)}|${
           opts.ignoreSalaryObjectsMom === true
-        }`;
+        }|${reserve.basis}|${reserve.requiredPercent}`;
   },
   buildFacts,
 );
@@ -254,13 +283,15 @@ async function buildFacts(
   db: TenantDb,
   scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
   codes: ActivityCodes,
-  opts: { ignoreSalaryObjectsMom?: boolean } = {},
+  opts: FactOptions = {},
 ): Promise<AlertFacts> {
+  const reserveOptions = reserveOptionsFrom(opts);
+
   const [totals, cash, fb, reserve, budgets, previous] = await Promise.all([
     activityTotals(db, scope, codes),
     endingCash(db, scope),
     computeFundBalance(db, scope, codes),
-    reservePercent(db, scope, codes),
+    reservePercent(db, scope, codes, reserveOptions),
     currentBudgets(db, scope),
     // The month before, for the month-over-month alerts. Period 1 has no predecessor.
     scope.period > 1
@@ -372,29 +403,40 @@ async function buildFacts(
    * that this function supplies the facts, so three of the twenty-four shipped
    * permanently silent behind a passing suite.
    *
-   * It does not need the multi-year projection. Year-end unassigned is today's unassigned
-   * plus the rest of THIS year's activity, and both projections are already computed a few
-   * lines above for the forecast-variance alerts:
+   * It does not need the multi-year projection. Year-end unassigned is the fixed beginning
+   * balance plus the rest of THIS year's projected activity, and both projections are
+   * already computed a few lines above for the forecast-variance alerts:
    *
-   *     projected unassigned = unassigned now
-   *                          + (year-end revenue − revenue so far)
-   *                          − (year-end spend  − spend so far)
+   *     trend year-end unassigned = beginning unassigned
+   *                               + projected year-end revenue
+   *                               − projected year-end spend
    *
-   * So this costs no extra queries. The divisor is the adopted expenditure budget, the
-   * same one `reservePercent()` uses, so the current and forecast reserve percentages are
-   * comparable — which is the whole point of showing them beside each other.
+   * So this costs no extra queries.
+   *
+   * ---------------------------------------------------------------------------
+   * WHY THIS IS NOT `reserve.unassigned` PLUS THE REMAINDER ANY MORE
+   *
+   * It used to add the un-elapsed part of the year onto the point-in-time balance. Since
+   * M6 `reserve.unassigned` is ALREADY a year-end figure — the BUDGET-driven one — so
+   * adding a remainder to it would count most of the year twice and report a reserve
+   * roughly double the district's.
+   *
+   * The two are deliberately different questions, and both are worth an alert:
+   *
+   *   reserve.percent          — where the board's AMENDED BUDGET says the year ends.
+   *   forecastReservePercent   — where the CURRENT PACE of collection and spending says it
+   *                              ends, which is what catches a district whose budget still
+   *                              looks healthy while its actuals do not.
+   *
+   * Same divisor for both, so they are directly comparable — which is the whole point of
+   * showing them beside each other.
    */
-  const remainingRevenue = revenueForecast.projected.minus(revenueYtd);
-  const remainingSpend = expenditureForecast.projected.minus(expenditureYtd);
-  const projectedUnassigned = reserve.unassigned.plus(remainingRevenue).minus(remainingSpend);
+  const trendProjectedUnassigned = reserve.beginningUnassigned
+    .plus(revenueForecast.projected)
+    .minus(expenditureForecast.projected);
   const forecastReservePercent = reserve.budget.isZero()
     ? null
-    : projectedUnassigned.dividedBy(reserve.budget).times(100);
-
-  // `components` is resolved in the round above; this is the balance it is measured against.
-  const projectedTotal = fb.beginning.plus(remainingRevenue.minus(remainingSpend)).plus(
-    totals.totalRevenueYtd.minus(totals.totalExpenditureYtd),
-  );
+    : trendProjectedUnassigned.dividedBy(reserve.budget).times(100);
 
   return {
     revenueBudget: budgets.revenue,
@@ -417,10 +459,22 @@ async function buildFacts(
 
     reservePercent: reserve.percent,
     forecastReservePercent,
+    reserveBasis: reserve.basis,
+    reserveDenominator: reserve.denominator,
+    reserveIsActual: reserve.actual,
+    requiredReserve: reserve.required,
+    excessUnassigned: reserve.excess,
     changeInFundBalance: fb.total.minus(fb.beginning),
-    // Only meaningful where the district actually reported components. With none imported
-    // the sum is zero, which would never exceed anything — silence, not a false all-clear.
-    componentsExceedTotal: components !== null && components.greaterThan(projectedTotal),
+    /**
+     * Measured against the BUDGET-driven projected ending balance — the same figure the
+     * fund balance screen shows — rather than against a trend projection. A board that has
+     * designated more than the year is budgeted to end with is over-committed on its own
+     * approved numbers, which is the version of this fact it can act on.
+     *
+     * Only meaningful where the district actually reported components. With none imported
+     * the sum is zero, which would never exceed anything — silence, not a false all-clear.
+     */
+    componentsExceedTotal: components !== null && components.greaterThan(reserve.endingTotal),
   };
 }
 
@@ -458,52 +512,6 @@ async function designatedComponents(
     agg._sum.begCommitted,
     agg._sum.begAssigned,
   ].reduce<Prisma.Decimal>((a, b) => (b ? a.plus(b) : a), ZERO);
-}
-
-/** Budget and encumbrances for the period, from the current versions. */
-const currentBudgets = memo(
-  "currentBudgets",
-  (db: TenantDb, scope: { fiscalYear: string; period: number; filter?: FinanceFilter }) => {
-    const k = dbKey(db);
-    return k === null ? null : `${k}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}`;
-  },
-  buildCurrentBudgets,
-);
-
-async function buildCurrentBudgets(
-  db: TenantDb,
-  scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
-): Promise<{ revenue: Prisma.Decimal; expenditure: Prisma.Decimal; encumbrances: Prisma.Decimal }> {
-  const versions = await currentVersionIds(db, {
-    fiscalYear: scope.fiscalYear,
-    period: scope.period,
-  });
-  const slice = detailWhere(scope.filter);
-
-  const revVersion = versions.get("REVENUE_DETAIL");
-  const expVersion = versions.get("EXPENDITURE_DETAIL");
-
-  const [rev, exp] = await Promise.all([
-    revVersion
-      ? db.revenueActual.aggregate({
-          where: { versionId: revVersion, ...slice },
-          _sum: { budget: true },
-        })
-      : null,
-    expVersion
-      ? db.expenditureActual.aggregate({
-          where: { versionId: expVersion, ...slice },
-          _sum: { budget: true, encumbrances: true },
-        })
-      : null,
-  ]);
-
-  return {
-    // The Budget column on the monthly detail IS the current/revised budget.
-    revenue: rev?._sum.budget ?? ZERO,
-    expenditure: exp?._sum.budget ?? ZERO,
-    encumbrances: exp?._sum.encumbrances ?? ZERO,
-  };
 }
 
 /**

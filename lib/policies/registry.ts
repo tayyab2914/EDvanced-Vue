@@ -10,6 +10,11 @@
 // screen still behaves sensibly on day one.
 //
 // Pure and client-safe: no Prisma, no server-only. The form needs these labels.
+//
+// The one import is TYPE-ONLY and therefore erased at compile — it costs the client bundle
+// nothing and keeps the basis vocabulary in a single place.
+
+import type { ReserveBasis } from "@/lib/enums";
 
 export type SettingType = "percent" | "money" | "days" | "toggle";
 
@@ -243,8 +248,28 @@ export const POLICY_GROUPS: PolicyGroup[] = [
     key: "fundBalance",
     title: "Fund Balance",
     description:
-      "The reserve level you aim to protect — unassigned fund balance as a share of the general fund budget.",
+      "The reserve level you aim to protect — unassigned fund balance as a share of General Fund revenue.",
     settings: [
+      /**
+       * WHAT THE PERCENTAGE IS A PERCENTAGE OF.
+       *
+       * Florida's s. 1011.051 states its reserve triggers as a share of general fund
+       * REVENUES, so a Florida district's board policy, its state reporting and this
+       * platform have to agree on that denominator or the number on screen is not the
+       * number the district is held to. Other states commonly use expenditures.
+       *
+       * A district setting rather than a platform constant, defaulting on so the Florida
+       * experience needs no configuration — and so expanding to an expenditure-basis state
+       * later is this switch rather than a second pass over the finance layer. The captions
+       * move with it; see RESERVE_BASIS_LABELS in lib/enums.ts.
+       */
+      toggle(
+        "measureAgainstRevenue",
+        "Measure reserves against General Fund revenue",
+        true,
+        "Florida measures reserves against revenue (s. 1011.051). Turn this off to measure against budgeted expenditures, which some other states use.",
+        "Measurement Basis",
+      ),
       pct(
         "target",
         "District Target",
@@ -257,22 +282,32 @@ export const POLICY_GROUPS: PolicyGroup[] = [
         "boardPolicyMinimum",
         "Board Policy Minimum",
         3,
-        "Minimum reserve levels required by board policy and state law.",
+        "Minimum reserve level required by board policy.",
         "Compliance Requirements",
         100,
       ),
+      /**
+       * The statutory floor — and the one setting that is not only a threshold.
+       *
+       * It is also the REQUIRED RESERVE the fund balance breakdown carves out of unassigned:
+       * the district's sheet reads "Required Reserve (3%)" and "Excess Unassigned Above
+       * Required Reserve" as two lines, and both are this percentage applied to the
+       * denominator. Reusing the state minimum rather than adding a second "required
+       * reserve %" is deliberate: two settings that must always hold the same value is one
+       * setting and a future bug report.
+       */
       pct(
         "stateMinimum",
-        "State Minimum",
-        2,
-        "Minimum reserve levels required by board policy and state law.",
+        "State Minimum (Required Reserve)",
+        3,
+        "The statutory floor. Also the required reserve the fund balance breakdown separates from excess unassigned. Florida: 3% of General Fund revenue (s. 1011.051).",
         "Compliance Requirements",
         100,
       ),
       pct(
         "warning",
         "Warning Threshold",
-        4,
+        3,
         "Alerts generated from CURRENT fund balance.",
         "Current Position Alerts",
         100,
@@ -280,7 +315,7 @@ export const POLICY_GROUPS: PolicyGroup[] = [
       pct(
         "critical",
         "Critical Threshold",
-        3,
+        2,
         "Alerts generated from CURRENT fund balance.",
         "Current Position Alerts",
         100,
@@ -288,7 +323,7 @@ export const POLICY_GROUPS: PolicyGroup[] = [
       pct(
         "forecastWarning",
         "Forecast Warning",
-        4,
+        3,
         "Alerts generated from PROJECTED year-end fund balance.",
         "Forecast Monitoring",
         100,
@@ -296,7 +331,7 @@ export const POLICY_GROUPS: PolicyGroup[] = [
       pct(
         "forecastCritical",
         "Forecast Critical",
-        3,
+        2,
         "Alerts generated from PROJECTED year-end fund balance.",
         "Forecast Monitoring",
         100,
@@ -304,6 +339,23 @@ export const POLICY_GROUPS: PolicyGroup[] = [
     ],
   },
 ];
+
+/**
+ * The district's chosen basis, as the named type the finance layer and the captions read.
+ *
+ * One translation point, so no caller has to remember which way the boolean points.
+ */
+export function reserveBasis(policy: PolicyValues): ReserveBasis {
+  return policy.fundBalance.measureAgainstRevenue === false ? "EXPENDITURE" : "REVENUE";
+}
+
+/**
+ * The required-reserve percentage the breakdown carves out of unassigned — the district's
+ * state minimum. See the note on `stateMinimum` above for why it is not its own setting.
+ */
+export function requiredReservePercent(policy: PolicyValues): number {
+  return Number(policy.fundBalance.stateMinimum);
+}
 
 /** Every setting, flat, keyed "group.setting" — the alert catalogue's vocabulary. */
 export const ALL_SETTINGS: { group: PolicyGroupKey; setting: Setting }[] =

@@ -1,11 +1,19 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
 import { loadCore, reserveThresholds, periodAxisLabels } from "@/lib/dashboard/load";
 import { byFund, primaryClassification } from "@/lib/finance/breakdown";
 import { activityTotals } from "@/lib/finance/engine";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
+import {
+  reserveCaption,
+  reserveSubject,
+  reserveTileLabel,
+  reserveUnavailableReason,
+  reserveMethodology,
+} from "@/lib/dashboard/reserve";
 import {
   compactMoney,
   money,
@@ -106,6 +114,32 @@ export default async function FundBalancePage({
   const reserveRung = ladder(reservePct, reserveT);
   const statutoryMinimum = Number(policy.fundBalance.boardPolicyMinimum);
 
+  /**
+   * The reserve's own vocabulary, resolved once.
+   *
+   * `reserve` is the General Fund's projected ending position — not the scoped period's
+   * balance, which is what `unassignedNow` below still is. The two are deliberately both on
+   * this page: a district wants the balance it holds today AND the one its budget is
+   * steering toward, and conflating them is what the captions here exist to prevent.
+   */
+  const reserveOf = reserveCaption(reserve);
+  const isOutturn = reserve?.actual === true;
+
+  /**
+   * The required reserve and what sits above it — the district's own two lines.
+   *
+   * Their sheet reads "Required Reserve (3%)" and "Excess Unassigned Above Required
+   * Reserve", and the second is what a board actually has room to spend. Both come from
+   * `reserve`; neither is a new query.
+   *
+   * `excess` goes NEGATIVE when the district is short of the statutory floor. That is not a
+   * negative surplus and must not render as one — the split below flips to a shortfall row,
+   * which is the only version of this a finance officer can act on.
+   */
+  const requiredReserve = reserve?.required ?? null;
+  const excessUnassigned = reserve?.excess ?? null;
+  const isShort = excessUnassigned !== null && excessUnassigned.isNegative();
+
   const totalNow = point?.fundBalance ?? null;
   const totalPrev = previous?.fundBalance ?? null;
   const change = totalNow && totalPrev ? totalNow.minus(totalPrev) : null;
@@ -183,6 +217,79 @@ export default async function FundBalancePage({
       ].filter((c) => c.value > 0)
     : [];
   const componentTotal = components.reduce((a, c) => a + c.value, 0);
+
+  /**
+   * ===================================================================================
+   * THE FUND BALANCE COMPONENTS BREAKDOWN — the district's own sheet, as a table.
+   * ===================================================================================
+   *
+   * Every line stated as a share of the SAME denominator the reserve percentage uses, so
+   * the column adds up down the page and the total row is the reserve KPI in the row above.
+   * That is the property the district's own workbook has and the platform did not: their
+   * sheet reads 0.19% + 1.45% + 0.39% + 3.00% + 0.65% = 5.68%, and a reader can check it.
+   *
+   * The two lines that are new:
+   *
+   *   REQUIRED RESERVE — the statutory floor in dollars, `stateMinimum`% of the denominator.
+   *   Not imported and not a component the district designates; it is a rule applied to the
+   *   revenue figure, which is why it is computed here rather than read off a file.
+   *
+   *   EXCESS UNASSIGNED — what is left above that floor, and the only line on this page that
+   *   answers "how much room do we actually have?". Negative when the district is short,
+   *   and it renders as a SHORTFALL row in that case: a board reading "Excess: −$4.2M"
+   *   would have to do the sign arithmetic itself to notice it is in trouble.
+   *
+   * The designated components come from the opening balance, which is correct under this
+   * model — a district re-designates by board action, which arrives as a new Opening Fund
+   * Balance or an override, never as a side effect of monthly activity.
+   */
+  const breakdownDivisor = reserve?.budget ?? null;
+  const breakdownShare = (v: Prisma.Decimal | null) =>
+    v === null || breakdownDivisor === null || breakdownDivisor.isZero()
+      ? "—"
+      : percent(v.dividedBy(breakdownDivisor).times(100));
+
+  const designated = o
+    ? ([
+        { label: "Nonspendable", amount: o.nonspendable },
+        { label: "Restricted", amount: o.restricted },
+        { label: "Committed", amount: o.committed },
+        { label: "Assigned", amount: o.assigned },
+      ] as const).filter((c) => c.amount !== null && !c.amount.isZero())
+    : [];
+
+  const breakdownRows = [
+    ...designated.map((c) => ({
+      id: c.label,
+      cells: {
+        line: c.label,
+        amount: { value: money(c.amount), strong: false },
+        share: breakdownShare(c.amount),
+      },
+    })),
+    {
+      id: "required",
+      cells: {
+        line: `Required reserve (${reserve?.requiredPercent.toFixed(2) ?? "—"}%)`,
+        amount: { value: money(requiredReserve), strong: true },
+        share: breakdownShare(requiredReserve),
+      },
+    },
+    {
+      id: "excess",
+      // The shortfall case tints the row and renames the line. See the note above.
+      flag: isShort ? ("negative" as const) : undefined,
+      cells: {
+        line: isShort ? "Shortfall against required reserve" : "Excess unassigned above required reserve",
+        amount: {
+          value: money(isShort && excessUnassigned ? excessUnassigned.abs() : excessUnassigned),
+          tone: isShort ? ("negative" as const) : ("positive" as const),
+          strong: true,
+        },
+        share: breakdownShare(excessUnassigned === null ? null : excessUnassigned.abs()),
+      },
+    },
+  ];
 
   /**
    * The composition card's "view by fund" rows — the client's "Fund Balance Composition is
@@ -263,9 +370,9 @@ export default async function FundBalancePage({
     },
     {
       key: "reserve-pct",
-      label: "Unassigned fund balance %",
+      label: reserveTileLabel(reserve),
       value: percent(reserve?.percent),
-      sub: "of budgeted general fund expenditures",
+      sub: reserveOf,
       note: `Target ≥ ${reserveT.target.toFixed(2)}%`,
       tone: rungTone(reserveRung),
     },
@@ -433,7 +540,7 @@ export default async function FundBalancePage({
             )}
             {reservePct !== null && (
               <KeyInsightBar tone={reserveRung === "Strong" ? "info" : "monitor"}>
-                Unassigned fund balance is {percent(reservePct)},{" "}
+                {reserveSubject(reserve)} is {percent(reservePct)} {reserveOf},{" "}
                 {reservePct >= statutoryMinimum ? "above" : "below"} the{" "}
                 {statutoryMinimum.toFixed(2)}% statutory minimum and{" "}
                 {reservePct >= reserveT.target ? "at or above" : "below"} the district target of{" "}
@@ -514,13 +621,13 @@ export default async function FundBalancePage({
         <KpiTile
           icon="pie"
           tone="purple"
-          label="Unassigned fund balance %"
+          label={reserveTileLabel(reserve)}
           caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
           value={percent(reserve?.percent)}
-          sub="As a % of budgeted General Fund expenditures"
+          sub={`As a % ${reserveOf}`}
           status={reserveRung}
           statusNote={`Target ≥ ${reserveT.target.toFixed(2)}%`}
-          unavailableReason="Needs a fund typed General, an opening fund balance and an adopted expenditure budget."
+          unavailableReason={reserveUnavailableReason(reserve?.basis ?? "REVENUE")}
         />
 
         <KpiTile
@@ -688,7 +795,7 @@ export default async function FundBalancePage({
             />
             {reservePct !== null && (
               <KeyInsightBar tone={reserveRung === "Strong" ? "info" : "monitor"}>
-                Unassigned fund balance is {percent(reservePct)}, which is{" "}
+                {reserveSubject(reserve)} is {percent(reservePct)} {reserveOf}, which is{" "}
                 {reservePct >= statutoryMinimum ? "above" : "below"} the{" "}
                 {statutoryMinimum.toFixed(2)}% statutory minimum and{" "}
                 {reservePct >= reserveT.target ? "at or above" : "below"} the district target of{" "}
@@ -712,7 +819,7 @@ export default async function FundBalancePage({
               bands={statusBands(reserveT)}
               target={reserveT.target}
               format={(v) => `${v.toFixed(v % 1 === 0 ? 0 : 2)}%`}
-              label={`Policy target: maintain unassigned fund balance at ${reserveT.target.toFixed(2)}% of budgeted general fund expenditures. The dotted rule marks the target.`}
+              label={`Policy target: maintain unassigned fund balance at ${reserveT.target.toFixed(2)}% ${reserveOf}. The dotted rule marks the target.`}
             />
           </div>
         </SectionCard>
@@ -823,6 +930,78 @@ export default async function FundBalancePage({
               No opening fund balance has been committed for this year.
             </p>
           )}
+        </SectionCard>
+      </Row>
+
+      {/* ---------- ROW 4: the components breakdown ---------- */}
+      <Row cols="2-1">
+        <SectionCard
+          title="Fund balance components"
+          subtitle={
+            isOutturn
+              ? "Actual ending balance, by component"
+              : "Projected ending balance, by component"
+          }
+          info={`Every line is stated as a share ${reserveOf}, so the column adds up to the reserve percentage above it. ${reserveMethodology(reserve)}`}
+        >
+          <DataTable
+            columns={[
+              { key: "line", label: "Component" },
+              { key: "amount", label: "Amount", align: "right", width: "24%" },
+              { key: "share", label: `% ${reserveOf}`, align: "right", width: "26%" },
+            ]}
+            rows={breakdownRows}
+            total={{
+              id: "total-unassigned",
+              total: true,
+              cells: {
+                line: "Total unassigned fund balance",
+                amount: money(reserve?.unassigned ?? null),
+                share: breakdownShare(reserve?.unassigned ?? null),
+              },
+            }}
+            empty="No opening fund balance has been committed for this year."
+          />
+          <p className="mt-3 text-[11.5px] text-muted-2">
+            {reserveMethodology(reserve)}
+            {reserve && !reserve.actual
+              ? " The projection moves when the board amends the budget, not with month-to-month collections."
+              : ""}
+          </p>
+        </SectionCard>
+
+        <SectionCard
+          title={isOutturn ? "Ending position" : "Projected ending position"}
+          subtitle={core.generalFund ? core.generalFund.name : "General fund"}
+          badge={<StatusBadge status={reserveRung} size="sm" />}
+        >
+          <MetricStrip
+            cols={4}
+            items={[
+              {
+                label: "Beginning fund balance",
+                value: compactMoney(reserve?.beginning ?? null),
+                note: "Fixed for the year",
+              },
+              {
+                label: isOutturn ? "Ending fund balance" : "Projected ending fund balance",
+                value: compactMoney(reserve?.endingTotal ?? null),
+              },
+              {
+                label: isOutturn
+                  ? "Actual General Fund revenue"
+                  : "Projected General Fund revenue",
+                value: compactMoney(reserve?.budget ?? null),
+              },
+              {
+                label: isShort ? "Shortfall to required reserve" : "Room above required reserve",
+                value: compactMoney(
+                  isShort && excessUnassigned ? excessUnassigned.abs() : excessUnassigned,
+                ),
+                tone: isShort ? "negative" : "positive",
+              },
+            ]}
+          />
         </SectionCard>
       </Row>
 

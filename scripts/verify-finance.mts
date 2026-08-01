@@ -13,7 +13,13 @@ import {
   type ActivityCodes,
 } from "@/lib/finance/transfers";
 import { activityTotals, netOperatingSurplus, endingCash } from "@/lib/finance/engine";
-import { computeFundBalance, computeUnassigned, reservePercent } from "@/lib/finance/fund-balance";
+import {
+  computeFundBalance,
+  computeUnassigned,
+  reservePercent,
+  usesActualOutturn,
+  type ReserveOptions,
+} from "@/lib/finance/fund-balance";
 import { oneFund } from "@/lib/finance/filter";
 import { DATASET_DEFS } from "@/lib/datasets/registry";
 import { parseFile } from "@/lib/import/parse/rows";
@@ -95,6 +101,17 @@ async function main() {
   assert(!isExpenseTransfer(codes, "0100"), "salaries are not");
   assert(!NO_CODES.configured, "an unconfigured classification says so");
   assert(!isRevenueTransfer(NO_CODES, "3600"), "and matches nothing");
+
+  /**
+   * The one rule that decides projection versus outturn.
+   *
+   * Asserted as a pure function as well as through the engine below, because it is the
+   * single place the whole open/closed distinction is made — and the single place that
+   * changes when the explicit year-close workflow lands in a later phase.
+   */
+  console.log("\nProjection versus outturn");
+  assert(!usesActualOutturn(1) && !usesActualOutturn(11), "periods 1–11 report a projection");
+  assert(usesActualOutturn(12), "period 12 reports the outturn");
 
   // ===== against the database =====
   const district = await prisma.district.findFirst({ orderBy: { createdAt: "asc" } });
@@ -222,20 +239,127 @@ async function main() {
     ]);
 
     const unassigned = await computeUnassigned(db, scope, live);
-    // 10.0 beginning unassigned + 6.5 − 3.4 = 13.1
+    // 10.0 beginning unassigned + 6.5 − 3.4 = 13.1. The POINT-IN-TIME balance, which is
+    // still what the drill-down and the trend chart show — and no longer what the reserve
+    // percentage divides.
     assert(unassigned.total.equals(new D("13100000")), "unassigned = beginning unassigned + net change");
 
-    const reserve = await reservePercent(db, scope, live);
-    assert(reserve.budget.equals(new D("100000000")), "budgeted expenditure is $100M");
+    /**
+     * ===================================================================================
+     * THE RESERVE, ON THE M6 BASIS
+     * ===================================================================================
+     *
+     * Both halves of the fraction moved, so both are asserted here.
+     *
+     *   NUMERATOR — the PROJECTED ending balance, not the balance as at period 2:
+     *     beginning 10.0 + amended revenue budget 6.5 − amended expenditure budget 10.0 = 6.5
+     *   Note this is NOT 13.1. The point-in-time figure above and the projection are
+     *   different quantities, and the whole risk of this milestone is a screen showing one
+     *   while captioned for the other.
+     *
+     *   DENOMINATOR — projected General Fund revenue (6.5), from the Budget column on the
+     *   monthly detail, not the adopted expenditure budget (100.0).
+     */
+    const FLORIDA: ReserveOptions = { basis: "REVENUE", requiredPercent: 3 };
+
+    const reserve = await reservePercent(db, scope, live, FLORIDA);
     assert(
-      reserve.percent !== null && reserve.percent.toFixed(2) === "13.10",
-      `reserve is 13.1% of the budget (got ${reserve.percent?.toFixed(2)}%)`,
+      reserve.beginning.equals(new D("10000000")),
+      "the projection starts from the beginning fund balance, fixed for the year",
+    );
+    assert(
+      reserve.endingTotal.equals(new D("6500000")),
+      `projected ending = beginning + amended revenue − amended expenditure = $6.5M (got $${reserve.endingTotal.dividedBy(1_000_000).toFixed(1)}M)`,
+    );
+    assert(
+      !reserve.unassigned.equals(unassigned.total),
+      "and it is NOT the point-in-time balance — the two are different quantities on purpose",
+    );
+    assert(
+      reserve.denominator === "AMENDED_REVENUE" && reserve.budget.equals(new D("6500000")),
+      `the divisor is the amended REVENUE budget, $6.5M (got ${reserve.denominator}, $${reserve.budget.dividedBy(1_000_000).toFixed(1)}M)`,
+    );
+    assert(!reserve.actual, "at period 2 the figures are a projection, not an outturn");
+
+    // ---- the required / excess split ----
+    // 3% of 6.5M = 195,000; everything above it is the district's room to manoeuvre.
+    assert(
+      reserve.required.equals(new D("195000")),
+      `required reserve is 3% of projected revenue = $195,000 (got $${reserve.required.toFixed(0)})`,
+    );
+    assert(
+      reserve.excess.equals(new D("6305000")),
+      `excess above the required reserve = $6,305,000 (got $${reserve.excess.toFixed(0)})`,
+    );
+    assert(
+      reserve.required.plus(reserve.excess).equals(reserve.unassigned),
+      "required + excess = total unassigned, so the district's own column adds up",
     );
 
-    const noBudget = await reservePercent(db, { ...scope, filter: oneFund(made.fund2Id) }, live);
+    // ---- the basis is the district's choice, not the platform's ----
+    const onExpenditures = await reservePercent(db, scope, live, {
+      basis: "EXPENDITURE",
+      requiredPercent: 3,
+    });
+    assert(
+      onExpenditures.denominator === "ADOPTED_EXPENDITURE" &&
+        onExpenditures.budget.equals(new D("100000000")),
+      "an expenditure-basis district divides by the adopted expenditure budget instead",
+    );
+    assert(
+      onExpenditures.unassigned.equals(reserve.unassigned),
+      "…while the NUMERATOR is unchanged — the basis moves the divisor only",
+    );
+    assert(
+      onExpenditures.percent !== null && onExpenditures.percent.toFixed(2) === "6.50",
+      `6.5M / 100M = 6.50% on the expenditure basis (got ${onExpenditures.percent?.toFixed(2)}%)`,
+    );
+
+    const noBudget = await reservePercent(
+      db,
+      { ...scope, filter: oneFund(made.fund2Id) },
+      live,
+      FLORIDA,
+    );
     assert(
       noBudget.percent === null,
       "a fund with no budget returns null, not 0% — 'we can't work this out' is not 'your reserve is zero'",
+    );
+
+    /**
+     * ---- the year closes, and both halves become the outturn ----
+     *
+     * The district's own example: a board budgets conservatively, the year comes in better,
+     * and the ending balance is nothing like the projection. Period 12 is where the platform
+     * stops reporting the plan and starts reporting what happened.
+     */
+    console.log("\nAt the year's final period, projection gives way to outturn");
+    await commit(db, "revenue-detail", "REVENUE_DETAIL", 12, [
+      ["FIN-F1", "FIN-R-OP", "FIN-P1", "", "6500000", "0", "8000000"],
+    ], [
+      "Fund Code", "Revenue Source / Object Code", "Project / Grant",
+      "School / Cost Center", "Budget", "Actual MTD", "Actual YTD",
+    ]);
+    await commit(db, "expenditure-detail", "EXPENDITURE_DETAIL", 12, [
+      ["FIN-F1", "FIN-FN1", "FIN-O-OP", "", "FIN-P1", "10000000", "0", "7000000", "0"],
+    ], [
+      "Fund Code", "Function Code", "Object Code", "Cost Center", "Project / Grant",
+      "Budget", "Actual MTD", "Actual YTD", "Encumbrances",
+    ]);
+
+    const closed = await reservePercent(db, { ...scope, period: 12 }, live, FLORIDA);
+    assert(closed.actual, "period 12 reports the outturn");
+    assert(
+      closed.denominator === "ACTUAL_REVENUE" && closed.budget.equals(new D("8000000")),
+      `the divisor becomes revenue actually collected, $8.0M (got ${closed.denominator}, $${closed.budget.dividedBy(1_000_000).toFixed(1)}M)`,
+    );
+    assert(
+      closed.endingTotal.equals(new D("11000000")),
+      `actual ending = beginning 10.0 + collected 8.0 − spent 7.0 = $11.0M (got $${closed.endingTotal.dividedBy(1_000_000).toFixed(1)}M)`,
+    );
+    assert(
+      closed.endingTotal.greaterThan(reserve.endingTotal),
+      "collecting above budget and spending below it finishes AHEAD of the projection — the district's own point",
     );
 
     // ---- override ----

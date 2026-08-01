@@ -8,10 +8,10 @@ import {
   type ActivityTotals,
   type PeriodScope,
 } from "@/lib/finance/engine";
-import { adoptedBudget } from "@/lib/finance/versions";
+import { adoptedBudget, currentBudgets } from "@/lib/finance/versions";
 import { memo, dbKey } from "@/lib/request-cache";
 import { fundOnly, soleFundId, narrowsCostCenter, filterKey } from "@/lib/finance/filter";
-import type { FundBalanceField } from "@/lib/enums";
+import type { FundBalanceField, ReserveBasis, ReserveDenominator } from "@/lib/enums";
 
 /**
  * System Calculated fund balance.
@@ -201,46 +201,259 @@ async function buildUnassigned(
 }
 
 /**
- * Unassigned fund balance as a share of budgeted general-fund expenditures — the KPI the
- * reserve thresholds compare against (workbook §4.2).
+ * ===========================================================================
+ * THE RESERVE PERCENTAGE — what it measures, and against what.
+ * ===========================================================================
  *
- * Returns null rather than zero when there is no budget: "we cannot work this out yet"
- * and "your reserve is 0%" are very different sentences to show a superintendent.
+ * This is the KPI every fund-balance threshold in the product compares against, and it
+ * changed shape in M6. Both halves of the fraction moved, so both are explained here.
+ *
+ * ---------------------------------------------------------------------------
+ * THE NUMERATOR: PROJECTED ENDING UNASSIGNED, NOT TODAY'S
+ *
+ * It used to be the balance as it stood in the scoped month: opening plus revenue and
+ * spending to date. That is a real quantity, but it is not the one a board governs by.
+ * A district's question in October is "where will we finish?", and the answer is:
+ *
+ *     projected ending balance = beginning fund balance
+ *                              + amended revenue budget
+ *                              − amended expenditure budget
+ *
+ * The beginning balance is FIXED for the whole year — it is last year's audited ending
+ * balance, entered once at setup. What moves is the budget. A district that adopts $513M of
+ * revenue against $563M of spending projects a $27M ending balance in July; when the board
+ * amends revenue to $514M in October without raising appropriations, the October upload
+ * carries the new figure and the projection becomes $28M on its own.
+ *
+ * DELIBERATELY NOT A TREND PROJECTION. Actual collections and spending do not move this
+ * number at all. That is the district's specification, not an omission: the projection a
+ * board is accountable for is the one it voted for, and a statistical extrapolation from
+ * two months of receipts is a different claim wearing the same label. The run-rate answer
+ * still exists and is still worth showing — it is what lib/forecast/engine.ts computes, on
+ * its own screen, which is precisely why the two must not be merged.
+ *
+ * ---------------------------------------------------------------------------
+ * THE DENOMINATOR: REVENUE, BY DEFAULT
+ *
+ * Florida's s. 1011.051 states its reserve triggers as a share of general fund REVENUES.
+ * Measuring against expenditures — which is what this did before, and what many states do —
+ * gives a district a number it cannot reconcile to the one the state holds it to. So the
+ * divisor is the district's setting (lib/policies/registry.ts), defaulting to REVENUE, and
+ * only the divisor moves: the projected-ending numerator above is the right numerator on
+ * either basis.
+ *
+ * ---------------------------------------------------------------------------
+ * PROJECTED WHILE THE YEAR RUNS, ACTUAL ONCE IT IS IN
+ *
+ * At the year's final period the projection and the outcome are the same reading, so that
+ * is where the basis flips: the numerator becomes the balance actually reached and the
+ * divisor becomes the revenue actually collected. A district that budgeted conservatively
+ * and finished at $77M against $447M collected reads 17.23% — not the 5.26% its budget
+ * implied — and prior fiscal years, which a district always views at their final period,
+ * therefore read as actuals with no year-close workflow in the way.
+ *
+ * That workflow (an explicit "close the books" action, and the ability to re-open) is a
+ * later phase. `usesActualOutturn` below is the single place this rule is decided, so it is
+ * also the single place that changes when the explicit control lands.
+ * ---------------------------------------------------------------------------
  */
-export const reservePercent = memo("reservePercent", scopeKey, buildReservePercent);
+
+/** A monthly fiscal year's last period. Districts on other calendars still close at 12. */
+const FINAL_PERIOD = 12;
+
+/**
+ * Whether the scoped period is far enough through the year that the figures ARE the outturn.
+ *
+ * See the header above. Exported because the captions have to say which of the two a
+ * reader is looking at, and a screen inferring it separately is how a tile ends up labelled
+ * "projected" beside a figure that is not.
+ */
+export function usesActualOutturn(period: number): boolean {
+  return period >= FINAL_PERIOD;
+}
+
+export interface ReserveOptions {
+  /** What the percentage is a percentage of. From `reserveBasis(policy)`. */
+  basis: ReserveBasis;
+  /** The statutory floor carved out of unassigned. From `requiredReservePercent(policy)`. */
+  requiredPercent: number;
+}
+
+export interface ReserveResult {
+  /**
+   * Unassigned as a share of the basis figure. Null rather than zero when there is no
+   * divisor — "we cannot work this out yet" and "your reserve is 0%" are very different
+   * sentences to show a superintendent.
+   */
+  percent: Prisma.Decimal | null;
+  /** The numerator: projected ending unassigned, or the actual once the year is in. */
+  unassigned: Prisma.Decimal;
+  /** The divisor. Kept named `budget` because every existing caller reads it by that name. */
+  budget: Prisma.Decimal;
+  basis: ReserveBasis;
+  /** Precisely which figure the divisor is, so a caption can say so. */
+  denominator: ReserveDenominator;
+  /** True when these are outturn figures rather than a projection. */
+  actual: boolean;
+  /** The ending TOTAL balance the unassigned share is part of. */
+  endingTotal: Prisma.Decimal;
+  /** The beginning balance the projection starts from — fixed for the year. */
+  beginning: Prisma.Decimal;
+  /**
+   * The unassigned share of that beginning balance.
+   *
+   * Exposed because the TREND projection needs it: lib/alerts/engine.ts builds a run-rate
+   * year-end reserve beside this budget-driven one, and reconstructing the starting point
+   * by subtracting the budgeted change back off `unassigned` would silently go wrong under
+   * a cost-centre filter, where the two are scoped differently.
+   */
+  beginningUnassigned: Prisma.Decimal;
+  /** `requiredPercent`% of the divisor — the district's "Required Reserve (3%)" line. */
+  required: Prisma.Decimal;
+  /**
+   * Unassigned above the required reserve. NEGATIVE when the district is short of the
+   * statutory floor, which is the state the reserve alerts exist for — the screen renders
+   * that case as a shortfall rather than as a negative surplus.
+   */
+  excess: Prisma.Decimal;
+  requiredPercent: number;
+  /** True when no Opening Fund Balance was imported; the figure is only the year's change. */
+  missingOpeningBalance: boolean;
+  fundLevelOnly: boolean;
+}
+
+/**
+ * The memo key carries the OPTIONS as well as the scope.
+ *
+ * Two districts' worth of settings can meet inside one render — the reserve is computed for
+ * the General Fund while a page is scoped elsewhere — and a basis or a required percentage
+ * that changed between calls is genuinely a different answer on the same scope. Leaving
+ * them out of the key is how a cache returns an expenditure-basis figure to a screen
+ * captioned for revenue.
+ */
+const reserveKey = (
+  db: TenantDb,
+  scope: PeriodScope,
+  codes: ActivityCodes,
+  opts: ReserveOptions,
+) => {
+  const k = scopeKey(db, scope, codes);
+  return k === null ? null : `${k}|${opts.basis}|${opts.requiredPercent}`;
+};
+
+export const reservePercent = memo("reservePercent", reserveKey, buildReservePercent);
 
 async function buildReservePercent(
   db: TenantDb,
   scope: PeriodScope,
   codes: ActivityCodes,
-): Promise<{ percent: Prisma.Decimal | null; unassigned: Prisma.Decimal; budget: Prisma.Decimal }> {
-  // Adopted budget, from the annual Expenditure Budget import — the same figure the trend
-  // series divides by, resolved through the same shared lookup so the two cannot disagree.
-  const [unassigned, adopted] = await Promise.all([
-    computeUnassigned(db, scope, codes),
-    // Fund-level divisor to match the fund-level numerator above. A reserve percentage
-    // whose halves are filtered differently is not a percentage of anything.
-    adoptedBudget(db, {
-      fiscalYear: scope.fiscalYear,
-      kind: "EXPENDITURE",
-      filter: fundOnly(scope.filter),
+  opts: ReserveOptions,
+): Promise<ReserveResult> {
+  const level = balanceScope(scope);
+  const actual = usesActualOutturn(scope.period);
+
+  const [beginning, activity, amended] = await Promise.all([
+    beginningFundBalance(db, { fiscalYear: level.fiscalYear, filter: level.filter }),
+    activityTotals(db, level, codes),
+    // The amended budget at FUND level, to match a fund-grain numerator. A reserve
+    // percentage whose halves are filtered differently is not a percentage of anything.
+    currentBudgets(db, {
+      fiscalYear: level.fiscalYear,
+      period: level.period,
+      filter: level.filter,
     }),
   ]);
 
-  if (!adopted) {
-    return { percent: null, unassigned: unassigned.total, budget: new D(0) };
+  /**
+   * The year's net change — budgeted while the year runs, actual once it is in.
+   *
+   * This one expression is the whole of the numerator change. Everything below it is the
+   * same arithmetic the point-in-time balance always did.
+   */
+  const netChange = actual
+    ? activity.totalRevenueYtd.minus(activity.totalExpenditureYtd)
+    : amended.revenue.minus(amended.expenditure);
+
+  const endingTotal = beginning.total.plus(netChange);
+  const unassigned = beginning.unassigned.plus(netChange);
+
+  const { divisor, denominator } = await resolveDivisor(db, level, opts.basis, actual, {
+    amendedRevenue: amended.revenue,
+    actualRevenue: activity.totalRevenueYtd,
+  });
+
+  const required = divisor.times(opts.requiredPercent).dividedBy(100);
+
+  const shared = {
+    unassigned,
+    budget: divisor,
+    basis: opts.basis,
+    denominator,
+    actual,
+    endingTotal,
+    beginning: beginning.total,
+    beginningUnassigned: beginning.unassigned,
+    required,
+    excess: unassigned.minus(required),
+    requiredPercent: opts.requiredPercent,
+    missingOpeningBalance: !beginning.found,
+    fundLevelOnly: narrowsCostCenter(scope.filter),
+  };
+
+  if (divisor.isZero()) {
+    return { ...shared, percent: null, required: new D(0), excess: unassigned };
   }
 
-  const budget = adopted.total;
+  return { ...shared, percent: unassigned.dividedBy(divisor).times(100) };
+}
 
-  if (budget.isZero()) {
-    return { percent: null, unassigned: unassigned.total, budget };
+/**
+ * Which figure the percentage divides by, and what to call it.
+ *
+ * The fallback to the ADOPTED revenue budget is not decoration. The amended figure is the
+ * Budget column on the monthly detail files, and a district whose export omits that column
+ * would otherwise divide by zero and see N/A on a tile it has perfectly good data for. It
+ * costs a query only in that degraded case — the common path resolves in the round above
+ * and never reaches this await.
+ */
+async function resolveDivisor(
+  db: TenantDb,
+  level: PeriodScope,
+  basis: ReserveBasis,
+  actual: boolean,
+  revenue: { amendedRevenue: Prisma.Decimal; actualRevenue: Prisma.Decimal },
+): Promise<{ divisor: Prisma.Decimal; denominator: ReserveDenominator }> {
+  if (basis === "EXPENDITURE") {
+    // Unchanged from before M6, deliberately: a district on the expenditure basis should
+    // see exactly the figure it saw last month. The annual adopted budget, fund-level,
+    // through the same shared lookup days-cash and the trend series use.
+    const adopted = await adoptedBudget(db, {
+      fiscalYear: level.fiscalYear,
+      kind: "EXPENDITURE",
+      filter: fundOnly(level.filter),
+    });
+    return {
+      divisor: adopted?.total ?? new D(0),
+      denominator: "ADOPTED_EXPENDITURE",
+    };
   }
 
+  if (actual) {
+    return { divisor: revenue.actualRevenue, denominator: "ACTUAL_REVENUE" };
+  }
+
+  if (!revenue.amendedRevenue.isZero()) {
+    return { divisor: revenue.amendedRevenue, denominator: "AMENDED_REVENUE" };
+  }
+
+  const adopted = await adoptedBudget(db, {
+    fiscalYear: level.fiscalYear,
+    kind: "REVENUE",
+    filter: fundOnly(level.filter),
+  });
   return {
-    percent: unassigned.total.dividedBy(budget).times(100),
-    unassigned: unassigned.total,
-    budget,
+    divisor: adopted?.total ?? new D(0),
+    denominator: "ADOPTED_REVENUE",
   };
 }
 

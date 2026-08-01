@@ -3,6 +3,7 @@ import type { AlertFacts } from "@/lib/alerts/catalog";
 import type { PolicyValues } from "@/lib/policies/registry";
 import type { BreakdownRow } from "@/lib/finance/breakdown";
 import { compactMoney, sharePercent } from "@/lib/dashboard/format";
+import { reserveCaption, reserveSubject } from "@/lib/dashboard/reserve";
 
 /**
  * §3.4's Key Insights — the plain-English sentences at the foot of the Executive dashboard.
@@ -113,15 +114,27 @@ export function buildInsights(args: {
   if (reserve !== null) {
     const target = Number(policy.fundBalance.target);
     const below = reserve.lessThan(target);
+    // Since M6 the figure is a PROJECTION until the year's final period, and it is a share
+    // of revenue rather than of expenditures. An insight that states neither is a sentence
+    // a board can act on without knowing what it means.
+    // AlertFacts is a FLAT bag, so its reserve fields carry a prefix the caption helpers
+    // do not. One adapter here rather than a second vocabulary in lib/dashboard/reserve.ts.
+    const view = {
+      denominator: facts.reserveDenominator,
+      basis: facts.reserveBasis,
+      actual: facts.reserveIsActual,
+    };
+    const subject = reserveSubject(view);
+    const basisOf = reserveCaption(view);
     out.push({
       id: "reserve",
       direction: below ? "flag" : "up",
       text: below
-        ? "Unassigned fund balance is below policy target."
-        : `Unassigned fund balance is ${pct(reserve)}, at or above policy target.`,
+        ? `${subject} is below policy target.`
+        : `${subject} is ${pct(reserve)}, at or above policy target.`,
       detail: below
-        ? `${pct(reserve)} against a ${target.toFixed(2)}% target. Action needed to rebuild reserves.`
-        : `${pct(reserve)} against a ${target.toFixed(2)}% target.`,
+        ? `${pct(reserve)} ${basisOf} against a ${target.toFixed(2)}% target. Action needed to rebuild reserves.`
+        : `${pct(reserve)} ${basisOf} against a ${target.toFixed(2)}% target.`,
       href: "/fund-balance",
     });
   }

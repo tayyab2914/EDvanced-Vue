@@ -125,3 +125,80 @@ export const adoptedBudget = memo(
     return { versionId, total: agg._sum.amount ?? ZERO };
   },
 );
+
+export interface CurrentBudgets {
+  revenue: Prisma.Decimal;
+  expenditure: Prisma.Decimal;
+  encumbrances: Prisma.Decimal;
+}
+
+/**
+ * The AMENDED budget for a period — the Budget column on the monthly detail files.
+ *
+ * ---------------------------------------------------------------------------
+ * ADOPTED versus AMENDED, AND WHY THE RESERVE NEEDS THIS ONE
+ *
+ * `adoptedBudget` above reads the two ANNUAL files: what the board approved in July and
+ * never touches again. This reads what the board has approved AS OF THIS MONTH, because
+ * the monthly detail files carry a Budget column that is the revised figure, tagged
+ * `BudgetType.CURRENT` on ingest (see the enum's note in prisma/schema.prisma).
+ *
+ * That distinction is the whole of the projected ending fund balance. A district that
+ * budgets $513M of revenue in July and amends to $514M in October has a projected ending
+ * balance that moves by $1M on the October upload — and reads the adopted file forever if
+ * this figure is taken from the wrong place. The amendment is the ONLY thing that moves
+ * the projection, so taking it from the annual file would leave the number frozen all year.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY IT LIVES HERE AND NOT IN THE ALERT ENGINE
+ *
+ * It was private to lib/alerts/engine.ts, which was fine while the alerts were its only
+ * caller. The reserve percentage needs the same figure now, and a second copy would be a
+ * second round trip per render for a sum the first one already has — the exact regression
+ * `verify:queries` exists to catch. One memo, two callers, one query.
+ * ---------------------------------------------------------------------------
+ *
+ * Zero rather than null when a file is absent: a month with no detail import has no budget
+ * to state, and every caller already guards `isZero()` before dividing.
+ */
+export const currentBudgets = memo(
+  "currentBudgets",
+  (db: TenantDb, scope: { fiscalYear: string; period: number; filter?: FinanceFilter }) => {
+    const k = dbKey(db);
+    return k === null ? null : `${k}|${scope.fiscalYear}|${scope.period}|${filterKey(scope.filter)}`;
+  },
+  async (
+    db: TenantDb,
+    scope: { fiscalYear: string; period: number; filter?: FinanceFilter },
+  ): Promise<CurrentBudgets> => {
+    const versions = await currentVersionIds(db, {
+      fiscalYear: scope.fiscalYear,
+      period: scope.period,
+    });
+    const slice = detailWhere(scope.filter);
+
+    const revVersion = versions.get("REVENUE_DETAIL");
+    const expVersion = versions.get("EXPENDITURE_DETAIL");
+
+    const [rev, exp] = await Promise.all([
+      revVersion
+        ? db.revenueActual.aggregate({
+            where: { versionId: revVersion, ...slice },
+            _sum: { budget: true },
+          })
+        : null,
+      expVersion
+        ? db.expenditureActual.aggregate({
+            where: { versionId: expVersion, ...slice },
+            _sum: { budget: true, encumbrances: true },
+          })
+        : null,
+    ]);
+
+    return {
+      revenue: rev?._sum.budget ?? ZERO,
+      expenditure: exp?._sum.budget ?? ZERO,
+      encumbrances: exp?._sum.encumbrances ?? ZERO,
+    };
+  },
+);

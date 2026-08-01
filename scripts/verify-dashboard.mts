@@ -569,9 +569,13 @@ async function main() {
     );
     // The forecast screen states the unassigned balance as a share of PROJECTED REVENUES —
     // the denominator the client's own workbook plans against, and the one every fund
-    // balance component on that screen is now shown against so the column adds up. The
-    // Current Position dashboard's `reservePercent()` still divides by expenditures; the
-    // two are deliberately different and neither may drift into the other.
+    // balance component on that screen is shown against so the column adds up.
+    //
+    // Since M6 the Current Position reserve divides by revenue TOO (Florida s. 1011.051),
+    // so the two are no longer on different denominators. They remain different NUMBERS,
+    // and deliberately: this one is the multi-year projection's own year, while
+    // `reservePercent()` is this year's board-approved budget. What must never happen is
+    // one silently becoming the other.
     assert(
       projection[1]
         .unassignedPercentOfRevenue!.minus(
@@ -622,12 +626,19 @@ async function main() {
     // and cannot be imported by a plain script. The property is the same: a blended
     // all-funds reserve is a different number, so which scope the dashboard passes is a
     // decision with consequences rather than a detail.
+    const RESERVE_OPTS = { basis: "REVENUE" as const, requiredPercent: 3 };
     const gfOnly = await reservePercent(
       db,
       { fiscalYear: FY, period: P3, filter: oneFund(made.fundId) },
       codes,
+      RESERVE_OPTS,
     );
-    const allFundsBlended = await reservePercent(db, { fiscalYear: FY, period: P3 }, codes);
+    const allFundsBlended = await reservePercent(
+      db,
+      { fiscalYear: FY, period: P3 },
+      codes,
+      RESERVE_OPTS,
+    );
 
     // This fixture commits to ONE fund, so an all-funds reserve and that fund's own
     // reserve are necessarily the same figure. Asserting they differ would be asserting

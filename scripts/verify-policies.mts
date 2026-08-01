@@ -73,11 +73,27 @@ async function main() {
   assert(d.cash.daysCashCritical === 45, "days cash critical is 45 days");
   assert(d.cash.decreaseWarning === 10, "cash decrease warning is 10%");
   assert(d.cash.decreaseCritical === 20, "cash decrease critical is 20%");
+  /**
+   * The fund balance defaults are FLORIDA'S since M6.
+   *
+   * s. 1011.051 sets the triggers a district is actually held to: below 3% of general fund
+   * revenues the superintendent notifies the commissioner, and 2% is the deeper bar. The
+   * warning and critical thresholds sit on those two numbers rather than on the 4%/3% the
+   * platform shipped with, and `stateMinimum` moves to 3% because it is now doing a second
+   * job — it is the REQUIRED RESERVE the fund balance breakdown carves out of unassigned.
+   *
+   * A district that has already saved its own thresholds keeps them: `resolvePolicy` only
+   * fills gaps, so these defaults reach new districts and nobody else.
+   */
   assert(d.fundBalance.target === 5, "district target unassigned fund balance is 5%");
   assert(d.fundBalance.boardPolicyMinimum === 3, "board policy minimum is 3%");
-  assert(d.fundBalance.stateMinimum === 2, "state minimum is 2%");
-  assert(d.fundBalance.warning === 4, "fund balance warning is 4%");
-  assert(d.fundBalance.critical === 3, "fund balance critical is 3%");
+  assert(d.fundBalance.stateMinimum === 3, "state minimum — the required reserve — is Florida's 3%");
+  assert(d.fundBalance.warning === 3, "fund balance warning is 3% (s. 1011.051's notification trigger)");
+  assert(d.fundBalance.critical === 2, "fund balance critical is 2%");
+  assert(
+    d.fundBalance.measureAgainstRevenue === true,
+    "and the measurement basis defaults to REVENUE — the Florida experience needs no configuration",
+  );
 
   // ---- resolution ----
   console.log("\nResolving a stored policy");

@@ -4,6 +4,7 @@ import { resolveScope } from "@/lib/dashboard/scope";
 import { labelMode } from "@/lib/dashboard/label-mode";
 import { loadCore, reserveThresholds, forecastReserveThresholds } from "@/lib/dashboard/load";
 import { ladder, bands as statusBands, ruleOf } from "@/lib/dashboard/status";
+import { reserveCaption, reserveSubject } from "@/lib/dashboard/reserve";
 import { percent, toNumber } from "@/lib/dashboard/format";
 import { MANAGE } from "@/lib/dashboard/cta";
 import { SectionCard } from "@/components/dashboard/section-card";
@@ -54,9 +55,19 @@ export default async function FundBalancePoliciesTab({
                 note: "Required by board policy.",
               },
               {
-                label: "State minimum",
+                label: "State minimum (required reserve)",
                 value: `${Number(policy.fundBalance.stateMinimum).toFixed(2)}%`,
-                note: "Required by state law.",
+                note: "Required by state law, and the reserve the breakdown separates from excess unassigned.",
+              },
+              {
+                // The one setting on this screen that is not a threshold — it decides what
+                // every OTHER number here is a percentage of. See lib/enums.ts.
+                label: "Measurement basis",
+                value: reserve?.basis === "EXPENDITURE" ? "Expenditures" : "Revenue",
+                note:
+                  reserve?.basis === "EXPENDITURE"
+                    ? "Measured against budgeted General Fund expenditures."
+                    : "Measured against General Fund revenue, per Florida s. 1011.051.",
               },
             ]}
             manageHref={userCan(user, "configure_district") ? "/policies" : undefined}
@@ -99,7 +110,7 @@ export default async function FundBalancePoliciesTab({
           value={reservePct}
           bands={statusBands(reserveT)}
           format={(v) => `${v.toFixed(v % 1 === 0 ? 0 : 2)}%`}
-          label="Unassigned fund balance as a share of budgeted general fund expenditures."
+          label={`${reserveSubject(reserve)} as a share ${reserveCaption(reserve)}.`}
         />
       </SectionCard>
     </FundBalanceShell>

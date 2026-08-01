@@ -4,13 +4,17 @@ import type { TenantDb } from "@/lib/tenant-db";
 import { prisma } from "@/lib/db";
 import { loadActivityCodes, type ActivityCodes } from "@/lib/finance/transfers";
 import { loadPolicy } from "@/lib/policies/load";
-import type { PolicyValues } from "@/lib/policies/registry";
+import {
+  reserveBasis,
+  requiredReservePercent,
+  type PolicyValues,
+} from "@/lib/policies/registry";
 import { yearSeries, pointAt, previousPoint, type YearSeries, type PeriodPoint } from "@/lib/finance/series";
 import { currentVersionsForYear } from "@/lib/finance/versions";
 import { evaluateAlerts, type AlertReport } from "@/lib/alerts/engine";
 import { generalFund, type FundRef } from "@/lib/finance/funds";
 import { oneFund } from "@/lib/finance/filter";
-import { reservePercent } from "@/lib/finance/fund-balance";
+import { reservePercent, type ReserveResult } from "@/lib/finance/fund-balance";
 import type { DashboardScope } from "@/lib/dashboard/scope";
 import type { DatasetKind } from "@/lib/enums";
 
@@ -74,8 +78,13 @@ export interface DashboardCore {
    * selector is worse than no KPI.
    *
    * Null when the district has no fund typed General, which the tile renders as N/A.
+   *
+   * Since M6 this carries the whole reserve picture rather than three figures: the
+   * projected ending balance, which basis it is measured on, whether it is a projection or
+   * an outturn, and the required/excess split the fund balance screen breaks it into. The
+   * screens read it rather than each re-deriving a percentage from parts.
    */
-  reserve: { percent: Prisma.Decimal | null; unassigned: Prisma.Decimal; budget: Prisma.Decimal } | null;
+  reserve: ReserveResult | null;
   /** Current version ids for the scoped period, by dataset. */
   versions: Map<DatasetKind, string>;
 }
@@ -156,6 +165,9 @@ export async function loadCore(
           // page filtered to three special revenue funds must not silently redefine it.
           { fiscalYear: scope.fiscalYear, period: scope.period, filter: oneFund(gf.id) },
           codes,
+          // The district's measurement basis, resolved in the round above. Revenue by
+          // default (Florida s. 1011.051); expenditures where the district has said so.
+          { basis: reserveBasis(policy), requiredPercent: requiredReservePercent(policy) },
         )
       : Promise.resolve(null),
   ]);
