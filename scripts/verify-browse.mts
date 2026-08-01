@@ -7,11 +7,16 @@ import {
   browse,
   browseAll,
   browseColumns,
+  browseFilters,
   browseInclude,
+  browseTotals,
   cellOf,
+  filtersFromParams,
   nameOf,
+  FILTER_PREFIX,
   PAGE_SIZE,
 } from "@/lib/datasets/browse";
+import { money } from "@/lib/dashboard/format";
 import { DATASET_SLUGS, DATASETS, type DatasetSlug } from "@/lib/datasets/kinds";
 import { datasetDef } from "@/lib/datasets/registry";
 
@@ -182,6 +187,109 @@ async function main() {
     });
     assert(miss.total === 0 && miss.rows.length === 0, "no match returns nothing, not everything");
 
+    /**
+     * FILTERS AND TOTALS — the pair that makes this screen usable for checking a figure.
+     *
+     * The district's report was that validating a dashboard number meant exporting, because
+     * the browse table could search and sort but not narrow to one dimension, and had no
+     * totals to read once it had. Both halves are asserted here, and the last assertion is
+     * the one that matters: the total must cover the whole filtered SET, not the page.
+     */
+    console.log("\nFiltering happens in the database, by column");
+    const f2Rows = Array.from({ length: ROWS }, (_, i) => i).filter((i) => i % 3 === 0);
+    const byFund = await browse(db, {
+      slug: "expenditure-detail",
+      versionId: seed.versionId,
+      filters: { fundId: "BRW-F2" },
+    });
+    assert(
+      byFund.total === f2Rows.length,
+      `a column filter narrows to exactly that fund (${byFund.total} of ${ROWS})`,
+    );
+    assert(
+      byFund.rows.every((r) => (r.fund as { code: string }).code === "BRW-F2"),
+      "and every row on the page belongs to it",
+    );
+    const bogus = await browse(db, {
+      slug: "expenditure-detail",
+      versionId: seed.versionId,
+      filters: { fundId: "", notAColumn: "x" },
+    });
+    assert(
+      bogus.total === ROWS,
+      "a blank value and an unknown column are ignored — a stale URL shows everything, never nothing",
+    );
+    const bothWays = await browse(db, {
+      slug: "expenditure-detail",
+      versionId: seed.versionId,
+      filters: { fundId: "BRW-F1" },
+      q: "BRW-F2",
+    });
+    assert(
+      bothWays.total === 0,
+      "a filter ANDs with the search rather than replacing it",
+    );
+
+    assert(
+      filtersFromParams({ f_fundId: "BRW-F2", q: "x", f_objectId: "" }).fundId === "BRW-F2" &&
+        Object.keys(filtersFromParams({ f_fundId: "BRW-F2", q: "x", f_objectId: "" })).length === 1,
+      `only \`${FILTER_PREFIX}*\` params become filters, and empty ones are dropped`,
+    );
+
+    console.log("\nFilter options come from the rows, not the chart of accounts");
+    const defs = await browseFilters(db, "expenditure-detail", seed.versionId);
+    const fundDef = defs.find((d) => d.key === "fundId")!;
+    assert(
+      fundDef.options.map((o) => o.value).join(",") === "BRW-F1,BRW-F2",
+      "both funds this version uses are offered, in code order",
+    );
+    const ccDef = defs.find((d) => d.key === "costCenterId")!;
+    assert(
+      ccDef.options.length === 0,
+      "a dimension no row fills offers nothing — an option that returns zero rows is not a filter",
+    );
+    assert(
+      fundDef.options[0].label.includes("First Fund"),
+      "options carry the name, so a district picks a fund rather than a code",
+    );
+
+    console.log("\nTotals cover the filtered set, not the visible page");
+    const allTotals = await browseTotals(db, {
+      slug: "expenditure-detail",
+      versionId: seed.versionId,
+    });
+    const everyYtd = Array.from({ length: ROWS }, (_, i) => 1000 + i).reduce((a, b) => a + b, 0);
+    assert(
+      allTotals.actualYtd === money(everyYtd),
+      `the unfiltered total is every row's Actual YTD, not the page's (got ${allTotals.actualYtd})`,
+    );
+    const f2Totals = await browseTotals(db, {
+      slug: "expenditure-detail",
+      versionId: seed.versionId,
+      filters: { fundId: "BRW-F2" },
+    });
+    assert(
+      f2Totals.actualYtd === money(f2Rows.reduce((a, i) => a + 1000 + i, 0)),
+      `and the filtered total covers all ${f2Rows.length} matching rows (got ${f2Totals.actualYtd})`,
+    );
+    assert(
+      f2Totals.availableBudget !== undefined,
+      "a calculated column is totalled like any other amount",
+    );
+    assert(
+      allTotals.fundId === undefined,
+      "dimension columns are not totalled — a sum of fund codes is not a quantity",
+    );
+    const emptyTotals = await browseTotals(db, {
+      slug: "expenditure-detail",
+      versionId: seed.versionId,
+      q: "nothing-matches-this",
+    });
+    assert(
+      emptyTotals.actualYtd === "",
+      "a filter that matches nothing totals to blank, not $0 — those are different claims",
+    );
+
     console.log("\nCells render the district's own codes");
     const cols = browseColumns("expenditure-detail");
     const row = first.rows[0];
@@ -273,6 +381,37 @@ async function main() {
       }
     }
     assert(sortFailure === null, `every column sorts in both directions${sortFailure ? ` (${sortFailure})` : ""}`);
+
+    /**
+     * Every dataset's filter options resolve — the sweep that catches a wrong DELEGATE NAME.
+     *
+     * `RELATION.rel` is the relation field on the detail row and `RELATION.model` is the
+     * lookup's own delegate, and they differ for three of the seven targets (a `function`
+     * relation points at AccountFunction, a cost centre is a School). Nothing but this reads
+     * the lookup directly, so a wrong name is a runtime TypeError on one dataset's browse
+     * page and nowhere else. A version with no rows still exercises it: the resolve query
+     * runs against an empty id list rather than being skipped.
+     */
+    console.log("\nEvery dataset's filter options resolve");
+    let filterFailure: string | null = null;
+    for (const slug of DATASET_SLUGS) {
+      const v = await db.datasetVersion.findFirst({
+        where: { dataset: kindOf(slug), fiscalYear: FY },
+      });
+      try {
+        const got = await browseFilters(db, slug, v?.id ?? seed.versionId);
+        const expected = browseColumns(slug).filter((c) => c.type === "code").length;
+        if (got.length !== expected) {
+          filterFailure = `${slug}: ${got.length} filters for ${expected} dimension columns`;
+        }
+      } catch (e) {
+        filterFailure = `${slug}: ${(e as Error).message.split("\n")[0]}`;
+      }
+    }
+    assert(
+      filterFailure === null,
+      `every dataset offers a filter per dimension column${filterFailure ? ` (${filterFailure})` : ""}`,
+    );
   } finally {
     await cleanup(district.id);
     await teardown();

@@ -300,6 +300,23 @@ export interface ReserveResult {
   /** The beginning balance the projection starts from — fixed for the year. */
   beginning: Prisma.Decimal;
   /**
+   * The two budget figures the projection is built from, stated rather than implied.
+   *
+   * `budget` above is the DIVISOR, which is only the revenue budget when the district is on
+   * the revenue basis — an expenditure-basis district's divisor is the adopted expenditure
+   * budget, and neither is the pair that makes up the numerator. These two always are.
+   *
+   * They exist because the projection was the one figure on the screen a finance officer
+   * could not check: `beginning` and the ending balance were shown, the two figures between
+   * them were not, and validating the arithmetic meant opening the Revenue and Expenditure
+   * dashboards to read the budget off each. Both are already in hand here — no query.
+   */
+  budgetedRevenue: Prisma.Decimal;
+  budgetedExpenditure: Prisma.Decimal;
+  /** Actual revenue and expenditure YTD at the scoped period — what the outturn is built from. */
+  actualRevenue: Prisma.Decimal;
+  actualExpenditure: Prisma.Decimal;
+  /**
    * The unassigned share of that beginning balance.
    *
    * Exposed because the TREND projection needs it: lib/alerts/engine.ts builds a run-rate
@@ -392,6 +409,10 @@ async function buildReservePercent(
     actual,
     endingTotal,
     beginning: beginning.total,
+    budgetedRevenue: amended.revenue,
+    budgetedExpenditure: amended.expenditure,
+    actualRevenue: activity.totalRevenueYtd,
+    actualExpenditure: activity.totalExpenditureYtd,
     beginningUnassigned: beginning.unassigned,
     required,
     excess: unassigned.minus(required),

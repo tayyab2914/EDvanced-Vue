@@ -120,3 +120,29 @@ export const FUND_BALANCE_VIEWS = [
   { value: "fund", label: "Fund" },
 ] as const;
 export type FundBalanceView = (typeof FUND_BALANCE_VIEWS)[number]["value"];
+
+/**
+ * Fund balance composition — ACTUAL or BUDGETED.
+ *
+ * The client's question was "what is the basis for the Fund Balance Composition, actual or
+ * budget?", and the honest answer before this control existed was "actual, and the card
+ * never said so". That silence was the whole problem: the composition card sits one row
+ * above a components table stated on the BUDGETED projection, so a reader comparing the two
+ * was comparing an outturn against a plan without being told either label.
+ *
+ * ACTUAL FIRST, because it is what the card has always drawn — the opening balance plus the
+ * revenue collected and the spending made through the scoped month. BUDGETED rebuilds the
+ * same balance from the amended budget instead: the projection the board voted for, which
+ * moves only when the board amends it.
+ *
+ * ITS OWN PARAMETER rather than four entries on `FUND_BALANCE_VIEWS`, because basis and
+ * grouping are independent — a district wants budgeted-by-fund as readily as actual-by-fund
+ * — and folding them into one list makes a control the reader has to decode as a matrix.
+ */
+export const BASIS_PARAM = "basis";
+
+export const FUND_BALANCE_BASES = [
+  { value: "actual", label: "Actual" },
+  { value: "budget", label: "Budgeted" },
+] as const;
+export type FundBalanceBasisView = (typeof FUND_BALANCE_BASES)[number]["value"];

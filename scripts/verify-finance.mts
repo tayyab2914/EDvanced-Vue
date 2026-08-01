@@ -275,6 +275,35 @@ async function main() {
       !reserve.unassigned.equals(unassigned.total),
       "and it is NOT the point-in-time balance — the two are different quantities on purpose",
     );
+
+    /**
+     * BOTH TERMS OF THE PROJECTION ARE STATED, not just its result.
+     *
+     * The screen used to print the beginning balance and the ending balance with the two
+     * budget figures between them left out, so the district could not check the one figure on
+     * the page it cannot derive by inspection — validating it meant opening two other
+     * dashboards to read each budget off separately. They are exposed here, and they must be
+     * the SAME figures the ending balance was built from, or the strip is decoration.
+     */
+    assert(
+      reserve.beginning
+        .plus(reserve.budgetedRevenue)
+        .minus(reserve.budgetedExpenditure)
+        .equals(reserve.endingTotal),
+      "beginning + budgeted revenue − budgeted expenditure reproduces the projection exactly",
+    );
+    assert(
+      reserve.budgetedRevenue.equals(new D("6500000")) &&
+        reserve.budgetedExpenditure.equals(new D("10000000")),
+      `and they are the amended budgets, $6.5M and $10.0M (got $${reserve.budgetedRevenue.dividedBy(1_000_000).toFixed(1)}M and $${reserve.budgetedExpenditure.dividedBy(1_000_000).toFixed(1)}M)`,
+    );
+    assert(
+      reserve.beginning
+        .plus(reserve.actualRevenue)
+        .minus(reserve.actualExpenditure)
+        .equals(fb.total),
+      "the actual pair reproduces the point-in-time balance, so the screen can show both without a second query",
+    );
     assert(
       reserve.denominator === "AMENDED_REVENUE" && reserve.budget.equals(new D("6500000")),
       `the divisor is the amended REVENUE budget, $6.5M (got ${reserve.denominator}, $${reserve.budget.dividedBy(1_000_000).toFixed(1)}M)`,

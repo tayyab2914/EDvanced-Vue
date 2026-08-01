@@ -686,8 +686,28 @@ export interface FundBreakdownRow {
   typeName: string | null;
   revenueYtd: Prisma.Decimal;
   expenditureYtd: Prisma.Decimal;
+  /**
+   * The AMENDED budget for this fund — the Budget column on the same monthly detail rows the
+   * actuals above come from, so it costs no query of its own.
+   *
+   * Carried so §6.1's by-fund table can print the ACTUAL and the BUDGETED ending balance
+   * side by side. The district's question was "why does the ending balance keep moving when
+   * we haven't amended anything?", and the honest answer is that the table was showing the
+   * actual balance under a name that reads as the projection. Two columns, each named for
+   * what it is, is the fix — one number cannot be both.
+   */
+  revenueBudget: Prisma.Decimal;
+  expenditureBudget: Prisma.Decimal;
   /** Opening balance + revenue − expenditure. Null when the year has no opening import. */
   fundBalance: Prisma.Decimal | null;
+  /**
+   * Opening balance + amended revenue budget − amended expenditure budget.
+   *
+   * The projection the board voted for. It moves ONLY when the board amends the budget —
+   * unlike `fundBalance` beside it, which moves every month as actuals land. See
+   * lib/finance/fund-balance.ts for why those are deliberately two different figures.
+   */
+  budgetedFundBalance: Prisma.Decimal | null;
   endingCash: Prisma.Decimal | null;
   /**
    * The fund's opening components, when an opening fund balance was imported.
@@ -777,14 +797,16 @@ export async function byFund(
       ? db.revenueActual.groupBy({
           by: ["fundId"],
           where: { versionId: args.revenueVersionId, ...funds_ },
-          _sum: { actualYtd: true },
+          // `budget` rides along in the SUM the actuals were already paying for — the
+          // budgeted ending balance per fund costs nothing but a column.
+          _sum: { actualYtd: true, budget: true },
         })
       : Promise.resolve([]),
     args.expenditureVersionId
       ? db.expenditureActual.groupBy({
           by: ["fundId"],
           where: { versionId: args.expenditureVersionId, ...funds_ },
-          _sum: { actualYtd: true },
+          _sum: { actualYtd: true, budget: true },
         })
       : Promise.resolve([]),
     args.cashVersionId
@@ -817,6 +839,8 @@ export async function byFund(
 
   const revById = new Map(revenue.map((r) => [r.fundId, r._sum.actualYtd ?? ZERO]));
   const expById = new Map(spending.map((r) => [r.fundId, r._sum.actualYtd ?? ZERO]));
+  const revBudgetById = new Map(revenue.map((r) => [r.fundId, r._sum.budget ?? ZERO]));
+  const expBudgetById = new Map(spending.map((r) => [r.fundId, r._sum.budget ?? ZERO]));
   const cashById = new Map(cash.map((r) => [r.fundId, r._sum.endingCash]));
   const openById = new Map(opening.map((r) => [r.fundId, r._sum.begTotal]));
   const componentsById = new Map(
@@ -836,6 +860,8 @@ export async function byFund(
   for (const f of funds) {
     const revenueYtd = revById.get(f.id) ?? ZERO;
     const expenditureYtd = expById.get(f.id) ?? ZERO;
+    const revenueBudget = revBudgetById.get(f.id) ?? ZERO;
+    const expenditureBudget = expBudgetById.get(f.id) ?? ZERO;
     const endingCash = cashById.get(f.id) ?? null;
     const openingTotal = openById.get(f.id) ?? null;
 
@@ -853,7 +879,13 @@ export async function byFund(
       typeName: f.fundType ? displayName(f.fundType.name) : null,
       revenueYtd,
       expenditureYtd,
+      revenueBudget,
+      expenditureBudget,
       fundBalance: openingTotal === null ? null : openingTotal.plus(revenueYtd).minus(expenditureYtd),
+      // Null on the same condition as `fundBalance`, and for the same reason: without an
+      // opening balance this is the budgeted net CHANGE, not a budgeted balance.
+      budgetedFundBalance:
+        openingTotal === null ? null : openingTotal.plus(revenueBudget).minus(expenditureBudget),
       endingCash,
       components: componentsById.get(f.id) ?? null,
     });

@@ -94,8 +94,8 @@ export async function buildDashboardSheets(
       { header: "Expenditure YTD", format: "money" },
       { header: "Encumbrances", format: "money" },
       { header: "Ending cash", format: "money" },
-      { header: "Fund balance", format: "money" },
-      { header: "Unassigned", format: "money" },
+      { header: "Fund balance (Actual)", format: "money" },
+      { header: "Unassigned (Actual)", format: "money" },
     ],
     rows: core.series.points.map((p) => [
       p.period,
@@ -165,7 +165,12 @@ export async function buildDashboardSheets(
         { header: "Type", format: "text", width: 20 },
         { header: "Revenue (YTD)", format: "money" },
         { header: "Spending (YTD)", format: "money" },
-        { header: "Fund balance", format: "money" },
+        { header: "Ending fund balance (Actual)", format: "money" },
+        // The budgeted pair travels with the actual one so the export answers the same
+        // question the screen does — "why did this move?" — without a second file.
+        { header: "Budgeted revenue", format: "money" },
+        { header: "Budgeted spending", format: "money" },
+        { header: "Ending fund balance (Budgeted)", format: "money" },
         { header: "Ending cash", format: "money" },
       ],
       rows: funds.map((f) => [
@@ -175,6 +180,9 @@ export async function buildDashboardSheets(
         num(f.revenueYtd),
         num(f.expenditureYtd),
         num(f.fundBalance),
+        num(f.revenueBudget),
+        num(f.expenditureBudget),
+        num(f.budgetedFundBalance),
         num(f.endingCash),
       ]),
     });

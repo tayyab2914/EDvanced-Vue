@@ -468,6 +468,39 @@ async function main() {
       "and the by-fund revenue column sums to the district total",
     );
 
+    /**
+     * THE TWO ENDING BALANCES ARE DIFFERENT FIGURES, and the table now says which is which.
+     *
+     * The district's report: "when I compared July and August, neither budgeted revenues nor
+     * budgeted expenditures changed, but the projected ending fund balance decreased." It had
+     * not — the column labelled "Ending fund balance" was the ACTUAL balance, which moves
+     * every month as collections and spending land. Both are carried now, each named for what
+     * it is, and each has to be built from its own pair of inputs.
+     */
+    const withOpening = funds.filter((f) => f.fundBalance !== null);
+    assert(withOpening.length >= 1, "at least one fund has an opening balance to build a balance on");
+    assert(
+      withOpening.every((f) =>
+        f
+          .fundBalance!.minus(f.revenueYtd)
+          .plus(f.expenditureYtd)
+          .equals(f.budgetedFundBalance!.minus(f.revenueBudget).plus(f.expenditureBudget)),
+      ),
+      "actual and budgeted ending balances start from the SAME beginning balance",
+    );
+    assert(
+      withOpening.every((f) =>
+        f.budgetedFundBalance!.minus(f.fundBalance!).equals(
+          f.revenueBudget.minus(f.expenditureBudget).minus(f.revenueYtd.minus(f.expenditureYtd)),
+        ),
+      ),
+      "and differ by exactly budget-net-change less actual-net-change — nothing else moves them",
+    );
+    assert(
+      funds.every((f) => (f.fundBalance === null) === (f.budgetedFundBalance === null)),
+      "a fund with no opening balance has neither figure, rather than a budgeted one that looks whole",
+    );
+
     // ---------- 8. funds and scope ----------
     console.log("\nGeneral Fund and scope");
     const gf = await generalFund(db);

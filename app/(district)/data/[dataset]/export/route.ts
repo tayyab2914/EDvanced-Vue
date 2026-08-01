@@ -1,6 +1,12 @@
 import { getTenantDb } from "@/lib/auth/dal";
 import { datasetBySlug } from "@/lib/datasets/kinds";
-import { browseAll, browseColumns, cellOf, EXPORT_LIMIT } from "@/lib/datasets/browse";
+import {
+  browseAll,
+  browseColumns,
+  cellOf,
+  filtersFromParams,
+  EXPORT_LIMIT,
+} from "@/lib/datasets/browse";
 import { csvEscape } from "@/lib/csv";
 import type { DatasetKind } from "@/lib/enums";
 
@@ -42,10 +48,12 @@ export async function GET(
   });
   if (!version) return new Response("No data for that period", { status: 404 });
 
+  const filters = filtersFromParams(Object.fromEntries(sp.entries()));
   const rows = await browseAll(db, {
     slug: meta.slug,
     versionId: version.id,
     q: sp.get("q") || undefined,
+    filters,
     sort: sp.get("sort") || undefined,
     dir: sp.get("dir") === "desc" ? "desc" : "asc",
   });
@@ -55,6 +63,16 @@ export async function GET(
   for (const row of rows) {
     lines.push(columns.map((c) => csvEscape(cellOf(meta.slug, row, c))).join(","));
   }
+
+  /**
+   * NO TOTALS ROW HERE, deliberately — the totals live on the screen instead.
+   *
+   * This file round-trips: a district edits it and imports it straight back, which is why
+   * `cellOf` writes bare digits and why there is no BOM. A trailing TOTAL row would import
+   * as one more account with a nine-figure amount in it. The reason the totals were wanted
+   * at all was that validating a figure meant exporting to add rows up — so they belong
+   * where that validation happens, which is now the browse table itself.
+   */
   // Deliberately no UTF-8 BOM, matching lib/csv-export.ts: Excel would like one, but it
   // corrupts the first header on re-import, and these files round-trip.
   const csv = lines.join("\n");

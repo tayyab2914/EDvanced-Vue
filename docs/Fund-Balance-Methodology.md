@@ -29,7 +29,52 @@ figure on screen to the figure it reports to the state.
 
 ---
 
-## 1. The projected ending fund balance
+## 1. Two ending fund balances, and why both are on screen
+
+The platform reports the ending fund balance two ways. They answer different questions, they
+are labelled **(Actual)** and **(Budgeted)** everywhere they appear, and they are not
+interchangeable.
+
+| | Ending fund balance (Actual) | Ending fund balance (Budgeted) |
+|---|---|---|
+| Formula | Beginning + revenues collected − expenditures made | Beginning + budgeted revenues − budgeted expenditures |
+| Answers | Where the balance stands **today** | Where the board's approved budget says the year **ends** |
+| Moves when | Every month, as actuals land | Only when the board amends the budget |
+
+**The actual figure moving month to month is expected, not an error.** Districts typically
+spend ahead of collections early in the year, so the actual balance drifts down and recovers
+later. If budgeted revenues and expenditures have not changed, the **Budgeted** figure will
+not change either — that is the one to watch for the effect of an amendment.
+
+Both appear as columns in *Fund Balance by Fund*, as two lines on the *Fund Balance Trend*
+chart (budgeted is the dashed reference line), and as separate columns in the export.
+
+### Fund Balance Composition — which of the two is on screen
+
+The composition card carries its own **Basis** control beside its **View by** control, and the
+card's subtitle prints the answer: *By classification · Actual*, *By fund · Budgeted*, and so
+on. There is no basis to infer.
+
+| Basis | What the card splits |
+|---|---|
+| **Actual** (default) | The balance as at the selected month — opening balance plus revenues collected and spending made |
+| **Budgeted** | The same balance rebuilt from the latest amended budget — the projection the board voted for |
+
+The two controls are independent: any grouping can be read on either basis.
+
+**Switching to Budgeted moves the unassigned slice only.** Nonspendable, Restricted, Committed
+and Assigned stay where they are, and that is correct rather than an oversight — a district
+re-designates fund balance by board action, which reaches the platform as a new Opening Fund
+Balance file, never as a budget amendment. The whole of the budgeted net change lands in
+unassigned.
+
+Under a cost-centre filter the *Budgeted* basis is unavailable for the classification view and
+the card says so, for the reason in §8: the budget figures carry the whole filter while the
+opening balance is fund-level.
+
+---
+
+## 2. The projected ending fund balance
 
 While the fiscal year is open:
 
@@ -89,7 +134,7 @@ A gap between them is itself the signal.
 
 ---
 
-## 2. Once the year is complete
+## 3. Once the year is complete
 
 At the fiscal year's final period, the platform stops reporting the plan and reports the
 outcome. Both halves of the fraction switch:
@@ -116,7 +161,22 @@ automatically report actuals**. No year-close action is required.
 
 ---
 
-## 3. The fund balance components breakdown
+## 4. Reserve components — the General Fund's, always
+
+This card answers one question: **what is the statutory floor, and what sits above it?** That
+question exists for the General Fund only, so every row of the card is the General Fund's —
+including the designated components — whatever the dashboard is filtered to. The subtitle
+names the fund so there is nothing to infer.
+
+> Before this, the designated lines were the *filtered* district's opening components while the
+> required-reserve and excess lines were the General Fund's, and the share column divided all of
+> them by General Fund revenue. On All Funds — the default view — that put district-wide dollar
+> figures over a General Fund divisor. The column added up on screen and could not be tied to
+> anything.
+
+When the dashboard is filtered to a fund other than the General Fund, the designated lines are
+omitted rather than guessed at, and the card says why. The required reserve and the balance
+above it still stand, because they are General Fund figures regardless of the filter.
 
 Every component is stated as a share of the same denominator, so the column adds up to the
 reserve percentage shown above it.
@@ -148,7 +208,7 @@ states the dollar gap:
 
 ---
 
-## 4. Thresholds
+## 5. Thresholds
 
 Defaults for a newly created district:
 
@@ -175,7 +235,7 @@ to new districts only.
 
 ---
 
-## 5. Configurable measurement basis
+## 6. Configurable measurement basis
 
 The revenue-versus-expenditure basis is a district setting, not a platform constant.
 
@@ -193,7 +253,7 @@ pass over the finance layer.
 
 ---
 
-## 6. Where each figure comes from
+## 7. Where each figure comes from
 
 | Figure | Source |
 |---|---|
@@ -211,17 +271,56 @@ the adopted annual revenue budget rather than showing an unavailable figure.
 
 ---
 
-## 7. Scope rules
+## 8. Scope rules
 
-**The reserve is always the General Fund's**, whatever the dashboard is filtered to. The
-workbook is explicit that a combined all-funds reserve percentage is not a meaningful figure,
-and the platform will not compute one. A district with no fund typed General sees "Not
+**The reserve percentage is always the General Fund's**, whatever the dashboard is filtered to.
+The workbook is explicit that a combined all-funds reserve percentage is not a meaningful
+figure, and the platform will not compute one. A district with no fund typed General sees "Not
 available" rather than a blended number.
+
+**The ending position follows the fund selector.** The reserve *test* is General Fund only; the
+arithmetic underneath it — beginning balance, plus the budget's two sides, equals the projected
+ending balance — holds for any fund and for all of them together, and the Projected Ending
+Position card computes it on whatever the page is scoped to:
+
+| Scope | Card shows | Fifth figure |
+|---|---|---|
+| All Funds | All funds' beginning, budget and projected ending | Projected change against the beginning balance |
+| General Fund | The General Fund's | Room above (or shortfall to) the required reserve, with the reserve status badge |
+| Any other fund | That fund's | Projected change against the beginning balance |
+
+On any scope other than the General Fund the card states that the required reserve is a General
+Fund test, and names where the General Fund currently stands — so a reader who filtered to
+Capital Projects is not left to assume the reserve moved with them.
+
+**Under a cost-centre filter the budgeted terms are withheld**, not estimated. The budget
+figures carry the whole filter while the beginning balance is fund-level, so the subtraction
+would mix two grains. The card says so.
 
 **Fund balance is always a fund-level figure.** Under a cost-centre filter the platform
 computes the balance at fund level and badges it as such, because an opening balance cannot be
 narrowed below a fund — subtracting one department's spending from the district's opening
 balance produces a number that is not anything.
+
+---
+
+## 9. Checking a figure against the underlying rows
+
+Every figure on these screens can be tied back to the imported detail without exporting.
+
+On **Data → the relevant dataset**, the row browser now offers:
+
+- **A filter per dimension** — Fund, Function, Object, Cost Center, Project. Each dropdown
+  offers only the codes that version actually uses, so every option returns rows. Filters
+  combine with each other and with the search box.
+- **A totals row** for every money column, covering **all matching rows** rather than the
+  fifty on screen. Applying a filter narrows the totals with it.
+
+Both live in the URL, so a filtered view can be bookmarked or sent to a colleague, and the
+Export CSV button carries the same filters — the file always matches the screen.
+
+The CSV itself deliberately carries **no totals row**: those files re-import, and a trailing
+total would come back in as an account.
 
 ---
 

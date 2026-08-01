@@ -2,7 +2,16 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { datasetBySlug, DATASET_SLUGS } from "@/lib/datasets/kinds";
-import { browse, cellOf, nameOf, PAGE_SIZE } from "@/lib/datasets/browse";
+import {
+  browse,
+  browseFilters,
+  browseTotals,
+  cellOf,
+  filtersFromParams,
+  nameOf,
+  FILTER_PREFIX,
+  PAGE_SIZE,
+} from "@/lib/datasets/browse";
 import { labelMode } from "@/lib/dashboard/label-mode";
 import { periodLabel } from "@/lib/periods/fiscal";
 import { formatDateTime } from "@/lib/format";
@@ -26,14 +35,9 @@ export default async function DatasetBrowsePage({
   searchParams,
 }: {
   params: Promise<{ dataset: string }>;
-  searchParams: Promise<{
-    fy?: string;
-    period?: string;
-    q?: string;
-    sort?: string;
-    dir?: string;
-    page?: string;
-  }>;
+  // The dimension filters arrive as `f_<column>` and are read off by name, so a new
+  // dimension on a dataset gets a filter without this signature changing.
+  searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const { dataset } = await params;
   const meta = datasetBySlug(dataset);
@@ -97,19 +101,29 @@ export default async function DatasetBrowsePage({
     versions[0];
 
   const dir = sp.dir === "desc" ? "desc" : "asc";
-  const result = await browse(db, {
-    slug: meta.slug,
-    versionId: selected.id,
-    q: sp.q || undefined,
-    sort: sp.sort || undefined,
-    dir,
-    page: Number(sp.page) || 1,
-    pageSize: PAGE_SIZE,
-  });
+  const filters = filtersFromParams(sp);
 
   // The reader's Codes / Names setting. The export route deliberately does NOT read it —
-  // see the note on `cellOf`.
+  // see the note on `cellOf`. Resolved before the reads below because the filter dropdowns
+  // are labelled with it too.
   const mode = await labelMode();
+
+  // Three reads of the same version with nothing between them. The totals and the filter
+  // options are not free, but they are not sequential either — the page waits once.
+  const [result, totals, filterDefs] = await Promise.all([
+    browse(db, {
+      slug: meta.slug,
+      versionId: selected.id,
+      q: sp.q || undefined,
+      filters,
+      sort: sp.sort || undefined,
+      dir,
+      page: Number(sp.page) || 1,
+      pageSize: PAGE_SIZE,
+    }),
+    browseTotals(db, { slug: meta.slug, versionId: selected.id, q: sp.q || undefined, filters }),
+    browseFilters(db, meta.slug, selected.id, mode),
+  ]);
 
   const rows: ServerRow[] = result.rows.map((row) => ({
     id: String(row.id),
@@ -124,6 +138,11 @@ export default async function DatasetBrowsePage({
     ...(selected.period !== null ? { period: String(selected.period) } : {}),
     ...(sp.q ? { q: sp.q } : {}),
     ...(sp.sort ? { sort: sp.sort, dir } : {}),
+    // The filters travel too, or the file stops matching the screen — which is the one
+    // property this page's URL-as-state design exists to guarantee.
+    ...Object.fromEntries(
+      Object.entries(filters).map(([k, v]) => [`${FILTER_PREFIX}${k}`, v]),
+    ),
   });
 
   return (
@@ -175,6 +194,10 @@ export default async function DatasetBrowsePage({
         sort={sp.sort ?? null}
         dir={dir}
         q={sp.q ?? ""}
+        filters={filterDefs}
+        active={filters}
+        filterPrefix={FILTER_PREFIX}
+        totals={totals}
         exportHref={`/data/${dataset}/export?${exportParams.toString()}`}
       />
     </div>
