@@ -698,6 +698,16 @@ export interface FundBreakdownRow {
    */
   revenueBudget: Prisma.Decimal;
   expenditureBudget: Prisma.Decimal;
+  /**
+   * The fund's opening balance — the term both ending balances are built from.
+   *
+   * Returned rather than left implicit so §6.1's table can print the whole calculation:
+   * beginning, revenues, expenditures, ending. It was already read to derive `fundBalance`;
+   * withholding it meant a reader could see the answer and neither of the inputs, which is
+   * the gap that sent the district to the Revenue and Expenditure dashboards to check a
+   * figure this table had all along.
+   */
+  beginning: Prisma.Decimal | null;
   /** Opening balance + revenue − expenditure. Null when the year has no opening import. */
   fundBalance: Prisma.Decimal | null;
   /**
@@ -881,6 +891,7 @@ export async function byFund(
       expenditureYtd,
       revenueBudget,
       expenditureBudget,
+      beginning: openingTotal,
       fundBalance: openingTotal === null ? null : openingTotal.plus(revenueYtd).minus(expenditureYtd),
       // Null on the same condition as `fundBalance`, and for the same reason: without an
       // opening balance this is the budgeted net CHANGE, not a budgeted balance.

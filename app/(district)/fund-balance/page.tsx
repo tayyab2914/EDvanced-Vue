@@ -217,6 +217,21 @@ export default async function FundBalancePage({
     (a, f) => (f.budgetedFundBalance ? a + (toNumber(f.budgetedFundBalance) ?? 0) : a),
     0,
   );
+  /**
+   * The other three columns of the by-fund table's total row.
+   *
+   * Summed over `withBalance` — the same rows the table prints — rather than taken from
+   * `activityTotals`. Those are the district's revenue and spending across every fund,
+   * including funds dropped from this table for having no opening balance, so the total row
+   * would not equal the column above it. A total that does not add up is worse than none.
+   */
+  const sumOf = (pick: (f: (typeof withBalance)[number]) => Prisma.Decimal | null) =>
+    withBalance.reduce((a, f) => a + (toNumber(pick(f)) ?? 0), 0);
+  const allFundsBeginning = sumOf((f) => f.beginning);
+  const allFundsRevenue = sumOf((f) => f.revenueYtd);
+  const allFundsExpenditure = sumOf((f) => f.expenditureYtd);
+  const allFundsRevenueBudget = sumOf((f) => f.revenueBudget);
+  const allFundsExpenditureBudget = sumOf((f) => f.expenditureBudget);
 
   /**
    * THE BUDGETED ENDING BALANCE, BY MONTH — the flat line beside the actual one.
@@ -288,6 +303,18 @@ export default async function FundBalancePage({
   const budgetedUnassigned = o && budgetedNet ? o.unassigned.plus(budgetedNet) : null;
   /** True when the budgeted basis can be drawn at all. See `scopedBudget` above. */
   const budgetBasisAvailable = budgetedNet !== null;
+
+  /**
+   * The unassigned figure under "Unassigned" in the by-fund table's General Fund row, and the
+   * word for it.
+   *
+   * Falls back to the actual when the budgeted one cannot be built — under a cost-centre
+   * filter, per `scopedBudget`. A dash there would read as "this fund has no unassigned
+   * balance", which is a different and more alarming claim; the label says which figure it
+   * is, so falling back states something true rather than nothing.
+   */
+  const rowUnassigned = budgetBasis && budgetBasisAvailable ? budgetedUnassigned : unassignedNow;
+  const rowUnassignedBasis = budgetBasis && budgetBasisAvailable ? "budgeted" : "actual";
 
   const compositionUnassigned = budgetBasis ? budgetedUnassigned : unassignedNow;
   const compositionTotal = budgetBasis ? budgetedNow : totalNow;
@@ -820,23 +847,48 @@ export default async function FundBalancePage({
       </KpiRow>
 
       {/* ---------- ROW 2: by fund · trend ---------- */}
-      <Row cols="1-2">
+      {/*
+        THE TABLE TAKES THE WIDE SLOT NOW (2-1, not 1-2).
+
+        It carries the whole calculation per fund — beginning, revenues, expenditures, ending
+        — rather than the ending balance alone, and seven columns in a third of the page is a
+        horizontal scrollbar pretending to be a table. The trend chart reads perfectly well
+        narrow; a ledger does not.
+      */}
+      <Row cols="2-1">
         <SectionCard
           title="Fund balance by fund"
-          info="ACTUAL is the balance as it stands in the selected month — beginning balance plus revenues collected less expenditures made, so it moves every month. BUDGETED is beginning balance plus the amended revenue budget less the amended expenditure budget: the projection the board approved, which moves only when the board amends the budget. Unassigned applies to the General Fund only; other funds show their primary fund balance classification."
+          subtitle={`${basisLabel} · beginning + revenues − expenditures`}
+          /*
+            ONE TOGGLE, NOT TWO TABLES.
+
+            The district asked which it should be. Two tables would repeat Fund, Primary
+            classification and Status in both and put the two ending balances a scroll apart,
+            which is the comparison the table exists to make easy. A toggle keeps one row per
+            fund and swaps the three figures that actually differ — and it is the same
+            `basis` parameter the composition card below reads, so the page states one basis
+            rather than disagreeing with itself card by card.
+          */
+          control={<ViewBy options={FUND_BALANCE_BASES} value={basis} param={BASIS_PARAM} label="Basis" />}
+          info="ACTUAL is the balance as it stands in the selected month — beginning balance plus revenues collected less expenditures made, so it moves every month as actuals land. BUDGETED is beginning balance plus the amended revenue budget less the amended expenditure budget: the projection the board approved, which moves only when the board amends the budget. Beginning fund balance is fixed for the year and is the same on either basis. Unassigned applies to the General Fund only; other funds show their primary fund balance classification."
           footerNote="All amounts are unaudited"
         >
           <DataTable
             columns={[
               { key: "fund", label: "Fund" },
-              { key: "balance", label: "Ending fund balance (Actual)", align: "right" },
-              { key: "budgeted", label: "Ending fund balance (Budgeted)", align: "right" },
+              { key: "beginning", label: "Beginning fund balance", align: "right" },
+              { key: "revenues", label: `Revenues (${basisLabel})`, align: "right" },
+              { key: "expenditures", label: `Expenditures (${basisLabel})`, align: "right" },
+              { key: "ending", label: `Ending fund balance (${basisLabel})`, align: "right" },
               { key: "class", label: "Primary classification" },
               { key: "status", label: "Status", align: "right" },
             ]}
             rows={withBalance.map((f) => {
               const isGeneral = core.generalFund?.id === f.fundId;
-              const balance = toNumber(f.fundBalance);
+              // The STATUS and the deficit tint follow the basis on show, so a row cannot
+              // read "Healthy" beside a negative figure — or the reverse.
+              const ending = budgetBasis ? f.budgetedFundBalance : f.fundBalance;
+              const balance = toNumber(ending);
               const rung = isGeneral
                 ? reserveRung
                 : balance === null
@@ -862,19 +914,22 @@ export default async function FundBalancePage({
                     value: <DimLabel code={f.code} name={f.name} mode={scope.labelMode} />,
                     strong: true,
                   },
-                  balance: { value: money(f.fundBalance), strong: true },
-                  budgeted: { value: money(f.budgetedFundBalance), strong: true },
-                  // The unassigned figure beside "Unassigned" is the ACTUAL one, because it
-                  // sits in a row whose balance column is actual. It used to carry the
-                  // reserve percentage next to it, which is computed on the PROJECTED
-                  // balance over projected revenue — so the dollar figure and the percentage
-                  // beside it were two different quantities that could not be reconciled to
-                  // each other. The percentage has its own tile, on its own basis, above.
+                  // Fixed for the year, and identical on either basis — the one column the
+                  // toggle does not move, which is itself the point the district was making.
+                  beginning: money(f.beginning),
+                  revenues: money(budgetBasis ? f.revenueBudget : f.revenueYtd),
+                  expenditures: money(budgetBasis ? f.expenditureBudget : f.expenditureYtd),
+                  ending: { value: money(ending), strong: true },
+                  // The unassigned figure follows the basis too. It used to carry the reserve
+                  // percentage next to it, which is computed on the PROJECTED balance over
+                  // projected revenue — so the dollar figure and the percentage beside it
+                  // were two different quantities that could not be reconciled to each other.
+                  // The percentage has its own tile, on its own basis, above.
                   class: isGeneral ? (
                     <span>
                       Unassigned
                       <span className="block text-[11px] text-muted-2">
-                        {money(unassignedNow)} actual
+                        {money(rowUnassigned)} {rowUnassignedBasis}
                       </span>
                     </span>
                   ) : (
@@ -893,24 +948,48 @@ export default async function FundBalancePage({
               total: true,
               cells: {
                 fund: "Total all funds",
-                balance: money(allFundsTotal),
-                budgeted: money(allFundsBudgetedTotal),
+                beginning: money(allFundsBeginning),
+                revenues: money(budgetBasis ? allFundsRevenueBudget : allFundsRevenue),
+                expenditures: money(
+                  budgetBasis ? allFundsExpenditureBudget : allFundsExpenditure,
+                ),
+                ending: money(budgetBasis ? allFundsBudgetedTotal : allFundsTotal),
                 class: "—",
                 status: "—",
               },
             }}
             empty="No fund has a committed opening balance for this year."
           />
-          {userCan(user, "configure_district") && (
+          {/*
+            A CORRECTION IS PER FUND, so the link has to name one — and it never did.
+
+            `/fund-balance/override` calls `notFound()` without a `fund` parameter, because a
+            SET of funds has no single figure to correct: three funds have three corrections
+            and applying one of them to their sum would misstate the other two (the same rule
+            `findOverride` enforces in lib/finance/fund-balance.ts). This link omitted the
+            parameter in every case, so "Corrections" was a 404 from every state of this page.
+
+            Gated on `override_fund_balance` rather than `configure_district` as well: the
+            target screen redirects anyone without it, and a link that bounces the reader back
+            to where they started is worse than no link.
+          */}
+          {userCan(user, "override_fund_balance") && (
             <p className="mt-3 text-[11.5px] text-muted-2">
-              A fund&apos;s balance can be corrected from{" "}
-              <Link
-                href={`/fund-balance/override?fy=${scope.fiscalYear}&period=${scope.period}`}
-                className="font-medium text-brand hover:underline"
-              >
-                Corrections
-              </Link>
-              .
+              {scope.fundId ? (
+                <>
+                  {scope.fund ? scope.fund.name : "This fund"}&apos;s balance can be corrected
+                  from{" "}
+                  <Link
+                    href={`/fund-balance/override?fy=${scope.fiscalYear}&period=${scope.period}&fund=${scope.fundId}`}
+                    className="font-medium text-brand hover:underline"
+                  >
+                    Corrections
+                  </Link>
+                  .
+                </>
+              ) : (
+                "Select a single fund above to correct its balance — a correction applies to one fund, not to a total."
+              )}
             </p>
           )}
         </SectionCard>

@@ -479,6 +479,18 @@ async function main() {
      */
     const withOpening = funds.filter((f) => f.fundBalance !== null);
     assert(withOpening.length >= 1, "at least one fund has an opening balance to build a balance on");
+
+    // The table prints the whole calculation now, so the beginning balance is a returned
+    // column rather than an intermediate — and it has to be the one both endings were
+    // actually built from, not a second read of the same file.
+    assert(
+      withOpening.every((f) => f.beginning !== null && f.beginning.plus(f.revenueYtd).minus(f.expenditureYtd).equals(f.fundBalance!)),
+      "beginning + revenues − expenditures reproduces the actual ending balance, per fund",
+    );
+    assert(
+      withOpening.every((f) => f.beginning!.plus(f.revenueBudget).minus(f.expenditureBudget).equals(f.budgetedFundBalance!)),
+      "and the same beginning + the budgeted pair reproduces the budgeted ending balance",
+    );
     assert(
       withOpening.every((f) =>
         f
