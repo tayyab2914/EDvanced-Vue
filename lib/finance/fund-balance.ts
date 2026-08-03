@@ -4,6 +4,7 @@ import type { ActivityCodes } from "@/lib/finance/transfers";
 import { codesKey } from "@/lib/finance/transfers";
 import {
   activityTotals,
+  beginningComponents,
   beginningFundBalance,
   type ActivityTotals,
   type PeriodScope,
@@ -476,6 +477,109 @@ async function resolveDivisor(
     divisor: adopted?.total ?? new D(0),
     denominator: "ADOPTED_REVENUE",
   };
+}
+
+/**
+ * ===========================================================================
+ * THE COMPONENTS A CORRECTION IS ENTERED AGAINST — and why TOTAL is not one of them.
+ * ===========================================================================
+ *
+ * The correction screen lists every component of the balance with the figure the platform
+ * calculated beside it, and the district types over the ones that are wrong. The total is
+ * NOT typed: it is "auto calculated by the system" from the entries, which is the client's
+ * own description of the screen and the only version of it that cannot be self-contradictory
+ * — a hand-typed total that disagrees with the components above it is a sheet nobody can
+ * reconcile, and this screen exists to be read by an auditor.
+ *
+ * The four designated components are the year's OPENING figures: a district re-designates by
+ * board action, which arrives as a new Opening Fund Balance, never as a side effect of
+ * monthly activity. Unassigned is the one that moves, and it carries the whole year's net
+ * change — the same split `computeUnassigned` above makes.
+ */
+export const CORRECTABLE_COMPONENTS = [
+  "NONSPENDABLE",
+  "RESTRICTED",
+  "COMMITTED",
+  "ASSIGNED",
+  "UNASSIGNED",
+] as const;
+
+export type CorrectableComponent = (typeof CORRECTABLE_COMPONENTS)[number];
+
+export interface ComponentBreakdown {
+  /** What the platform calculated for each component, at the scoped period. */
+  components: Record<CorrectableComponent, Prisma.Decimal>;
+  /** The calculated total — `begTotal` plus the year's net change. */
+  total: Prisma.Decimal;
+  /**
+   * `total` minus the sum of the components. Zero on a clean import.
+   *
+   * It is not always zero, and pretending otherwise is what would make the screen lie: the
+   * Total column on an Opening Fund Balance file is imported as its own figure rather than
+   * summed from the four designated columns beside it, so a district whose file does not
+   * foot has a real gap here. The screen states it, and the corrected total is built by
+   * applying the district's CHANGES to the calculated total rather than by re-summing the
+   * column — so a correction to one component moves the total by exactly that correction and
+   * never silently absorbs the gap.
+   */
+  gap: Prisma.Decimal;
+  /** False when no Opening Fund Balance has been imported for the year. */
+  found: boolean;
+  fundLevelOnly: boolean;
+}
+
+export const componentBreakdown = memo("componentBreakdown", scopeKey, buildComponentBreakdown);
+
+async function buildComponentBreakdown(
+  db: TenantDb,
+  scope: PeriodScope,
+  codes: ActivityCodes,
+): Promise<ComponentBreakdown> {
+  const level = balanceScope(scope);
+  const [opening, activity] = await Promise.all([
+    beginningComponents(db, { fiscalYear: level.fiscalYear, filter: level.filter }),
+    activityTotals(db, level, codes),
+  ]);
+
+  const net = activity.totalRevenueYtd.minus(activity.totalExpenditureYtd);
+  const components: Record<CorrectableComponent, Prisma.Decimal> = {
+    NONSPENDABLE: opening.nonspendable,
+    RESTRICTED: opening.restricted,
+    COMMITTED: opening.committed,
+    ASSIGNED: opening.assigned,
+    UNASSIGNED: opening.unassigned.plus(net),
+  };
+
+  const total = opening.total.plus(net);
+  const summed = CORRECTABLE_COMPONENTS.reduce((a, k) => a.plus(components[k]), new D(0));
+
+  return {
+    components,
+    total,
+    gap: total.minus(summed),
+    found: opening.found,
+    fundLevelOnly: narrowsCostCenter(scope.filter),
+  };
+}
+
+/**
+ * The corrected total, given what the district typed.
+ *
+ * Calculated total plus the sum of the changes made to the components — NOT the sum of the
+ * corrected column. See `gap` above for why the difference matters. Where the import foots,
+ * the two are the same figure.
+ *
+ * Shared by the screen (which shows the result live as it is typed) and the action (which
+ * stores it), so the number the district approves is the number that is written.
+ */
+export function correctedTotal(
+  breakdown: Pick<ComponentBreakdown, "components" | "total">,
+  corrections: Partial<Record<CorrectableComponent, Prisma.Decimal>>,
+): Prisma.Decimal {
+  return CORRECTABLE_COMPONENTS.reduce((a, k) => {
+    const c = corrections[k];
+    return c === undefined ? a : a.plus(c.minus(breakdown.components[k]));
+  }, breakdown.total);
 }
 
 async function findOverride(
