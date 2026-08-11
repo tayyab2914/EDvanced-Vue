@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Icon } from "@/components/icons";
+import { cn } from "@/lib/cn";
+import { PILL_BUTTON, PILL_MENU, PillChevron } from "@/components/dashboard/pill";
 
 /**
  * The header scope controls' shared parts — the option shape, and the export menu.
@@ -25,6 +26,17 @@ import { Icon } from "@/components/icons";
 export interface ScopeOption {
   value: string;
   label: string;
+  /**
+   * `label`, in its two halves — "July 2026" and "FY 2026-27".
+   *
+   * The Filters panel prints the whole label on one line; the Overview pill's menu sets the
+   * month against a muted year, which is the design's treatment. Both halves are supplied by
+   * whoever builds the option (lib/dashboard/options.ts) rather than split back out of the
+   * string here, because a control that has to parse its own label is one separator away from
+   * showing a blank row.
+   */
+  primary?: string;
+  secondary?: string;
 }
 
 /**
@@ -73,19 +85,16 @@ export function ExportMenu({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-white px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-[#c8d3e4]"
+        className={PILL_BUTTON}
       >
-        <Icon name="upload" size={14} className="rotate-180" />
         Export
-        <span aria-hidden className="text-[9px] text-muted-2">
-          ▼
-        </span>
+        <PillChevron open={open} />
       </button>
 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-30 mt-1 w-[264px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-lg"
+          className={cn(PILL_MENU, "absolute right-0 z-30 mt-[6px] w-[264px] overflow-hidden py-1")}
         >
           {summaryHref && (
             <>

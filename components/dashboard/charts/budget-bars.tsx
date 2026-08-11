@@ -1,4 +1,4 @@
-import { niceTicks } from "@/lib/dashboard/scale";
+import { fittedTicks } from "@/lib/dashboard/scale";
 import { cn } from "@/lib/cn";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import { Swatch, ChartEmpty } from "./chrome";
@@ -50,6 +50,26 @@ export interface BudgetBarRow {
   status: PaceStatus;
 }
 
+/**
+ * The track's width, near enough. Only two things use it and both are approximations that
+ * err on the safe side: the axis-label collision check, and the floor below.
+ *
+ * This chart only ships inside the one-page sheet now, where it gets a half-page column
+ * less its label / full-year / status columns — about 190px.
+ */
+const TRACK_PX = 190;
+
+/**
+ * No non-zero figure is drawn as nothing.
+ *
+ * A $716K row against a $120M axis is 0.6% — one pixel here — so a floor is applied to the
+ * actual bar, and again to the budget bar BEYOND it when budget is the longer of the two.
+ * That second floor is the one that matters: the two series share a track, so without it a
+ * small row's blue would sit entirely under its green and the row would state one quantity
+ * where it has two. Both exact figures are printed above and below the track regardless.
+ */
+const MIN_SEG_PCT = (5 / TRACK_PX) * 100;
+
 export function BudgetBars({
   rows,
   title,
@@ -74,10 +94,12 @@ export function BudgetBars({
     return <ChartEmpty height={220}>Nothing to compare for this period yet.</ChartEmpty>;
   }
 
-  const ticks = niceTicks(
-    0,
+  // The axis ends at the largest figure on the chart rather than at the nice number above
+  // it, so the longest row runs the full width of its track — see `fittedTicks`. On this
+  // half-page sheet column a rounded-up axis was expensive: a fifth of a ~190px track.
+  const ticks = fittedTicks(
     Math.max(...rows.flatMap((r) => [r.actual, r.budgetToDate, r.budgetFullYear]), 0),
-    { count: 4 },
+    { count: 4, label: format, plotPx: TRACK_PX, gapPx: 8 },
   );
   const pct = (v: number) => (ticks.max === 0 ? 0 : Math.max(0, Math.min(v / ticks.max, 1)) * 100);
 
@@ -112,12 +134,24 @@ export function BudgetBars({
           >
             {unit}
           </span>
-          <span className="relative flex-1">
-            <span className="flex justify-between text-[10px] tabular-nums text-viz-label">
-              {ticks.values.map((v) => (
-                <span key={v}>{format(v)}</span>
-              ))}
-            </span>
+          {/* Ticks sit at their VALUE, not spread evenly: the axis ends on the data, so the
+              last gap is a remainder and `justify-between` would misplace every label. */}
+          <span className="relative h-3 flex-1">
+            {ticks.values.map((v, i) => (
+              <span
+                key={v}
+                className="absolute bottom-0 whitespace-nowrap text-[10px] tabular-nums text-viz-label"
+                style={
+                  i === 0
+                    ? { left: 0 }
+                    : i === ticks.values.length - 1
+                      ? { left: "100%", transform: "translateX(-100%)" }
+                      : { left: `${pct(v)}%`, transform: "translateX(-50%)" }
+                }
+              >
+                {format(v)}
+              </span>
+            ))}
           </span>
           <span data-bars-ref className="w-[86px] flex-none" />
           <span data-bars-badge className="w-[92px] flex-none" />
@@ -129,8 +163,17 @@ export function BudgetBars({
             const actualPct = pct(r.actual);
             const budgetPct = pct(r.budgetToDate);
             const fullPct = pct(r.budgetFullYear);
+
+            // Floored so a small source still draws both of its series — see MIN_SEG_PCT.
+            const drawnActual = r.actual > 0 ? Math.max(actualPct, MIN_SEG_PCT) : 0;
+            const drawnBudget =
+              r.budgetToDate > 0
+                ? budgetPct > actualPct
+                  ? Math.max(budgetPct, drawnActual + MIN_SEG_PCT)
+                  : Math.max(budgetPct, MIN_SEG_PCT)
+                : 0;
             // The dashed run starts where the drawn bar ends, whichever series is longer.
-            const barEnd = Math.max(actualPct, budgetPct);
+            const barEnd = Math.max(drawnActual, drawnBudget);
 
             return (
               <li
@@ -155,7 +198,7 @@ export function BudgetBars({
                   <span data-bars-value className="mb-[3px] block h-[13px]">
                     <span
                       className="absolute text-[10.5px] font-semibold tabular-nums text-strong"
-                      style={{ left: `min(${actualPct}%, calc(100% - 3.5rem))` }}
+                      style={{ left: `min(${drawnActual}%, calc(100% - 3.5rem))` }}
                     >
                       {r.actualDisplay}
                     </span>
@@ -163,22 +206,29 @@ export function BudgetBars({
 
                   <span data-bars-track className="relative block h-[11px] rounded-full bg-line-soft">
                     {/* Budget to date, underneath. */}
-                    <span
-                      className="absolute inset-y-0 left-0 rounded-full"
-                      style={{
-                        width: `${budgetPct}%`,
-                        background: "var(--color-viz-budget)",
-                      }}
-                    />
+                    {drawnBudget > 0 && (
+                      <span
+                        className="absolute inset-y-0 left-0 rounded-full"
+                        style={{
+                          width: `${drawnBudget}%`,
+                          background: "var(--color-viz-budget)",
+                        }}
+                      />
+                    )}
                     {/* Actual, painted over it — the overlap IS the comparison. */}
-                    <span
-                      className="absolute inset-y-0 left-0 rounded-full"
-                      style={{
-                        width: `${actualPct}%`,
-                        background: "var(--color-viz-actual)",
-                      }}
-                    />
-                    {/* The full-year reference: a dashed run to a hollow marker. */}
+                    {drawnActual > 0 && (
+                      <span
+                        className="absolute inset-y-0 left-0 rounded-full"
+                        style={{
+                          width: `${drawnActual}%`,
+                          background: "var(--color-viz-actual)",
+                        }}
+                      />
+                    )}
+                    {/* The full-year reference: a dashed run to a hollow marker. The marker
+                        is held half its own width inside the track, because the axis now
+                        ends ON the largest full-year figure and that row's marker would
+                        otherwise be drawn hanging off the end of its own track. */}
                     {fullPct > barEnd && (
                       <>
                         <span
@@ -187,7 +237,7 @@ export function BudgetBars({
                         />
                         <span
                           className="absolute top-1/2 h-[9px] w-[9px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-viz-reference bg-white"
-                          style={{ left: `${fullPct}%` }}
+                          style={{ left: `min(${fullPct}%, calc(100% - 5px))` }}
                         />
                       </>
                     )}
@@ -196,7 +246,7 @@ export function BudgetBars({
                   <span data-bars-value className="mt-[3px] block h-[13px]">
                     <span
                       className="absolute text-[10.5px] tabular-nums text-brand"
-                      style={{ left: `min(${budgetPct}%, calc(100% - 3.5rem))` }}
+                      style={{ left: `min(${drawnBudget}%, calc(100% - 3.5rem))` }}
                     >
                       {r.budgetToDateDisplay}
                     </span>
@@ -225,7 +275,8 @@ export function BudgetBars({
       </div>
 
       {/* The same numbers as text, for a reader who cannot use the bars. */}
-      <table className="sr-only">
+      <div className="sr-only">
+        <table>
         <caption>{title}</caption>
         <thead>
           <tr>
@@ -247,7 +298,8 @@ export function BudgetBars({
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
     </figure>
   );
 }
@@ -323,7 +375,8 @@ export function ShareBars({
           </li>
         ))}
       </ul>
-      <table className="sr-only">
+      <div className="sr-only">
+        <table>
         <caption>{title}</caption>
         <tbody>
           {rows.map((r) => (
@@ -334,7 +387,8 @@ export function ShareBars({
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
     </figure>
   );
 }
@@ -368,10 +422,11 @@ export function MetricStrip({
   cols?: 3 | 4 | 5;
   className?: string;
 }) {
+  // The redesign's rail inks — the same pair OverviewMetricRail sets on its figures.
   const TONE = {
-    positive: "text-strong",
-    negative: "text-action",
-    neutral: "text-ink",
+    positive: "text-[#1a932e]",
+    negative: "text-[#fd4438]",
+    neutral: "text-[#1f1f21]",
   };
   // Container breakpoints, not viewport ones: the strip goes wide only when the card it
   // sits in is wide enough to spell every label out.
@@ -384,25 +439,29 @@ export function MetricStrip({
     <div className="@container">
       <dl
         className={cn(
-          "grid grid-cols-2 divide-x divide-line-soft rounded-lg border border-line-soft",
+          // The redesign's white metric rail (Figma 3:12428) at strip scale: solid white on
+          // the translucent card, the rail's #e7e7e7 border, #ebebeb hairlines between cells.
+          "grid grid-cols-2 divide-x divide-[#ebebeb] rounded-[16px] border border-[#e7e7e7] bg-white",
           GRID[cols],
           className,
         )}
       >
         {items.map((i) => (
           <div key={i.label} className="min-w-0 px-3 py-2.5">
-            <dt className="text-[9.5px] font-semibold uppercase leading-tight tracking-[0.05em] text-muted-2">
-              {i.label}
-            </dt>
+            <dt className="text-[11px] font-medium leading-tight text-[#1f1f21]">{i.label}</dt>
             <dd
               className={cn(
-                "mt-1 text-[15px] font-semibold leading-tight tabular-nums",
+                "mt-1 text-[16px] font-medium leading-tight tabular-nums",
                 TONE[i.tone ?? "neutral"],
               )}
             >
               {i.value}
             </dd>
-            {i.note && <dd className="mt-0.5 text-[10.5px] leading-snug text-muted-2">{i.note}</dd>}
+            {i.note && (
+              <dd className="mt-0.5 text-[10.5px] leading-snug text-[#1f1f21]/[0.74]">
+                {i.note}
+              </dd>
+            )}
           </div>
         ))}
       </dl>

@@ -79,16 +79,18 @@ export function EmptyState({
   icon?: IconName;
 }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed border-line bg-white px-6 py-14 text-center">
-      <span className="mb-3.5 flex h-11 w-11 items-center justify-center rounded-xl bg-panel text-muted-2">
+    <div className="flex flex-col items-center rounded-[14px] border border-dashed border-black/15 bg-white/[0.62] px-6 py-14 text-center">
+      <span className="mb-3.5 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#797979]">
         <Icon name={icon} size={20} />
       </span>
-      <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
-      <p className="mt-1.5 max-w-[46ch] text-[13px] leading-relaxed text-muted">{children}</p>
+      <h2 className="text-[15px] font-semibold text-[#060606]">{title}</h2>
+      <p className="mt-1.5 max-w-[46ch] text-[13px] leading-relaxed text-[#060606]/[0.62]">
+        {children}
+      </p>
       {action && href && (
         <Link
           href={href}
-          className="mt-4 rounded-lg bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-dark"
+          className="mt-4 rounded-full bg-brand px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand-dark"
         >
           {action}
         </Link>
@@ -106,7 +108,7 @@ export function EmptyState({
  */
 export function SubstitutionNotice({ asked, showing }: { asked: string; showing: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-monitor-bg bg-monitor-bg px-3.5 py-2.5 text-[12.5px] text-monitor">
+    <div className="flex items-start gap-2 rounded-[10px] bg-[rgba(239,138,31,0.18)] px-3.5 py-2.5 text-[12.5px] text-[#b76a12]">
       <span aria-hidden className="font-bold">
         !
       </span>
@@ -162,8 +164,8 @@ export function FundLevelOnly({ what = "This figure is" }: { what?: string }) {
  */
 export function FundLevelNotice({ subject }: { subject: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-line bg-panel px-3.5 py-2.5 text-[12.5px] text-ink-muted">
-      <span aria-hidden className="mt-px flex-none text-muted-2">
+    <div className="flex items-start gap-2 rounded-[10px] bg-white/[0.62] px-3.5 py-2.5 text-[12.5px] text-[#060606]/[0.74]">
+      <span aria-hidden className="mt-px flex-none text-[#797979]">
         <Icon name="building" size={14} />
       </span>
       <span>
@@ -300,7 +302,8 @@ export function Row({
     "2-2-1": "xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1.1fr)_minmax(0,0.8fr)]",
     "1-2-rail": "xl:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,0.9fr)]",
   }[cols];
-  return <div className={cn("grid gap-4", grid, className)}>{children}</div>;
+  // 10px gaps — the redesign's band rhythm (the Executive page's grids use the same).
+  return <div className={cn("grid gap-2.5", grid, className)}>{children}</div>;
 }
 
 /**
@@ -337,7 +340,7 @@ export function KeyInsightBar({
   return (
     <div
       data-insight-bar
-      className={cn("flex items-start gap-2.5 rounded-lg border px-3.5 py-3", TONE[tone])}
+      className={cn("flex items-start gap-2.5 rounded-[10px] border px-3.5 py-3", TONE[tone])}
     >
       <span
         aria-hidden

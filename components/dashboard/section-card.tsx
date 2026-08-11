@@ -1,10 +1,18 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { ArrowGlyph } from "@/components/dashboard/overview-panel";
 
 /**
  * The card every dashboard section sits in: title, optional subtitle, an optional control
  * on the right, the content, and an optional footer link.
+ *
+ * Restyled to the executive redesign's card (Figma 3:11828's frame): 62% white on the
+ * canvas at a 14px radius, no border and no shadow — the ground colour is what makes it a
+ * card. The header speaks OverviewPanelHeader's ramp: a 16px sentence-case title with the
+ * white "Go to …" capsule beside it, and the 10px bold sub-line at 56% black. The footer
+ * link the old card parked at the bottom IS that capsule now, which is where the design
+ * puts every card's destination.
  *
  * One card does one job. That is the discipline behind the client's "use of white space" —
  * a card that answered two questions would need a divider, and a divider is where a
@@ -31,9 +39,10 @@ export function SectionCard({
   badge?: ReactNode;
   /** A range toggle, a "view by" — anything that changes only this card. */
   control?: ReactNode;
+  /** The label of the card's destination capsule — "View revenue detail". */
   footer?: string;
   footerHref?: string;
-  /** A caveat set opposite the footer link — "All amounts are unaudited". */
+  /** A caveat set at the card's foot — "All amounts are unaudited". */
   footerNote?: string;
   children: ReactNode;
   className?: string;
@@ -42,50 +51,59 @@ export function SectionCard({
   return (
     <section
       className={cn(
-        "flex min-w-0 flex-col rounded-xl border border-line bg-white p-5 shadow-[0_1px_2px_rgba(15,32,56,0.03)]",
+        "flex min-w-0 flex-col rounded-[14px] bg-white/[0.62] p-[18px]",
         className,
       )}
     >
       <header className="mb-3.5 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {/* #1F2937 and a step up in size — the client's "section headings" rung. The old
-              heading wore the secondary-label token, which put a card's title at the same
-              weight as the labels inside it and flattened the hierarchy. */}
-          <h2 className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.055em] text-heading">
-            <span className="truncate">{title}</span>
-            {badge}
-            {info && (
-              <span
-                title={info}
-                aria-label={info}
-                className="flex h-[13px] w-[13px] flex-none cursor-help items-center justify-center rounded-full border border-line bg-panel text-[9px] font-bold text-muted-2"
+          <div className="flex min-w-0 flex-wrap items-center gap-x-[14px] gap-y-1">
+            <h2 className="flex min-w-0 items-center gap-1.5 text-[16px] font-normal leading-[1.4] tracking-[0.16px] text-[#060606]">
+              {/* Wraps rather than truncates: at 16px a card in a narrow rail column loses
+                  half its name to an ellipsis, and a second line is cheaper than a title
+                  nobody can read. */}
+              <span className="min-w-0">{title}</span>
+              {badge}
+              {info && (
+                <span
+                  title={info}
+                  aria-label={info}
+                  className="flex size-[14px] flex-none cursor-help items-center justify-center rounded-full bg-black/[0.07] text-[9px] font-bold text-[#797979]"
+                >
+                  i
+                </span>
+              )}
+            </h2>
+            {footer && footerHref && (
+              <Link
+                href={footerHref}
+                className="flex h-[20px] flex-none items-center gap-[2px] rounded-[22px] bg-white pl-[3px] pr-[9px] transition-opacity hover:opacity-75"
               >
-                i
-              </span>
+                <span className="flex size-[16px] items-center justify-center">
+                  <ArrowGlyph color="#1A932E" className="-rotate-45" />
+                </span>
+                <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-black">
+                  {footer}
+                </span>
+              </Link>
             )}
-          </h2>
-          {subtitle && <p className="mt-1 text-[12px] text-muted-2">{subtitle}</p>}
+          </div>
+          {subtitle && (
+            <p className="mt-[2px] text-[10px] font-bold leading-[1.8] tracking-[0.1px] text-[#060606]/[0.56]">
+              {subtitle}
+            </p>
+          )}
         </div>
         {control && <div className="flex-none">{control}</div>}
       </header>
 
       <div className={cn("min-w-0 flex-1", bodyClassName)}>{children}</div>
 
-      {(footer && footerHref) || footerNote ? (
-        <footer className="mt-3.5 flex flex-wrap items-center justify-between gap-2 border-t border-line-soft pt-3">
-          {footer && footerHref ? (
-            <Link
-              href={footerHref}
-              className="text-[12.5px] font-semibold text-brand transition-opacity hover:opacity-75"
-            >
-              {footer} →
-            </Link>
-          ) : (
-            <span />
-          )}
-          {footerNote && <span className="text-[11px] text-muted-2">{footerNote}</span>}
+      {footerNote && (
+        <footer className="mt-3.5 border-t border-black/10 pt-2.5 text-[10.5px] text-[#060606]/[0.56]">
+          {footerNote}
         </footer>
-      ) : null}
+      )}
     </section>
   );
 }
@@ -103,8 +121,8 @@ export function FooterInfoBar({
   href?: string;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#d5e3fb] bg-[#f2f7ff] px-4 py-3">
-      <p className="flex min-w-0 items-start gap-2 text-[12.5px] leading-relaxed text-[#33507a]">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-white/[0.62] px-[18px] py-3">
+      <p className="flex min-w-0 items-start gap-2 text-[12.5px] leading-relaxed text-[#060606]/[0.74]">
         <span aria-hidden className="font-semibold text-brand">
           ⓘ
         </span>
@@ -113,7 +131,7 @@ export function FooterInfoBar({
       {action && href && (
         <Link
           href={href}
-          className="flex-none rounded-lg bg-brand px-3 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-brand-dark"
+          className="flex-none rounded-full bg-brand px-4 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-brand-dark"
         >
           {action} →
         </Link>
@@ -141,17 +159,20 @@ export function DataAsOf({ date, note }: { date: Date | null; note?: string }) {
   );
 }
 
-/** A row of small label/value pairs under a chart — §7.2's 12-month high/low strip. */
+/** A row of small label/value pairs under a chart — §7.2's 12-month high/low strip.
+ *  Speaks the redesign's rail ramp: sentence-case grey label over a near-black figure. */
 export function StatStrip({ items }: { items: { label: string; value: string; note?: string }[] }) {
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line-soft pt-3.5 sm:grid-cols-4">
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-black/10 pt-3.5 sm:grid-cols-4">
       {items.map((i) => (
         <div key={i.label} className="min-w-0">
-          <dt className="truncate text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2">
-            {i.label}
-          </dt>
-          <dd className="mt-1 truncate text-[14.5px] font-semibold tabular-nums text-ink">{i.value}</dd>
-          {i.note && <dd className="truncate text-[11px] text-muted-2">{i.note}</dd>}
+          <dt className="truncate text-[11px] font-medium text-[#797979]">{i.label}</dt>
+          <dd className="mt-1 truncate text-[15px] font-medium tabular-nums text-[#1f1f21]">
+            {i.value}
+          </dd>
+          {i.note && (
+            <dd className="truncate text-[11px] text-[#1f1f21]/[0.74]">{i.note}</dd>
+          )}
         </div>
       ))}
     </dl>

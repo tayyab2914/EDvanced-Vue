@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons";
 import { Spinner } from "@/components/dashboard/scope-navigation";
+import { CHIP_TONE, PILL_BUTTON, PillChevron } from "@/components/dashboard/pill";
 import type { ScopeOption } from "@/components/dashboard/scope-bar";
 import type {
   FilterOptions,
@@ -529,25 +530,23 @@ export function FilterMenu({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        className={cn(
-          "flex h-9 items-center gap-2 rounded-lg border bg-white px-3 text-[12.5px] font-medium transition-colors disabled:cursor-not-allowed",
-          activeCount > 0
-            ? "border-brand/40 text-brand"
-            : "border-line text-ink-soft hover:border-[#c8d3e4]",
-        )}
+        className={PILL_BUTTON}
       >
-        {pending ? <Spinner size={13} /> : <Icon name="filter" size={14} />}
+        {pending && <Spinner size={13} />}
         {pending ? "Applying…" : "Filters"}
+        {/* The count, in the chips' own teal rather than the brand blue — it says how many
+            of the chips below belong to this button, so it wears their colour. SOLID, not
+            the chips' 16% wash: this is the one mark on a white pill that has to be seen
+            from across the header, and a tint at 11px is not. */}
         {activeCount > 0 && !pending && (
-          <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1 text-[10.5px] font-semibold text-white">
+          <span
+            className="inline-flex h-[19px] min-w-[19px] items-center justify-center rounded-full px-[5px] text-[11px] font-bold leading-none text-white"
+            style={{ background: CHIP_TONE.teal.fg }}
+          >
             {activeCount}
           </span>
         )}
-        {!pending && (
-          <span aria-hidden className="text-[9px] text-muted-2">
-            ▼
-          </span>
-        )}
+        {!pending && <PillChevron open={open} />}
       </button>
 
       {open &&
@@ -565,7 +564,10 @@ export function FilterMenu({
               maxHeight: pos?.maxH,
               visibility: pos ? "visible" : "hidden",
             }}
-            className="z-50 flex flex-col rounded-lg border border-line bg-white text-left shadow-[0_10px_30px_rgba(15,32,56,0.14)] print:hidden"
+            // NOT `overflow-hidden`, however much the 16px radius wants it — the options
+            // flyout is an absolutely positioned child that hangs off this box's side, and
+            // clipping to the panel would clip the flyout out of existence.
+            className="z-50 flex flex-col rounded-[16px] border border-line bg-white text-left shadow-[0_12px_30px_rgba(0,6,6,0.14)] print:hidden"
           >
           {stacked && active ? (
             /* Drill-down: one card, a step at a time, with a way back up. */
@@ -680,7 +682,7 @@ export function FilterMenu({
                   ...(pos?.side === "left" ? { marginRight: GAP } : { marginLeft: GAP }),
                 }}
                 className={cn(
-                  "absolute top-0 flex flex-col overflow-hidden rounded-lg border border-line bg-white shadow-[0_10px_30px_rgba(15,32,56,0.14)]",
+                  "absolute top-0 flex flex-col overflow-hidden rounded-[16px] border border-line bg-white shadow-[0_12px_30px_rgba(0,6,6,0.14)]",
                   pos?.side === "left" ? "right-full" : "left-full",
                 )}
               >

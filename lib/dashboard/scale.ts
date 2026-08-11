@@ -71,6 +71,70 @@ export function niceTicks(
   return { min, max, step, values };
 }
 
+/**
+ * Ticks for an axis whose END IS THE DATA.
+ *
+ * `niceTicks` widens the domain to the next nice number, which is right for a plotted area
+ * where a bar touching the frame reads as clipped. On the row charts it is not: a card
+ * whose largest figure is $120M rounds out to a $150M axis, and every bar on it — including
+ * the small ones that were already hard to see — is then drawn into four-fifths of the
+ * track for the sake of 30M of empty space nothing will ever occupy.
+ *
+ * So here the axis ends exactly at the largest figure: the longest row always runs the full
+ * width of its track, and everything else is measured against it. The interior ticks are
+ * still nice numbers, but they are positioned BY VALUE rather than evenly spaced, since the
+ * last gap is now a remainder. Pass `label` and `plotPx` and any interior tick whose text
+ * would touch its neighbour — or the end label, which is the one that must survive — is
+ * dropped rather than overprinted.
+ */
+export function fittedTicks(
+  dataMax: number,
+  opts: {
+    count?: number;
+    /** Formats a tick. Only needed for the collision check. */
+    label?: (v: number) => string;
+    /** Approximate plot width in px — the axis is still laid out in percentages. */
+    plotPx?: number;
+    /** Average glyph advance of the axis type. The cards set 10px tabular figures. */
+    charPx?: number;
+    /** Clear air demanded between two labels. */
+    gapPx?: number;
+  } = {},
+): Ticks {
+  const { count = 5, label, plotPx = 0, charPx = 5.8, gapPx = 10 } = opts;
+  if (!(dataMax > 0)) return { min: 0, max: 1, step: 1, values: [0, 1] };
+
+  const step = niceStep(dataMax / Math.max(2, count));
+
+  const candidates: number[] = [];
+  for (let i = 0; i * step < dataMax; i++) candidates.push(round(i * step));
+  candidates.push(round(dataMax));
+
+  if (!label || plotPx <= 0) return { min: 0, max: dataMax, step, values: candidates };
+
+  // A server component cannot measure text. It does not have to: the first label is
+  // left-aligned at the origin, the last is right-aligned at the end, and the rest are
+  // centred on their value — so each box is known from its character count, near enough
+  // to prune with. Estimating a little wide only drops a tick that would have squeezed in.
+  const width = (v: number) => label(v).length * charPx;
+  const endLeft = plotPx - width(dataMax);
+
+  const values: number[] = [candidates[0]];
+  let prevRight = width(candidates[0]);
+  for (let i = 1; i < candidates.length - 1; i++) {
+    const v = candidates[i];
+    const centre = (v / dataMax) * plotPx;
+    const half = width(v) / 2;
+    if (centre - half < prevRight + gapPx) continue;
+    if (centre + half > endLeft - gapPx) continue;
+    values.push(v);
+    prevRight = centre + half;
+  }
+  values.push(candidates[candidates.length - 1]);
+
+  return { min: 0, max: dataMax, step, values };
+}
+
 function niceStep(raw: number): number {
   if (raw <= 0 || !Number.isFinite(raw)) return 1;
   const magnitude = Math.pow(10, Math.floor(Math.log10(raw)));

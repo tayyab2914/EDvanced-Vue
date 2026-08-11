@@ -86,9 +86,11 @@ export function DataTable({
       key={row.id}
       className={cn(
         isTotal
-          ? "border-t-2 border-line bg-panel font-semibold text-ink"
-          : "border-t border-line-soft",
-        !isTotal && zebra && index % 2 === 1 && "bg-panel/60",
+          ? "border-t-2 border-[#e7e7e7] bg-black/[0.03] font-semibold text-[#060606]"
+          : // The first body row sits directly under the header's own hairline; giving it a
+            // rule as well would draw a double line.
+            index > 0 && "border-t border-black/[0.06]",
+        !isTotal && zebra && index % 2 === 1 && "bg-black/[0.02]",
         // A row the caller has flagged — an overspent function, a fund below its floor. The
         // tint is a SECOND channel behind the badge the row already carries, never the only
         // one: "make overspending easier to identify visually" does not mean "identify it
@@ -124,7 +126,9 @@ export function DataTable({
     <div className="-mx-1 overflow-x-auto">
       <table className="min-w-full">
         <thead>
-          <tr>
+          {/* The redesign's header row (Figma 3:12545): sentence-case near-black labels
+              over one hairline at 10% black, instead of the old uppercase muted caps. */}
+          <tr className="border-b border-black/10">
             {columns.map((c) => (
               <th
                 key={c.key}
@@ -132,7 +136,7 @@ export function DataTable({
                 style={c.width ? { width: c.width } : undefined}
                 className={cn(
                   pad,
-                  "text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2",
+                  "text-[11.5px] font-medium tracking-[0.11px] text-[#060606]",
                   c.align === "right" ? "text-right" : "text-left",
                 )}
               >

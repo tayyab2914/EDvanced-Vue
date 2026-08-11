@@ -21,8 +21,16 @@
   --color-faint: #9ca3af;
   --color-line: #e5e7eb;
   --color-line-soft: #f3f4f6;
-  --color-canvas: #eef1f5;
+  /* The page ground, straight off the redesign's root frame (Figma 3:11565). It replaced a
+     neutral blue-grey (#eef1f5), and the change is load-bearing rather than cosmetic: the
+     Overview tiles are 62% white with NO border, so this colour is the only thing that makes
+     them read as cards. Darken or neutralise it and the whole band flattens. */
+  --color-canvas: #ecfbff;
   --color-navy: #0d1b2e;
+  /* The sidebar card. A step deeper and cooler than `navy`, which stays the ink for
+     overlays and scrims — the redesign floats the rail as its own surface above the canvas,
+     so it needs a colour that is not also the colour of a modal backdrop. */
+  --color-sidebar: #081b31;
   --color-brand: #2f6bf6;
   --color-brand-dark: #245ce0;
   --color-panel: #f9fafb;
@@ -332,7 +340,11 @@ body {
 .sheet-page {
   width: 990px;
   max-width: 100%;
-  background: #ffffff;
+  /* The redesign's ground (--color-canvas), not white. The sheet's cards are the screen's
+     62%-white cards with no border, and — exactly as the token's own note says — this
+     colour is the only thing that makes them read as cards. It prints: the print block
+     above sets print-color-adjust on everything. */
+  background: var(--color-canvas);
   border: 1px solid var(--color-line);
   border-radius: 10px;
   box-shadow: 0 2px 14px rgba(15, 32, 56, 0.07);
@@ -345,8 +357,8 @@ body {
   display: flex;
   width: 990px;
   flex-direction: column;
-  gap: 7px;
-  padding: 10px;
+  gap: 6px;
+  padding: 9px;
   color: var(--color-ink);
 }
 
@@ -396,19 +408,33 @@ body {
 }
 
 /* ---------- bands and cards ---------- */
+/* The bands stack with the same rhythm the cards keep inside them, and a `grow` band takes
+   the leftover page rather than leaving a white gutter above the colophon. */
+.sheet-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
 .sheet-band {
   display: grid;
   gap: 7px;
   align-items: stretch;
 }
+.sheet-band-grow {
+  flex: 1;
+}
 
+/* The redesign's card: 62% white on the canvas, 14px radius, NO border — the ground colour
+   is what makes it a card, same as on screen. */
 .sheet-card {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  border: 1px solid var(--color-line);
-  border-radius: 7px;
-  padding: 7px 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 7px 9px;
 }
 .sheet-card-head {
   display: flex;
@@ -417,21 +443,22 @@ body {
   gap: 6px;
   margin-bottom: 5px;
 }
+/* The design's sentence-case card title, not the old uppercase label. */
 .sheet-card-title {
   display: flex;
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
-  color: var(--color-heading);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  color: #060606;
 }
 .sheet-card-note {
   flex: none;
-  font-size: 9px;
-  color: var(--color-muted-2);
+  font-size: 8.5px;
+  font-weight: 700;
+  color: rgba(6, 6, 6, 0.56);
 }
 .sheet-card-body {
   display: flex;
@@ -446,69 +473,115 @@ body {
   gap: 5px;
 }
 
-/* ---------- the KPI strip ---------- */
+/* ---------- the KPI strip ----------
+   The Overview tile at sheet scale: the same 62%-white borderless card, the same tinted
+   icon disc, the same 18%-tint judgement pill — where the old sheet tile carried a 3px
+   coloured left edge, the judgement now rides the pill, exactly as it does on screen. */
 .sheet-kpi {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 1px;
-  border: 1px solid var(--color-line);
-  border-radius: 7px;
-  border-left-width: 3px;
-  padding: 6px 7px;
+  gap: 2px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 7px 8px;
 }
-.sheet-kpi[data-tone="neutral"] {
-  border-left-color: var(--color-line);
+.sheet-kpi-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
 }
-.sheet-kpi[data-tone="positive"] {
-  border-left-color: var(--color-strong-mark);
-}
-.sheet-kpi[data-tone="monitor"] {
-  border-left-color: var(--color-monitor-mark);
-}
-.sheet-kpi[data-tone="negative"] {
-  border-left-color: var(--color-action-mark);
+.sheet-kpi-disc {
+  display: flex;
+  height: 20px;
+  width: 20px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
 }
 .sheet-kpi-label {
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-size: 8.5px;
+  font-weight: 600;
   line-height: 1.25;
-  text-transform: uppercase;
-  color: var(--color-muted-2);
+  color: #797979;
 }
 .sheet-kpi-value {
   font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.4px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
   line-height: 1.15;
+  color: #060606;
   font-variant-numeric: proportional-nums;
 }
-.sheet-kpi-sub,
-.sheet-kpi-note {
+.sheet-kpi-sub {
   font-size: 8.5px;
   line-height: 1.3;
-  color: var(--color-muted-2);
+  color: rgba(0, 6, 6, 0.62);
 }
+/* The judgement pill — the tiles' 18% tints with their full-strength ink. */
 .sheet-kpi-note {
-  font-weight: 600;
-  color: var(--color-muted);
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  margin-top: 1px;
+  border-radius: 20px;
+  padding: 1.5px 6px;
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+  line-height: 1.3;
+}
+.sheet-kpi[data-tone="neutral"] .sheet-kpi-note {
+  background: rgba(92, 106, 128, 0.18);
+  color: #5c6a80;
+}
+.sheet-kpi[data-tone="positive"] .sheet-kpi-note {
+  background: rgba(26, 147, 46, 0.18);
+  color: #1a932e;
+}
+.sheet-kpi[data-tone="monitor"] .sheet-kpi-note {
+  background: rgba(239, 138, 31, 0.18);
+  color: #b76a12;
+}
+.sheet-kpi[data-tone="negative"] .sheet-kpi-note {
+  background: rgba(230, 95, 43, 0.18);
+  color: #e65f2b;
 }
 
-/* ---------- the key/value strip under a chart ---------- */
+/* ---------- the key/value strip under a chart ----------
+   The redesign's white metric rail at sheet scale: solid white on the translucent card,
+   the rail's #e7e7e7 border and hairlines. */
 .sheet-stats {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
-  border: 1px solid var(--color-line-soft);
-  border-radius: 6px;
+  border: 1px solid #e7e7e7;
+  border-radius: 10px;
+  background: #ffffff;
 }
 .sheet-stats > div {
   min-width: 0;
   padding: 3px 6px;
 }
 .sheet-stats > div + div {
-  border-left: 1px solid var(--color-line-soft);
+  border-left: 1px solid #ebebeb;
+}
+/* Stacked — one figure per row, for a card too narrow to run them across. */
+.sheet-stats[data-stacked] {
+  grid-auto-flow: row;
+}
+.sheet-stats[data-stacked] > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 7px;
+}
+.sheet-stats[data-stacked] > div + div {
+  border-left: 0;
+  border-top: 1px solid #ebebeb;
 }
 .sheet-stats dt {
   font-size: 8px;
@@ -541,48 +614,9 @@ body {
    with them is their screen spacing: a 65px chart row and a 3.5px-padded table cell are
    right at 1440px and are the difference between one page and three at 990px. */
 
-[data-sheet] [data-bars-legend] {
-  margin-bottom: 4px;
-  gap: 4px 10px;
-  font-size: 8.5px;
-}
-[data-sheet] [data-bars-legend] > li {
-  font-size: 8.5px;
-  gap: 4px;
-}
-[data-sheet] [data-bars-axis] {
-  margin-bottom: 0;
-  font-size: 8px;
-}
-[data-sheet] [data-bars-row] {
-  padding-top: 3px;
-  padding-bottom: 3px;
-  gap: 6px;
-}
-[data-sheet] [data-bars-label] {
-  width: 84px;
-  font-size: 9px;
-  line-height: 1.15;
-}
-[data-sheet] [data-bars-ref] {
-  width: 54px;
-  font-size: 9px;
-}
-[data-sheet] [data-bars-badge] {
-  width: 66px;
-}
-[data-sheet] [data-bars-axis] > [data-bars-label],
-[data-sheet] [data-bars-axis] > [data-bars-ref],
-[data-sheet] [data-bars-axis] > [data-bars-badge] {
-  flex: none;
-}
-[data-sheet] [data-bars-value] {
-  height: 10px;
-  font-size: 8.5px;
-}
-[data-sheet] [data-bars-track] {
-  height: 8px;
-}
+/* The data-bars-* overrides that used to sit here densified BudgetBars for the Executive
+   sheet. That sheet now draws SheetBudgetBars (components/dashboard/sheet-widgets.tsx),
+   which is authored at sheet scale, so the hooks have no reader on any summary route. */
 
 [data-sheet] [data-chart-legend] {
   gap: 3px 10px;
@@ -714,5 +748,111 @@ body {
   }
   .sheet-fit {
     padding: 0;
+  }
+}
+
+/* ===================== executive dashboard entrance animations =====================
+   Server components mark themselves `data-reveal`; RevealManager (components/reveal.tsx)
+   stamps `.in` on each as it first scrolls into view, and these rules do the drawing —
+   the card lifts in, needles sweep, rings and arcs fill, lines draw, bars grow.
+
+   Guarded twice, and both guards are load-bearing:
+     - `@media screen` — print and the PDF export must never meet a hidden pre-state.
+     - `prefers-reduced-motion` — the manager stamps `.in` immediately and none of these
+       pre-states ever apply. The animation is decoration; the figures are not.
+
+   The pre-states live on `:not(.in)` so the FINISHED values stay where they belong — in
+   the markup (SVG attributes, inline widths). CSS out-ranks a presentation attribute,
+   and the one place it has to out-rank an inline style (.anim-bar) says so explicitly. */
+@media screen and (prefers-reduced-motion: no-preference) {
+  [data-reveal] {
+    transition:
+      opacity 0.55s ease-out,
+      transform 0.55s ease-out;
+  }
+  [data-reveal]:not(.in) {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  /* Stroke draw, left to right. Every path that wears this carries pathLength="1", so
+     one dash unit is the whole path and no measuring ever happens. */
+  [data-reveal] .anim-draw {
+    stroke-dasharray: 1;
+    transition: stroke-dashoffset 1.1s cubic-bezier(0.33, 1, 0.68, 1) 0.2s;
+  }
+  [data-reveal]:not(.in) .anim-draw {
+    stroke-dashoffset: 1;
+  }
+
+  /* Ring fill — --c is the circle's circumference; the final offset is the attribute. */
+  [data-reveal] .anim-ring {
+    transition: stroke-dashoffset 1s cubic-bezier(0.33, 1, 0.68, 1) 0.15s;
+  }
+  [data-reveal]:not(.in) .anim-ring {
+    stroke-dashoffset: var(--c);
+  }
+
+  /* Bar growth. The finished width is an inline style, hence the !important. */
+  [data-reveal] .anim-bar {
+    transition: width 0.9s cubic-bezier(0.33, 1, 0.68, 1) 0.15s;
+  }
+  [data-reveal]:not(.in) .anim-bar {
+    width: 0 !important;
+  }
+
+  /* Needle / sector sweep — --sweep is minus the mark's own final angle, so everything
+     starts at the scale's zero and sweeps home. */
+  [data-reveal] .anim-needle {
+    transition: transform 1.3s cubic-bezier(0.33, 1, 0.68, 1) 0.2s;
+  }
+  [data-reveal]:not(.in) .anim-needle {
+    transform: rotate(var(--sweep));
+  }
+  [data-reveal] .anim-sweep {
+    transition:
+      transform 1s cubic-bezier(0.33, 1, 0.68, 1) 0.15s,
+      opacity 0.4s ease-out 0.15s;
+  }
+  [data-reveal]:not(.in) .anim-sweep {
+    transform: rotate(var(--sweep));
+    opacity: 0;
+  }
+
+  /* Late arrivals — markers, in-bar figures, hatches — after their chart has drawn. */
+  [data-reveal] .anim-fade {
+    transition: opacity 0.5s ease-out 0.35s;
+  }
+  [data-reveal] .anim-fade-late {
+    transition: opacity 0.45s ease-out 0.85s;
+  }
+  [data-reveal]:not(.in) .anim-fade,
+  [data-reveal]:not(.in) .anim-fade-late {
+    opacity: 0;
+  }
+
+  /* The category card's tab swap (revenue-view-tabs.tsx). The reveal rules above are
+     one-shot transitions gated on `.in`, so content swapped in AFTER the card revealed
+     would land without an entrance; the switcher remounts the new rows under this class
+     instead, and these keyframes replay the same grammar — the body lifts in, each bar
+     grows from zero to its inline width. */
+  .rev-swap-in {
+    animation: rev-swap-up 0.4s ease-out both;
+  }
+  .rev-swap-in .anim-bar {
+    animation: rev-grow-bar 0.9s cubic-bezier(0.33, 1, 0.68, 1) 0.1s backwards;
+  }
+}
+
+@keyframes rev-swap-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes rev-grow-bar {
+  from {
+    width: 0;
   }
 }

@@ -27,6 +27,10 @@ export function scopeOptions(scope: DashboardScope) {
   const periods = scope.available.map((a) => ({
     value: `${a.fiscalYear}:${a.period}`,
     label: `${a.label} · FY ${a.fiscalYear}`,
+    // The same two halves, unjoined, for the controls that set the month against a muted
+    // fiscal year rather than printing one string — see `ScopeOption` in scope-bar.tsx.
+    primary: a.label,
+    secondary: `FY ${a.fiscalYear}`,
   }));
 
   const funds = scope.funds.map((f) => ({ value: f.id, label: fundLabel(f, scope.labelMode) }));

@@ -1,23 +1,20 @@
 import { cn } from "@/lib/cn";
 import type { StatusRung } from "@/lib/dashboard/status";
+import { PANEL_RUNG } from "@/components/dashboard/overview-panel";
 
 /**
  * The status badge — Strong · Acceptable · Monitor · Action Required · N/A.
  *
- * Always renders its WORD, never a bare colour. That is not politeness: the ink steps
- * behind these badges are darkened for text contrast, which compresses their hue
- * separation (see the note in app/globals.css). The label is the identity channel and the
- * colour reinforces it. A badge that showed only a coloured dot would be unreadable to a
- * reader with deuteranopia, and this is the one signal in the product that must not be.
+ * Restyled to the executive redesign's pill: 20px radius, an 18% tint of the rung's hue
+ * with the full-strength ink on top. The palette is PANEL_RUNG — the lower band's, where
+ * Acceptable turns BLUE — imported from overview-panel.tsx rather than copied, so a badge
+ * on the Revenues page and a pill on the Executive health table can never disagree.
+ *
+ * Always renders its WORD, never a bare colour. That is not politeness: the label is the
+ * identity channel and the colour reinforces it. A badge that showed only a coloured dot
+ * would be unreadable to a reader with deuteranopia, and this is the one signal in the
+ * product that must not be.
  */
-
-const RUNG: Record<StatusRung, { text: string; bg: string; dot: string }> = {
-  Strong: { text: "text-strong", bg: "bg-strong-bg", dot: "bg-strong-mark" },
-  Acceptable: { text: "text-acceptable", bg: "bg-acceptable-bg", dot: "bg-acceptable-mark" },
-  Monitor: { text: "text-monitor", bg: "bg-monitor-bg", dot: "bg-monitor-mark" },
-  "Action Required": { text: "text-action", bg: "bg-action-bg", dot: "bg-action-mark" },
-  "N/A": { text: "text-na", bg: "bg-na-bg", dot: "bg-na" },
-};
 
 /** The chart fill for a rung — the mark step, never the ink step. */
 export const RUNG_MARK: Record<StatusRung, string> = {
@@ -35,7 +32,8 @@ export function StatusBadge({
   /** Why the figure could not be computed. Shown on hover; only meaningful for N/A. */
   reason,
   size = "md",
-  dot = true,
+  /** The design's pills carry no dot, so it is opt-in now rather than opt-out. */
+  dot = false,
   className,
 }: {
   status: StatusRung;
@@ -46,13 +44,13 @@ export function StatusBadge({
   dot?: boolean;
   className?: string;
 }) {
-  const rung = RUNG[status];
+  const rung = PANEL_RUNG[status];
   const text = label ?? (status === "N/A" ? "Not available" : status);
 
   const SIZE = {
-    sm: "px-1.5 py-0.5 text-[10.5px]",
-    md: "px-2 py-[3px] text-[11.5px]",
-    lg: "px-2.5 py-[5px] text-[12px]",
+    sm: "px-[7px] py-[2px] text-[10px] tracking-[0.1px]",
+    md: "px-[8px] py-[3px] text-[11px] tracking-[0.11px]",
+    lg: "px-[9px] py-[5px] text-[12px] tracking-[0.12px]",
   } as const;
 
   return (
@@ -60,14 +58,18 @@ export function StatusBadge({
       data-status-badge
       title={status === "N/A" ? (reason ?? "Not enough data to work this out yet.") : undefined}
       className={cn(
-        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full font-semibold",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-[20px] font-semibold leading-[normal]",
         SIZE[size],
-        rung.bg,
-        rung.text,
         className,
       )}
+      style={{ background: rung.bg, color: rung.fg }}
     >
-      {dot && <span className={cn("h-[6px] w-[6px] flex-none rounded-full", rung.dot)} />}
+      {dot && (
+        <span
+          className="size-1.5 flex-none rounded-full"
+          style={{ background: rung.fg }}
+        />
+      )}
       {text}
     </span>
   );

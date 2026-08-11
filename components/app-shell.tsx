@@ -131,16 +131,23 @@ export async function AppShell({
             <RailSwap
               expanded={
                 switcher ?? (
-                  <div className="flex items-center gap-2.5 rounded-[9px] bg-white/[0.05] px-2.5 py-2">
-                    <div className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-md bg-[#20406b] text-[11px] font-semibold text-[#9cc0ff]">
+                  /**
+                   * LABEL ABOVE NAME, not below it. The redesign reads "FINANCE WORKSPACE /
+                   * Tayyab Test District" top-to-bottom — the quiet uppercase line says what
+                   * kind of thing this is, and the district name below it is the answer. The
+                   * old order set the name first in the emphatic slot and left the reader to
+                   * work out what the grey line under it referred to.
+                   */
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[#20406b] text-[15px] font-semibold text-[#9cc0ff]">
                       {initials(workspaceName)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-semibold text-[#e7edf6]">
-                        {workspaceName}
-                      </div>
-                      <div className="truncate text-[11px] text-[#6f8099]">
+                      <div className="truncate text-[11px] uppercase leading-[22px] tracking-[0.4px] text-white/40">
                         {workspaceSub}
+                      </div>
+                      <div className="truncate text-[14px] leading-5 text-white">
+                        {workspaceName}
                       </div>
                     </div>
                   </div>
@@ -162,15 +169,25 @@ export async function AppShell({
 
           <SidebarNav groups={nav} />
 
-          <div className="border-t border-white/[0.07] p-3">
+          <div className="p-4">
             <RailSwap
               expanded={
-                <div className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-2">
+                /**
+                 * The sidebar's floor: the account row, then sign-out inside its own raised
+                 * card — the redesign's "Promo Block", which in this build holds exactly one
+                 * control.
+                 *
+                 * The account row is NOT in the design, and it stays anyway: /account is
+                 * reachable from nowhere else in this shell, and the header that used to
+                 * carry it is switched off for the district area (`hideHeader`). Dropping it
+                 * to match the mockup would strand the page.
+                 */
+                <>
                   {/* The user's own card is where people look for "my account" — a nav item
                       would put it beside the district's data, which is not what it is. */}
                   <Link
                     href="/account"
-                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-[7px] transition-opacity hover:opacity-80"
+                    className="mb-3 flex min-w-0 items-center gap-2.5 rounded-[7px] px-1 transition-opacity hover:opacity-80"
                   >
                     <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#3a5680] text-[12.5px] font-semibold text-white">
                       {initials(user.name)}
@@ -184,8 +201,10 @@ export async function AppShell({
                       </div>
                     </div>
                   </Link>
-                  <LogoutButton />
-                </div>
+                  <div className="rounded-[28px] border-[0.5px] border-[rgba(245,239,235,0.16)] bg-white/12 px-4 pb-4 pt-6">
+                    <LogoutButton variant="full" />
+                  </div>
+                </>
               }
               collapsed={
                 <div className="flex flex-col items-center gap-1.5 py-1">

@@ -26,11 +26,23 @@ const BASE = process.env.BASE ?? "http://localhost:3000";
 const EMAIL = process.env.PRINT_USER ?? "demo.admin@k12finance.local";
 const ROUTE = "/dashboard";
 
-/** Must match the `lg:` variants in components/sidebar-shell.tsx. */
-const EXPANDED_WIDTH = 250;
+/**
+ * Must match the `lg:` variants in components/sidebar-shell.tsx.
+ *
+ * 256 since the M5 rail redesign, and the same number on both sides of `lg` — the mobile
+ * drawer and the desktop panel are one width, so this stays one constant.
+ */
+const EXPANDED_WIDTH = 256;
 const RAIL_WIDTH = 68;
-/** A label that is in every district sidebar, used as the probe throughout. */
-const PROBE_LABEL = "Executive Dashboard";
+/**
+ * A label that is in every district sidebar, used as the probe throughout.
+ *
+ * "Executive", not "Executive Dashboard", since the M5 rail redesign — the nav rows are
+ * 14px on a 208px row and the design shortens the first item to fit. It must stay in step
+ * with `main[0].label` in app/(district)/layout.tsx or every hover check below fails on a
+ * null element rather than on a real regression.
+ */
+const PROBE_LABEL = "Executive";
 
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,

@@ -33,7 +33,7 @@ import { cashSummary, cashComposition, cashStats, thirtyDayForecast, daysCashOnH
 import { generalFund, generalFundAmbiguous, listFunds } from "@/lib/finance/funds";
 import { resolveScope } from "@/lib/dashboard/scope";
 import { oneFund } from "@/lib/finance/filter";
-import { niceTicks, linear, bands, barWidth } from "@/lib/dashboard/scale";
+import { niceTicks, fittedTicks, linear, bands, barWidth } from "@/lib/dashboard/scale";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
 
 /**
@@ -113,6 +113,32 @@ async function main() {
 
   const flat = niceTicks(5, 5);
   assert(flat.min !== flat.max, "a flat series still gets a non-zero axis");
+
+  // The budget cards' axis: it ENDS at the data, so the longest row fills its track. The
+  // old rounding-out sent a $120M card to a $150M axis and drew every bar a fifth short.
+  const fit = fittedTicks(120_000_000, { count: 5 });
+  assert(fit.max === 120_000_000, "a fitted axis ends exactly on the largest figure");
+  assert(fit.values[0] === 0, "…still starting at zero");
+  assert(
+    fit.values[fit.values.length - 1] === 120_000_000,
+    "…and labelling the end rather than a nice number above it",
+  );
+  assert(
+    fit.values.slice(1, -1).every((v, i, a) => v > 0 && v < fit.max && (i === 0 || v > a[i - 1])),
+    "with interior ticks inside the domain and in order",
+  );
+  const crowded = fittedTicks(113_500_000, {
+    count: 5,
+    label: (v) => `$${Math.round(v / 1_000_000)}M`,
+    plotPx: 420,
+  });
+  assert(
+    crowded.values.every(
+      (v) => v === crowded.max || (crowded.max - v) / crowded.max > 0.06,
+    ),
+    "and a tick whose label would collide with the end label dropped, not overprinted",
+  );
+  assert(fittedTicks(0).max > 0, "an all-zero card still gets a usable axis");
 
   const y = linear([0, 100], [200, 0]);
   assert(y(0) === 200 && y(100) === 0, "a y-scale inverts for SVG's downward axis");

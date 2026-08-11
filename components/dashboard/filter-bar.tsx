@@ -1,11 +1,13 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/cn";
 import { ExportMenu, type ScopeOption } from "@/components/dashboard/scope-bar";
 import { FilterMenu } from "@/components/dashboard/filter-menu";
 import { SavedViews, type SavedViewItem } from "@/components/dashboard/saved-views";
 import { useScopeNavigation, Spinner } from "@/components/dashboard/scope-navigation";
+import { CHIP_FACE, CHIP_ROTATION, CHIP_TONE } from "@/components/dashboard/pill";
 import {
   writeFilterParams,
   clearFilters,
@@ -144,11 +146,50 @@ export function FilterBar({
 
   const reset = () => push(clearFilters(params));
 
-  const periodLabel = periods.find((p) => p.value === period)?.label;
+  const periodOption = periods.find((p) => p.value === period);
+
+  /**
+   * How many chips stand on their own before the row folds.
+   *
+   * A district that filters by fund type, fund code and three cost-centre categories puts
+   * five chips under a two-line header, and the applied slice — the thing this row exists to
+   * state — stops being readable at exactly the moment it has the most to say. Three is what
+   * fits beside the "Showing" label on one line at 1440px; the rest are one click away and
+   * still every one of them prints, because `expanded` only gates the screen (see the print
+   * note below).
+   */
+  const VISIBLE_CHIPS = 3;
+  const [expanded, setExpanded] = useState(false);
+  const overflow = Math.max(0, chips.length - VISIBLE_CHIPS);
+  const shownChips = expanded ? chips : chips.slice(0, VISIBLE_CHIPS);
+
+  /** A small capsule that is a control rather than a statement — "+2 more", "Clear". */
+  const chipButton = cn(
+    CHIP_FACE,
+    "gap-[4px] py-[5px] font-semibold transition-colors print:hidden",
+    "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#301a93]",
+    "disabled:cursor-not-allowed disabled:opacity-50",
+  );
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-[10px]">
+      {/*
+        VIEWS · FILTERS · EXPORT, in one group, at the right.
+
+        Filters used to sit alone on the left with the other two pushed away by `ml-auto`,
+        which read as two unrelated toolbars — and the gap between them grew with the window,
+        so on a wide screen the button that changes the page and the button that saves that
+        change were a foot apart. They are one set of header controls and they now travel as
+        one, whatever is applied beneath them.
+      */}
+      <div className="flex flex-wrap items-center justify-end gap-[10px]">
+        <SavedViews
+          views={savedViews}
+          currentFilters={currentFilters}
+          periodQuery={periodQuery}
+          hasFilters={!isEmptySelection(selection)}
+        />
+
         <FilterMenu
           periods={periods}
           period={period}
@@ -158,16 +199,7 @@ export function FilterBar({
           pending={pending}
         />
 
-        <div className="ml-auto flex items-center gap-2">
-          <SavedViews
-            views={savedViews}
-            currentFilters={currentFilters}
-            periodQuery={periodQuery}
-            hasFilters={!isEmptySelection(selection)}
-          />
-
-          <ExportMenu detailHref={exportHref} summaryHref={summaryHref} />
-        </div>
+        <ExportMenu detailHref={exportHref} summaryHref={summaryHref} />
       </div>
 
       {/*
@@ -180,44 +212,101 @@ export function FilterBar({
         here, or a reader would have to open a menu to learn which month they are looking
         at — and the printed page would not say at all.
       */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-2">
-          Showing
+      <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[6px]">
+        <span className="text-[11px] font-bold uppercase leading-[16px] tracking-[0.66px] text-[#797979]">
+          Showing:
         </span>
 
-        {periodLabel && (
-          <span className="inline-flex items-center rounded-full border border-line bg-panel px-2.5 py-1 text-[11.5px] text-ink-muted">
-            {periodLabel}
+        {/* The period, in green on every page — the one tone no filter dimension may wear,
+            so that "which month" is always the same colour wherever a reader looks. */}
+        {periodOption && (
+          <span
+            className={cn(CHIP_FACE, "gap-[6px] px-[11px] py-[5px] font-semibold")}
+            style={{ background: CHIP_TONE.green.bg, color: CHIP_TONE.green.fg }}
+          >
+            {periodOption.primary ?? periodOption.label}
+            {periodOption.secondary && (
+              <span className="font-semibold opacity-75">{periodOption.secondary}</span>
+            )}
           </span>
         )}
 
         {active && chips.length > 0 ? (
-          chips.map((chip) => (
-            <span
-              key={`${chip.param}:${chip.dimension}`}
-              className="inline-flex max-w-[380px] items-center gap-1.5 rounded-full border border-brand/25 bg-brand/[0.07] py-1 pl-2.5 pr-1 text-[11.5px] text-brand"
-            >
-              <span className="truncate">
-                <span className="font-semibold">{chip.dimension}:</span>{" "}
-                {chip.values.slice(0, 3).join(", ")}
-                {chip.values.length > 3 && ` +${chip.values.length - 3}`}
+          <>
+            {shownChips.map((chip) => {
+              // The tone follows the chip's POSITION in the row, not a hash of its name, so
+              // the dimensions keep the order the resolver put them in and a district always
+              // sees Fund Type in the same colour.
+              const tone = CHIP_TONE[CHIP_ROTATION[chips.indexOf(chip) % CHIP_ROTATION.length]];
+              return (
+                <span
+                  key={`${chip.param}:${chip.dimension}`}
+                  className={cn(
+                    CHIP_FACE,
+                    "max-w-[320px] gap-[4px] py-[5px] pl-[11px] pr-[4px] font-semibold",
+                  )}
+                  style={{ background: tone.bg, color: tone.fg }}
+                >
+                  <span className="truncate">
+                    <span className="font-bold">{chip.dimension}:</span>{" "}
+                    {chip.values.slice(0, 3).join(", ")}
+                    {chip.values.length > 3 && ` +${chip.values.length - 3}`}
+                  </span>
+                  {/* Disabled mid-navigation: the chips still name the OUTGOING filter until
+                      the server answers, so a second × would subtract from a selection that is
+                      already being replaced. */}
+                  <button
+                    type="button"
+                    onClick={() => removeChip(chip)}
+                    disabled={pending}
+                    aria-label={`Remove the ${chip.dimension} filter`}
+                    className="flex-none rounded-full px-[5px] text-[14px] leading-none opacity-60 transition-opacity hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30 print:hidden"
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+
+            {/* The folded chips still PRINT — `hidden` only takes them off the screen, and a
+                board packet that named three of five filters would misstate its own figures. */}
+            {!expanded && overflow > 0 && (
+              <span className="hidden flex-wrap items-center gap-[8px] print:flex">
+                {chips.slice(VISIBLE_CHIPS).map((chip) => {
+                  const tone =
+                    CHIP_TONE[CHIP_ROTATION[chips.indexOf(chip) % CHIP_ROTATION.length]];
+                  return (
+                    <span
+                      key={`${chip.param}:${chip.dimension}`}
+                      className={cn(CHIP_FACE, "gap-[4px] px-[11px] py-[5px] font-semibold")}
+                      style={{ background: tone.bg, color: tone.fg }}
+                    >
+                      <span className="font-bold">{chip.dimension}:</span>{" "}
+                      {chip.values.slice(0, 3).join(", ")}
+                      {chip.values.length > 3 && ` +${chip.values.length - 3}`}
+                    </span>
+                  );
+                })}
               </span>
-              {/* Disabled mid-navigation: the chips still name the OUTGOING filter until
-                  the server answers, so a second × would subtract from a selection that is
-                  already being replaced. */}
+            )}
+
+            {overflow > 0 && (
               <button
                 type="button"
-                onClick={() => removeChip(chip)}
-                disabled={pending}
-                aria-label={`Remove the ${chip.dimension} filter`}
-                className="flex-none rounded-full px-1 text-[13px] leading-none text-brand/70 transition-colors hover:text-brand disabled:cursor-not-allowed disabled:opacity-40 print:hidden"
+                onClick={() => setExpanded((e) => !e)}
+                aria-expanded={expanded}
+                className={cn(chipButton, "px-[10px] hover:brightness-95")}
+                style={{ background: CHIP_TONE.slate.bg, color: CHIP_TONE.slate.fg }}
               >
-                ×
+                {expanded ? "Show less" : `+${overflow} more`}
               </button>
-            </span>
-          ))
+            )}
+          </>
         ) : (
-          <span className="inline-flex items-center rounded-full border border-line bg-panel px-2.5 py-1 text-[11.5px] text-muted-2">
+          <span
+            className={cn(CHIP_FACE, "px-[11px] py-[5px] font-bold uppercase")}
+            style={{ background: CHIP_TONE.red.bg, color: CHIP_TONE.red.fg }}
+          >
             All funds
           </span>
         )}
@@ -227,7 +316,7 @@ export function FilterBar({
             type="button"
             onClick={reset}
             disabled={pending}
-            className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11.5px] font-medium text-brand transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 print:hidden"
+            className={cn(chipButton, "px-[8px] text-[#797979] hover:text-[#060606]")}
           >
             {pending && <Spinner size={11} />}
             {pending ? "Clearing…" : "Clear filters"}

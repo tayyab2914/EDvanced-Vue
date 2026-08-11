@@ -37,10 +37,24 @@ export default async function DistrictLayout({
   // Project spend is already collected, tagged, on every detail row, so those screens can
   // be built later from data the platform holds today — they are deliberately not here.
   const main: NavItem[] = [
-    { label: "Executive Dashboard", href: "/dashboard", icon: "dashboard", exact: true },
+    { label: "Executive", href: "/dashboard", icon: "dashboard", exact: true },
     { label: "Revenues", href: "/revenues", icon: "chart" },
     { label: "Expenditures", href: "/expenditures", icon: "database" },
-    { label: "Fund Balance", href: "/fund-balance", icon: "shield" },
+    {
+      label: "Fund Balance",
+      href: "/fund-balance",
+      icon: "shield",
+      // The one branch deep enough to earn a second level. Its three screens answer three
+      // different questions about the same reserve — where it stands, where it is heading,
+      // and what it is measured against — and until now the last two were reachable only
+      // from inside the first. `exact` on the index so following a sibling does not leave
+      // "Current Position" looking selected alongside it.
+      children: [
+        { label: "Current Position", href: "/fund-balance", icon: "shield", exact: true },
+        { label: "Forecasting", href: "/fund-balance/forecast", icon: "chart" },
+        { label: "Policies", href: "/fund-balance/policies", icon: "book" },
+      ],
+    },
     { label: "Cash Position", href: "/cash", icon: "activity" },
     { label: "Alerts", href: "/alerts", icon: "mail" },
   ];

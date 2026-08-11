@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons";
-import { StatusBadge } from "@/components/dashboard/status-badge";
 import type { StatusRung } from "@/lib/dashboard/status";
 import { NOT_AVAILABLE, type DeltaTone } from "@/lib/dashboard/format";
 
@@ -10,26 +9,17 @@ import { NOT_AVAILABLE, type DeltaTone } from "@/lib/dashboard/format";
  * The KPI tile — the top row of every dashboard, and the client's first named requirement:
  * "carry forward the KPI hierarchy".
  *
- * M4 restated it: "I'd like them to have slightly more emphasis since they're the first
- * thing users see — slightly larger values, stronger status colours, small trend indicators
- * when applicable, keep the coloured icons."
+ * REDRAWN TO THE EXECUTIVE REDESIGN (Figma 3:11586's Overview tiles): a borderless 62%-white
+ * card on the canvas, the 18%-tinted icon disc, sentence-case grey label over a bold
+ * near-black figure, tinted judgement pills and bold delta lines with the diagonal arrow.
+ * The Executive dashboard's own tiles (components/dashboard/overview-kpi.tsx) transcribed
+ * the design first; this tile speaks the same vocabulary so the other five dashboards read
+ * as the same product. The tone maps below are the canonical copy — overview-kpi.tsx and
+ * the print sheet import them from here.
  *
- * The layout is built for the WORST case, which is the six-up row on a 1440–1600px laptop:
- * roughly 170px of tile, and every element in the header competing for it. Two rules follow
- * from that width and neither is cosmetic:
- *
- *   1. The header holds the icon and the label and NOTHING else. A "Detail →" affordance
- *      parked at the top-right took ~55px of a 140px content box, which forced a two-word
- *      label onto three lines and then collided with it. The whole card is already a link;
- *      the wording lives in the footer, where it can wrap without pushing anything.
- *   2. The label carries the tone colour rather than the icon carrying it alone. At this
- *      width the label is the only element with room to identify the tile at a glance, and
- *      a tinted chip beside coloured text reads as one object where a solid disc beside
- *      grey text read as two.
- *
- * The contract is otherwise unchanged: icon chip · uppercase label · large value · one
- * sub-line of context · optionally a status badge or a trend. Nothing else. A tile that
- * grew a second sub-line would stop being scannable, which is the only thing it is for.
+ * The contract is unchanged: icon disc · label · large value · one sub-line of context ·
+ * optionally a status pill or a trend. Nothing else. A tile that grew a second sub-line
+ * would stop being scannable, which is the only thing it is for.
  *
  * `value` is a STRING, always. Every figure here is a Prisma.Decimal upstream, and a tile
  * that accepted a number would silently round a district's nine-figure total at the
@@ -39,56 +29,90 @@ import { NOT_AVAILABLE, type DeltaTone } from "@/lib/dashboard/format";
 
 export type TileTone = "green" | "blue" | "purple" | "amber" | "teal" | "red" | "slate";
 
-/**
- * The icon chip: a tone tint carrying the tone's INK step, not a solid disc carrying white.
- *
- * A 30px solid disc was the loudest thing in a 170px tile and read as the subject rather
- * than as the label's marker. The tint recedes to roughly the weight of the coloured label
- * it sits beside, which is what lets the two read as one header line.
- *
- * The glyph takes the ink step (badge text) and not the chart mark step: a mark on its own
- * 10% tint is ~2.9:1, which is a decorative glyph rather than a legible one.
- */
-const CHIP: Record<TileTone, string> = {
-  green: "bg-strong-bg text-strong",
-  blue: "bg-[#e7eefd] text-brand-dark",
-  purple: "bg-[#ece7f8] text-[#513a9c]",
-  amber: "bg-monitor-bg text-monitor",
-  teal: "bg-[#e0f3f1] text-[#0a6f66]",
-  red: "bg-action-bg text-action",
-  slate: "bg-na-bg text-na",
+/** Solid tone colours, taken from the four discs and the corner arrows in the design. */
+export const TONE_INK: Record<TileTone, string> = {
+  green: "#1a932e",
+  teal: "#1a7b93",
+  // The design's second card. It has no separate blue, so the two share a slot.
+  blue: "#1a7b93",
+  purple: "#301a93",
+  amber: "#ef8a1f",
+  red: "#e65f2b",
+  slate: "#5c6a80",
+};
+
+/** The 18% wash behind each disc, same hues. */
+export const TONE_TINT: Record<TileTone, string> = {
+  green: "rgba(26,147,46,0.18)",
+  teal: "rgba(26,123,147,0.18)",
+  blue: "rgba(26,123,147,0.18)",
+  purple: "rgba(48,26,147,0.18)",
+  amber: "rgba(239,138,31,0.18)",
+  red: "rgba(230,95,43,0.18)",
+  slate: "rgba(92,106,128,0.18)",
 };
 
 /**
- * The label ink, matched to the chip. Every step here is a text step (≥4.5:1 on white) —
- * the label is set at 10px and is the first thing read on the tile, so it cannot borrow a
- * chart mark colour the way a filled shape can.
+ * The status pill. The design shows three — "Acceptable" and "Healthy" in green, "On going"
+ * in orange — and the rest extend from that pair: Strong joins green, Action Required takes
+ * the file's deepest red, N/A the neutral slate.
  */
-const LABEL: Record<TileTone, string> = {
-  green: "text-strong",
-  blue: "text-brand-dark",
-  purple: "text-[#513a9c]",
-  amber: "text-monitor",
-  teal: "text-[#0a6f66]",
-  red: "text-action",
-  slate: "text-na",
+export const RUNG_PILL: Record<StatusRung, { bg: string; fg: string }> = {
+  Strong: { bg: "rgba(26,147,46,0.18)", fg: "#1a932e" },
+  Acceptable: { bg: "rgba(26,147,46,0.18)", fg: "#1a932e" },
+  Monitor: { bg: "rgba(239,138,31,0.18)", fg: "#b76a12" },
+  "Action Required": { bg: "rgba(230,95,43,0.18)", fg: "#e65f2b" },
+  "N/A": { bg: "rgba(92,106,128,0.18)", fg: "#5c6a80" },
 };
 
 /**
- * The trend pill. A tinted chip rather than bare coloured text, because at 11px a green
- * "−2.31%" beside a grey "vs prior year" is not obviously a different kind of thing.
+ * The design's `vuesax/linear/arrow-right` turned 45°, which is the only form of arrow in
+ * this band — it appears in the card corner, before every footnote, and in the alerts pill.
+ * Drawn rather than fetched: the exported asset is a flat right-arrow whose meaning is
+ * entirely in the rotation applied to it, and a rotation is not worth four PNGs.
  */
-const DELTA: Record<DeltaTone, string> = {
-  positive: "bg-strong-bg text-strong",
-  negative: "bg-action-bg text-action",
-  neutral: "bg-na-bg text-na",
-};
+export function DiagonalArrow({
+  size = 14,
+  direction = "up",
+}: {
+  size?: number;
+  direction?: "up" | "down" | "flat";
+}) {
+  return (
+    <svg
+      aria-hidden
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={cn(
+        "flex-none",
+        direction === "up" && "-rotate-45",
+        direction === "down" && "rotate-45",
+      )}
+    >
+      <path d="M5 12h14" />
+      <path d="m13 6 6 6-6 6" />
+    </svg>
+  );
+}
 
-const ARROW: Record<"up" | "down" | "flat", string> = {
-  up: "↑",
-  down: "↓",
-  flat: "→",
-};
+/** The 23px disc in each tile's top-right corner, carrying the tile's own tone. */
+export function CornerArrow({ tone }: { tone: TileTone }) {
+  return (
+    <span
+      aria-hidden
+      className="absolute right-[16px] top-[14px] flex size-[23px] items-center justify-center rounded-full bg-white/70"
+      style={{ color: TONE_INK[tone] }}
+    >
+      <DiagonalArrow size={16} />
+    </span>
+  );
+}
 
 export interface KpiDelta {
   text: string;
@@ -101,6 +125,13 @@ export interface KpiDelta {
   /** What the change is measured against — "vs Apr 2026". */
   note?: string;
 }
+
+/** The delta arrow's ink, by judgement — the design's green/red pair with a neutral grey. */
+const DELTA_INK: Record<DeltaTone, string> = {
+  positive: "#1a932e",
+  negative: "#e65f2b",
+  neutral: "#797979",
+};
 
 export function KpiTile({
   label,
@@ -135,123 +166,126 @@ export function KpiTile({
   /** One sentence explaining the figure, on a ⓘ beside the label. */
   info?: string;
   href?: string;
+  /** Kept for compatibility; the corner arrow is the affordance in this design. */
   hrefLabel?: string;
   /** Shown on hover when the value is unavailable. */
   unavailableReason?: string;
 }) {
+  void hrefLabel;
   const unavailable = value === NOT_AVAILABLE;
-
-  const VALUE_STATUS: Record<StatusRung, string> = {
-    Strong: "text-strong",
-    Acceptable: "text-acceptable",
-    Monitor: "text-monitor",
-    "Action Required": "text-action",
-    "N/A": "text-na",
-  };
-
-  const footer = delta || status || statusNote || href;
 
   const body = (
     <>
-      <div className="mb-2 flex items-center gap-2">
+      {/* The corner arrow IS the tile's affordance in this design — there is no "View →"
+          line under the figures the way the old tile had one. */}
+      {href && <CornerArrow tone={tone} />}
+
+      <div className="flex flex-col items-start gap-[10px]">
         {icon && (
           <span
-            className={cn(
-              "flex h-[26px] w-[26px] flex-none items-center justify-center rounded-[8px]",
-              CHIP[tone],
-            )}
+            className="flex size-[40px] flex-none items-center justify-center rounded-full"
+            style={{ background: TONE_TINT[tone], color: TONE_INK[tone] }}
           >
-            <Icon name={icon} size={14} />
+            <Icon name={icon} size={20} />
           </span>
         )}
-
-        <span className="min-w-0 flex-1">
-          <span
-            className={cn(
-              "flex items-start gap-1 text-[10px] font-bold uppercase leading-[1.3] tracking-[0.045em]",
-              LABEL[tone],
-            )}
-          >
+        <div className="flex flex-col items-start gap-[2px]">
+          <span className="flex items-start gap-1 text-[13px] font-semibold leading-[1.3] text-[#797979]">
             <span className="min-w-0">{label}</span>
             {info && (
               <span
                 title={info}
                 aria-label={info}
-                className="mt-[1px] flex h-[12px] w-[12px] flex-none cursor-help items-center justify-center rounded-full border border-line bg-panel text-[8px] font-bold normal-case text-muted-2"
+                className="mt-[1px] flex size-[13px] flex-none cursor-help items-center justify-center rounded-full bg-black/[0.07] text-[8.5px] font-bold text-[#797979]"
               >
                 i
               </span>
             )}
           </span>
           {caption && (
-            <span className="mt-[2px] block truncate text-[9.5px] font-medium uppercase tracking-[0.05em] text-faint">
+            <span className="block truncate text-[10px] font-medium leading-[1.3] text-[#797979]/80">
               {caption}
             </span>
           )}
-        </span>
-      </div>
-
-      <div
-        className={cn(
-          // Proportional figures, not tabular: at 28px, tabular-nums gives every digit the
-          // width of a zero and "121" reads loose. `tabular-nums` belongs in columns.
-          "font-semibold leading-none [font-variant-numeric:proportional-nums]",
-          // A status WORD set at 28px overflows a six-up grid, so a tile whose value is a
-          // rung gets its own step down. One class or the other, never both — two arbitrary
-          // font-size utilities on one element resolve by stylesheet order, not by the order
-          // they were written in.
-          valueStatus ? "text-[21px] tracking-[-0.3px]" : "text-[28px] tracking-[-0.6px]",
-          unavailable ? "text-muted-2" : valueStatus ? VALUE_STATUS[valueStatus] : "text-ink",
-        )}
-        title={unavailable ? (unavailableReason ?? "Not enough data to work this out yet.") : undefined}
-      >
-        {value}
-      </div>
-
-      {sub && <div className="mt-1.5 text-[11.5px] leading-snug text-muted-2">{sub}</div>}
-
-      {footer && (
-        // The spacer, not a margin: it pushes the footer to the card's floor so the trend
-        // pills line up across a row of tiles whose sub-lines wrap to different heights,
-        // while still guaranteeing a gap when the card has no slack to give.
-        <div aria-hidden className="min-h-[11px] flex-1" />
-      )}
-      {footer && (
-        // No hairline above this row. The spacer already separates it, and a rule drawn
-        // across a 170px tile turned six tiles into six boxed-in sub-cards.
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-2">
-          {delta && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-md px-1.5 py-[3px] text-[11px] font-semibold tabular-nums",
-                DELTA[delta.tone],
-              )}
-            >
-              {delta.direction && <span aria-hidden>{ARROW[delta.direction]}</span>}
-              {delta.text}
-            </span>
-          )}
-          {delta?.note && <span className="text-[11px] leading-snug text-muted-2">{delta.note}</span>}
-          {status && <StatusBadge status={status} size="sm" reason={unavailableReason} />}
-          {statusNote && <span className="text-[11px] leading-snug text-muted-2">{statusNote}</span>}
-          {href && (
-            // Last, and never wrapped internally: on a tile too narrow to hold it beside
-            // the trend it drops to its own line rather than squeezing the figure's context.
-            <span className="whitespace-nowrap text-[11px] font-medium text-brand group-hover:underline">
-              {hrefLabel ?? "View"} →
-            </span>
-          )}
+          <span
+            className={cn(
+              // Proportional figures, not tabular: at this size, tabular-nums gives every
+              // digit the width of a zero and "121" reads loose. `tabular-nums` belongs in
+              // columns.
+              "font-bold leading-[1.15] [font-variant-numeric:proportional-nums]",
+              // A status WORD set at 26px overflows a six-up grid, so a tile whose value is
+              // a rung gets its own step down. One class or the other, never both — two
+              // arbitrary font-size utilities on one element resolve by stylesheet order.
+              valueStatus ? "text-[20px] tracking-[0.2px]" : "text-[26px] tracking-[0.26px]",
+              unavailable ? "text-[#797979]" : !valueStatus && "text-[#060606]",
+            )}
+            style={
+              !unavailable && valueStatus ? { color: RUNG_PILL[valueStatus].fg } : undefined
+            }
+            title={
+              unavailable
+                ? (unavailableReason ?? "Not enough data to work this out yet.")
+                : undefined
+            }
+          >
+            {value}
+          </span>
         </div>
+      </div>
+
+      {sub && (
+        <span className="text-[12px] font-semibold leading-[1.3] text-[rgba(0,6,6,0.62)]">
+          {sub}
+        </span>
       )}
+
+      <div className="flex flex-col items-start gap-[6px]">
+        {status && (
+          <span
+            className="inline-flex items-center rounded-[20px] px-[9px] py-[2px] text-[10px] font-bold leading-normal tracking-[0.1px]"
+            style={{ background: RUNG_PILL[status].bg, color: RUNG_PILL[status].fg }}
+            title={unavailableReason}
+          >
+            {status}
+          </span>
+        )}
+
+        {delta && (
+          <span className="flex items-center gap-[5px] text-[12px] font-bold leading-[14px] tracking-[0.24px] text-[#060606]">
+            {delta.direction && (
+              <span style={{ color: DELTA_INK[delta.tone] }}>
+                <DiagonalArrow size={14} direction={delta.direction} />
+              </span>
+            )}
+            <span className="min-w-0 [font-variant-numeric:tabular-nums]">
+              {delta.text}
+              {delta.note && <span className="font-semibold text-[#797979]"> {delta.note}</span>}
+            </span>
+          </span>
+        )}
+
+        {statusNote && (
+          <span className="flex items-center gap-[5px] text-[12px] font-bold leading-[14px] tracking-[0.24px] text-[#060606]">
+            <span style={{ color: TONE_INK[tone] }}>
+              <DiagonalArrow size={14} />
+            </span>
+            {statusNote}
+          </span>
+        )}
+      </div>
     </>
   );
 
+  /**
+   * The design's card: 14px radius on 62% white, no border, no shadow — the canvas colour
+   * behind it is what makes it read as a card (see --color-canvas in globals.css).
+   */
   const className =
-    "group flex min-w-0 flex-col rounded-xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(15,32,56,0.04)]";
+    "group relative flex h-full min-w-0 flex-col gap-[8px] rounded-[14px] bg-white/[0.62] px-[16px] py-[14px]";
 
   if (href) {
     return (
-      <Link href={href} className={cn(className, "transition-colors hover:border-[#c8d3e4]")}>
+      <Link href={href} className={cn(className, "transition-colors hover:bg-white/80")}>
         {body}
       </Link>
     );
@@ -265,12 +299,14 @@ export function KpiTile({
  * Six tiles do not fit legibly in the 1200px content column at this type scale, and the
  * breakpoint that looks right for a six-up grid — `lg:` — is exactly where the sidebar
  * takes 250px back. So it steps 2 → 3 → 6 and only reaches six on a genuinely wide screen.
+ * `items-stretch` so every tile in a row takes the tallest one's height, as the Overview
+ * band's grid does.
  */
 export function KpiRow({ children, count = 6 }: { children: ReactNode; count?: number }) {
   return (
     <div
       className={cn(
-        "grid gap-3 sm:grid-cols-2 lg:grid-cols-3",
+        "grid items-stretch gap-2.5 sm:grid-cols-2 lg:grid-cols-3",
         count >= 6
           ? "2xl:grid-cols-6"
           : count === 5
@@ -287,9 +323,10 @@ export function KpiRow({ children, count = 6 }: { children: ReactNode; count?: n
  * The small figure card — §7.2's Monthly Cash Summary, converted from a table to "visual
  * KPI cards" at the client's request.
  *
- * A cut-down tile: no status ladder, no link, no trend judgement. Five of these sit in a
- * row inside a card, so the type scale steps down from the page-level tiles rather than
- * competing with them.
+ * Restyled to the redesign's white metric rail cell (Figma 3:12428's items): solid white on
+ * the translucent card, the rail's #e7e7e7 border, sentence-case label over a medium-weight
+ * figure. Five of these sit in a row inside a card, so the type scale steps down from the
+ * rail's 15/32px to fit.
  */
 export function MiniStat({
   label,
@@ -307,34 +344,32 @@ export function MiniStat({
   valueTone?: DeltaTone;
 }) {
   const TEXT: Record<DeltaTone, string> = {
-    positive: "text-strong",
-    negative: "text-action",
-    neutral: "text-ink",
+    positive: "text-[#1a932e]",
+    negative: "text-[#fd4438]",
+    neutral: "text-[#1f1f21]",
   };
   return (
-    <div className="flex min-w-0 flex-col rounded-lg border border-line-soft bg-panel px-2.5 py-3">
+    <div className="flex min-w-0 flex-col gap-[6px] rounded-[16px] border border-[#e7e7e7] bg-white px-[14px] py-[12px]">
       {icon && (
         <span
-          className={cn(
-            "mb-2 flex h-[24px] w-[24px] flex-none items-center justify-center rounded-full",
-            CHIP[tone],
-          )}
+          className="flex size-[26px] flex-none items-center justify-center rounded-full"
+          style={{ background: TONE_TINT[tone], color: TONE_INK[tone] }}
         >
-          <Icon name={icon} size={13} />
+          <Icon name={icon} size={14} />
         </span>
       )}
-      <span className="text-[9.5px] font-semibold uppercase leading-tight tracking-[0.05em] text-muted-2">
-        {label}
-      </span>
+      <span className="text-[11.5px] font-medium leading-[1.3] text-[#1f1f21]">{label}</span>
       <span
         className={cn(
-          "mt-1 text-[17px] font-semibold leading-none tracking-[-0.3px] [font-variant-numeric:proportional-nums]",
-          valueTone ? TEXT[valueTone] : "text-ink",
+          "text-[20px] font-medium leading-[1.15] [font-variant-numeric:proportional-nums]",
+          valueTone ? TEXT[valueTone] : "text-[#1f1f21]",
         )}
       >
         {value}
       </span>
-      {note && <span className="mt-1 text-[10.5px] leading-snug text-muted-2">{note}</span>}
+      {note && (
+        <span className="text-[10.5px] leading-snug text-[#1f1f21]/[0.74]">{note}</span>
+      )}
     </div>
   );
 }

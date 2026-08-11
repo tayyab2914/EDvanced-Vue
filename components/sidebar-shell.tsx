@@ -299,16 +299,28 @@ export function SidebarPanel({ children }: { children: ReactNode }) {
       tabIndex={-1}
       aria-label="Main navigation"
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex w-[250px] flex-none flex-col bg-navy outline-none",
+        "fixed inset-y-0 left-0 z-50 flex w-[256px] flex-none flex-col bg-sidebar outline-none",
         "transition-[transform,visibility] duration-200 ease-out",
         // `invisible` (visibility:hidden) keeps the off-canvas panel out of the
         // tab order and the a11y tree without any viewport measurement.
         open ? "visible translate-x-0" : "invisible -translate-x-full",
-        "lg:visible lg:sticky lg:top-0 lg:bottom-auto lg:z-auto lg:h-screen lg:translate-x-0",
+        "lg:visible lg:sticky lg:bottom-auto lg:z-auto lg:translate-x-0",
+        /**
+         * FLUSH TO THE VIEWPORT'S LEFT EDGE, full height.
+         *
+         * The Figma frame draws the rail as a rounded card inset from the window, but that
+         * inset is a presentation device for the mockup — in the running app it costs 12px
+         * of the content column on the left and the same again in gutters, which is what
+         * pushed the fourth Overview tile onto a second row at 1440px. Flush also matches
+         * how the client views it. Keep it flush: the tile row is sized against exactly the
+         * width this gives back.
+         */
+        "lg:top-0 lg:h-screen",
+        "lg:shadow-[0_24px_64px_-32px_rgba(0,32,102,0.45)]",
         // At `lg` the panel is in flow, so it is the width — not the transform — that
         // moves, and the main column reflows into the space the rail gives back.
         "lg:transition-[width] lg:duration-200 lg:ease-out",
-        collapsed ? "lg:w-[68px]" : "lg:w-[250px]",
+        collapsed ? "lg:w-[68px]" : "lg:w-[256px]",
       )}
     >
       {children}
@@ -373,18 +385,33 @@ export function RailSwap({
   );
 }
 
+/**
+ * The hairline between the sidebar's bands.
+ *
+ * A gradient rather than a flat `border-white/[0.07]`: on a panel this dark a uniform rule
+ * runs all the way into the rounded corners and reads as a seam across the card. The
+ * redesign fades it out at both ends, so it separates the bands in the middle — where the
+ * content is — and disappears before it reaches the edge.
+ */
+function SidebarRule() {
+  return (
+    <div
+      aria-hidden
+      className="h-px w-full flex-none bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.24)_50%,transparent_100%)]"
+    />
+  );
+}
+
 /** The sidebar's top band. Loses its generous side padding once it is only a rail wide. */
 export function SidebarHeader({ children }: { children: ReactNode }) {
   const { collapsed } = useShell();
   return (
-    <div
-      className={cn(
-        "border-b border-white/[0.07] px-5 pb-4 pt-5",
-        collapsed && "lg:px-3",
-      )}
-    >
-      {children}
-    </div>
+    <>
+      <div className={cn("px-6 pb-5 pt-6", collapsed && "lg:px-3")}>
+        {children}
+      </div>
+      <SidebarRule />
+    </>
   );
 }
 
@@ -477,47 +504,48 @@ export function SidebarCollapseToggle() {
   const tip = useRailTip(label, collapsed);
 
   return (
-    <div className="hidden border-t border-white/[0.07] p-3 lg:block">
-      <button
-        type="button"
-        onClick={toggleCollapsed}
-        aria-controls="app-sidebar"
-        aria-expanded={!collapsed}
-        aria-label={label}
-        title={label}
-        {...tip.handlers}
-        className={cn(
-          "flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-[13px] font-medium text-[#9aa8bd] transition-colors hover:bg-white/[0.06] hover:text-[#cdd8e8]",
-          collapsed && "justify-center gap-0 px-0",
-        )}
+    /**
+     * PINNED TO THE PANEL'S RIGHT EDGE, half on the card and half on the canvas.
+     *
+     * The redesign moves this off the sidebar's floor, where it used to be a full-width row
+     * competing with the nav, and onto the seam as a 28px disc beside the wordmark. Two
+     * consequences worth keeping in mind if this moves again: it resolves against the
+     * `<aside>` — which is a containing block already, being `fixed` below `lg` and `sticky`
+     * above it, so it needs no `relative` of its own — and it must NOT be clipped, so the
+     * panel cannot take `overflow-hidden` to round its corners.
+     *
+     * Still desktop-only. Below `lg` the drawer's own close button does this job, and a
+     * control that hangs off the panel edge would sit on top of the page content.
+     */
+    <button
+      type="button"
+      onClick={toggleCollapsed}
+      aria-controls="app-sidebar"
+      aria-expanded={!collapsed}
+      aria-label={label}
+      title={label}
+      {...tip.handlers}
+      className={cn(
+        "absolute -right-[14px] top-[62px] z-10 hidden h-7 w-7 items-center justify-center rounded-full",
+        "border-[0.5px] border-[rgba(235,238,245,0.4)] bg-[#12304f] text-[#c9d6e8]",
+        "shadow-[0_4px_10px_rgba(0,32,102,0.35)] transition-colors hover:bg-[#1b3f66] hover:text-white lg:flex",
+      )}
+    >
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="flex-none"
       >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="flex-none"
-        >
-          {collapsed ? (
-            <>
-              <path d="m13 17 5-5-5-5" />
-              <path d="m6 17 5-5-5-5" />
-            </>
-          ) : (
-            <>
-              <path d="m11 17-5-5 5-5" />
-              <path d="m18 17-5-5 5-5" />
-            </>
-          )}
-        </svg>
-        {!collapsed && <span>Collapse</span>}
-        {tip.node}
-      </button>
-    </div>
+        <path d={collapsed ? "m9 18 6-6-6-6" : "m15 18-6-6 6-6"} />
+      </svg>
+      {tip.node}
+    </button>
   );
 }
 

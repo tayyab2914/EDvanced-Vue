@@ -40,26 +40,38 @@ import {
   changePercent,
 } from "@/lib/dashboard/format";
 import { PageHeader } from "@/components/page-header";
-import { KpiTile, KpiRow } from "@/components/dashboard/kpi-tile";
-import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/section-card";
+import {
+  OverviewKpiTile,
+  OverviewSection,
+  OverviewSplitCard,
+  OverviewTileRow,
+} from "@/components/dashboard/overview-kpi";
+import { OverviewPeriodSelect } from "@/components/dashboard/overview-period-select";
+import { DataAsOf, FooterInfoBar } from "@/components/dashboard/section-card";
 import { DataTable } from "@/components/dashboard/data-table";
-import { AlertSummary, InsightList } from "@/components/dashboard/alert-list";
+import { InsightList } from "@/components/dashboard/alert-list";
+import { OverviewBudgetCard } from "@/components/dashboard/overview-budget-card";
+import { OverviewAlertsPanel } from "@/components/dashboard/overview-alerts";
 import { StatusBadge } from "@/components/dashboard/status-badge";
 import {
   EmptyState,
   SubstitutionNotice,
-  Row,
   KeyInsightBar,
   FundLevelOnly,
 } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
-import { BudgetBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
-import { DonutChart } from "@/components/dashboard/charts/donut-chart";
-import { HalfDonut } from "@/components/dashboard/charts/half-donut";
-import { Gauge } from "@/components/dashboard/charts/gauge";
-import { VIZ } from "@/lib/dashboard/palette";
-import { Sparkline } from "@/components/dashboard/charts/sparkline";
+import { OverviewTrendCard } from "@/components/dashboard/overview-trend-card";
+import { RevealManager } from "@/components/reveal";
+import { OverviewCashCard } from "@/components/dashboard/overview-cash-card";
+import { OverviewHealthCard } from "@/components/dashboard/overview-health-card";
+import type { RailItem } from "@/components/dashboard/overview-panel";
+import {
+  RevenueCollectedWidget,
+  BudgetStatusWidget,
+  KeyInsightsWidget,
+  OverviewWidgetRow,
+} from "@/components/dashboard/overview-widgets";
 import { scopeOptions, alertFunds, scopeDescription } from "@/lib/dashboard/options";
 import {
   PrintSheet,
@@ -68,6 +80,11 @@ import {
   SheetKpi,
   SheetStats,
 } from "@/components/dashboard/print-sheet";
+import {
+  SheetRevenueCollected,
+  SheetBudgetStatus,
+  SheetBudgetBars,
+} from "@/components/dashboard/sheet-widgets";
 import { rungTone, sheetTone, sheetScope, sheetAsOf } from "@/lib/dashboard/summary";
 
 /**
@@ -337,39 +354,47 @@ export default async function ExecutiveDashboard({
     endingFundBalance && previous?.fundBalance ? endingFundBalance.minus(previous.fundBalance) : null;
   const fbChangePct = changePercent(endingFundBalance, previous?.fundBalance);
 
-  const fundBalanceMetrics = isGeneralFund
+  /**
+   * The white metric rail beside the trend chart — Figma 3:12428's four figures, or the
+   * General Fund's five. The labels are the design's Title Case; the figures are the same
+   * ones the old MetricStrip carried.
+   */
+  const fundBalanceRail: RailItem[] = isGeneralFund
     ? [
-        { label: "Ending fund balance", value: compactMoney(endingFundBalance) },
+        { label: "Ending Fund Balance", value: compactMoney(endingFundBalance) },
         {
-          label: "Unassigned fund balance",
+          label: "Unassigned Fund Balance",
           value: compactMoney(point?.unassignedFundBalance),
           note: reservePct === null ? undefined : `${percent(reservePct)} ${reserveOf}`,
         },
         {
           label: "Status",
-          value: reserveRung === "N/A" ? "Not available" : reserveRung,
-          note: reserveRung === "Strong" ? "At or above target" : "Below target",
-          tone:
-            reserveRung === "Strong"
-              ? ("positive" as const)
-              : reserveRung === "N/A"
-                ? ("neutral" as const)
-                : ("negative" as const),
+          value: "",
+          badge: reserveRung,
+          note:
+            reserveRung === "N/A"
+              ? undefined
+              : reserveRung === "Strong"
+                ? "At or above target"
+                : "Below target",
         },
-        { label: "Policy target", value: `${reserveT.target.toFixed(2)}%` },
-        { label: "Statutory minimum", value: `${statutoryMinimum.toFixed(2)}%` },
+        { label: "Policy Target", value: `${reserveT.target.toFixed(2)}%` },
+        { label: "Statutory Minimum", value: `${statutoryMinimum.toFixed(2)}%` },
       ]
     : [
-        { label: "Ending fund balance", value: compactMoney(endingFundBalance) },
-        { label: "Total fund balance", value: compactMoney(endingFundBalance) },
+        { label: "Ending Fund Balance", value: compactMoney(endingFundBalance) },
+        { label: "Total Fund Balance", value: compactMoney(endingFundBalance) },
         {
-          label: "Month over month change",
+          label: "Month over Month Change",
           value: accounting(fbChange, { compact: true }),
-          note: fbChangePct === null ? undefined : `${signedPercent(fbChangePct)} vs prior period`,
           tone: fbChange?.isNegative() ? ("negative" as const) : ("positive" as const),
+          note:
+            fbChangePct === null ? undefined : `${signedPercent(fbChangePct)} vs Prior period`,
+          noteArrow:
+            fbChangePct === null ? undefined : fbChangePct < 0 ? ("down" as const) : ("up" as const),
         },
         {
-          label: "Opening balance",
+          label: "Opening Balance",
           value: compactMoney(openingFundBalance),
           note: `Start of FY ${scope.fiscalYear}`,
         },
@@ -571,16 +596,76 @@ export default async function ExecutiveDashboard({
     },
   ];
 
+  /**
+   * §3.1's KPI row, redrawn as the Overview band.
+   *
+   * The tiles are the same six figures over the same `kpiData` — only the presentation
+   * changed. The band steps to four columns rather than six, so on a wide screen the last
+   * two wrap onto a second row instead of every tile losing 90px of width.
+   *
+   * The pill states the period the figures cover AND sets it. It writes the same `fy` and
+   * `period` parameters the Filters panel writes — one resolver reads them either way (see
+   * components/dashboard/overview-period-select.tsx), so this is a second way to reach one
+   * setting, not a second setting.
+   */
+  /**
+   * The percentage rings on the first two tiles. The design draws a 20px arc beside "Of
+   * annual budget collected"; these are the figures it reports. `null` where there is no
+   * budget to divide by, which renders the sub-line without a ring rather than a 0% one.
+   */
+  const expendedPct =
+    point && toNumber(point.expenditureBudget)
+      ? ((toNumber(point.expenditureYtd) ?? 0) /
+          (toNumber(point.expenditureBudget) || 1)) *
+        100
+      : null;
+
+  /**
+   * The design splits the Overview six ways: four tiles, then Available Budget and Alerts
+   * sharing one bordered card. `kpiData` is already in that order, so the split is
+   * positional — tiles 0–3, then the pair.
+   */
+  const tiles = kpiData.slice(0, 4);
+  const budgetKpi = kpiData[4];
+  const alertsKpi = kpiData[5];
+
+  /**
+   * The ring already states the percentage, so the sentence beside it must not repeat it —
+   * the design reads "◕ Of annual budget collected", not "93% of annual budget collected"
+   * next to a 93% ring. Stripping here rather than in `kpiData` because the same strings
+   * feed the one-page summary sheet, which has no ring to carry the figure.
+   */
+  const withoutLeadingPercent = (s: string) => s.replace(/^[\d.,]+%\s+/, "");
+
+  const availableBudgetNum = toNumber(facts?.availableBudget);
+  const expenditureBudgetNum = toNumber(point?.expenditureBudget);
+  const remainingPct =
+    availableBudgetNum !== null && expenditureBudgetNum
+      ? (availableBudgetNum / expenditureBudgetNum) * 100
+      : null;
+
   const kpis = (
-    <KpiRow count={6}>
-      {kpiData.map((k) => (
-        <KpiTile
+    <OverviewSection
+      action={
+        <OverviewPeriodSelect
+          label={scope.label}
+          periods={options.periods}
+          value={options.period}
+        />
+      }
+    >
+      <OverviewTileRow>
+      {tiles.map((k, i) => (
+        <OverviewKpiTile
           key={k.key}
           icon={k.icon}
           tone={k.tileTone}
           label={k.label}
           value={k.value}
-          sub={k.sub}
+          sub={
+            i < 2 && typeof k.sub === "string" ? withoutLeadingPercent(k.sub) : k.sub
+          }
+          subPct={i === 0 ? collectedPct : i === 1 ? expendedPct : null}
           delta={k.delta}
           status={k.status}
           statusNote={k.statusNote}
@@ -589,343 +674,261 @@ export default async function ExecutiveDashboard({
           // was computed over — a figure filtered to two funds must open a dashboard
           // filtered to the same two, or the drill-down contradicts the number clicked.
           href={k.href ? options.link(k.href) : undefined}
-          hrefLabel={k.href ? GO_TO_DASHBOARD_SHORT : undefined}
         />
       ))}
-    </KpiRow>
+      </OverviewTileRow>
+      <OverviewSplitCard
+        budget={{
+          label: budgetKpi.label,
+          value: budgetKpi.value,
+          // "Healthy" / "Overcommitted" is the design's own vocabulary for this pane, and
+          // both words are already decided by the figure above them — this only names what
+          // `availableBudget < 0` already means everywhere else on the page.
+          badge:
+            availableBudgetNum === null
+              ? undefined
+              : availableBudgetNum < 0
+                ? { text: "Overcommitted", tone: "negative" as const }
+                : { text: "Healthy", tone: "positive" as const },
+          note:
+            remainingPct === null
+              ? undefined
+              : `${percent(remainingPct)} of annual budget remaining`,
+        }}
+        alerts={{
+          label: alertsKpi.label,
+          value: alertsKpi.value,
+          criticalCount: alerts?.criticalCount ?? 0,
+          href: alertsKpi.href ? options.link(alertsKpi.href) : undefined,
+          hrefLabel: GO_TO_DASHBOARD_SHORT,
+        }}
+      />
+    </OverviewSection>
   );
 
+  /**
+   * ---------- the two budget cards + the alerts rail (Figma 3:11828 / 3:12063 / 3:11737) ----------
+   *
+   * The redesign redraws §3.3a/b as two stacked translucent cards with the Alerts Summary
+   * standing beside them — see components/dashboard/overview-budget-card.tsx and
+   * overview-alerts.tsx for the transcription notes. The figures are the same rows the
+   * SectionCard + BudgetBars versions carried; the one-page summary sheet draws them with
+   * SheetBudgetBars (sheet-widgets.tsx), the same design at sheet scale.
+   */
   const revenueCard = (
-    <SectionCard
-      title="Revenues vs budget (YTD)"
-      subtitle="Top five revenue sources compared to expected YTD collections"
-      footer={GO_TO.revenues}
-      footerHref={options.link("/revenues")}
-      info={`Status is judged against your revenue variance policy: warning at ${revT.warning.toFixed(2)}%, critical at ${revT.critical.toFixed(2)}%.`}
-    >
-      <BudgetBars
-        title="Revenues against budget"
-        summary="Actual year-to-date revenue against the budget expected by now and the full-year budget, for the five largest sources."
-        rows={revenueRows}
-        format={(v) => compactMoney(v, 0)}
-      />
-    </SectionCard>
+    <OverviewBudgetCard
+      title="Revenues vs Budget (YTD)"
+      subtitle="Top five sources compared to expected YTD collections"
+      ctaLabel={GO_TO.revenues}
+      ctaHref={options.link("/revenues")}
+      accent="green"
+      rows={revenueRows}
+      format={(v) => compactMoney(v, 0)}
+      chartTitle="Revenues against budget"
+      summary="Actual year-to-date revenue against the budget expected by now and the full-year budget, for the five largest sources."
+    />
   );
 
   const expenditureCard = (
-    <SectionCard
-      title="Expenditures vs budget (YTD)"
+    <OverviewBudgetCard
+      title="Expenditures vs Budget (YTD)"
       subtitle="By object, compared to expected YTD expenses"
-      footer={GO_TO.expenditures}
-      footerHref={options.link("/expenditures")}
-      info={`Status is judged against your expenditure variance policy: warning at ${expT.warning.toFixed(2)}%, critical at ${expT.critical.toFixed(2)}%.`}
-    >
-      <BudgetBars
-        title="Expenditures against budget"
-        summary="Actual year-to-date spending against the budget expected by now and the full-year budget, by object type."
-        rows={expenditureRows}
-        format={(v) => compactMoney(v, 0)}
-      />
-    </SectionCard>
+      ctaLabel={GO_TO.expenditures}
+      ctaHref={options.link("/expenditures")}
+      accent="purple"
+      rows={expenditureRows}
+      format={(v) => compactMoney(v, 0)}
+      chartTitle="Expenditures against budget"
+      summary="Actual year-to-date spending against the budget expected by now and the full-year budget, by object type."
+    />
   );
 
   /**
-   * The budget donut — where the full-year expenditure budget currently stands.
+   * ---------- the three widget cards (Figma 3:11691 / 3:11667 / 3:11713) ----------
    *
-   * Three states, one figure each, and the client's word for the middle one is ENCUMBERED
-   * rather than "committed". Worth honouring precisely: "committed" is already a fund
-   * balance CLASSIFICATION in this product (see COMPONENT_COLORS in lib/dashboard/palette.ts
-   * and the Fund Balance dashboard), so a donut labelling purchase orders "Committed" would
-   * collide with a term the same reader meets two screens away meaning something else.
-   */
-  const budgetStatusCard = (
-    <SectionCard
-      title="Budget status"
-      subtitle="The full-year expenditure budget, and what is left of it"
-      info="Expended is spending to date, Encumbered is committed but not yet paid, and Remaining is the budget still uncommitted. The three sum to the full-year budget."
-      footer={GO_TO.expenditures}
-      footerHref={options.link("/expenditures")}
-    >
-      <DonutChart
-        title="Budget status"
-        summary={
-          budgetTotal > 0
-            ? `Of a ${compactMoney(budgetTotal)} expenditure budget, ${compactMoney(expended)} has been expended and ${compactMoney(encumbered)} encumbered, leaving ${accounting(availableBudget, { compact: true })} remaining.`
-            : "No expenditure budget has been adopted for this period."
-        }
-        size={210}
-        centerValue={budgetTotal > 0 ? compactMoney(budgetTotal) : NOT_AVAILABLE}
-        centerLabel="Total budget"
-        shareOf={budgetTotal}
-        slices={[
-          {
-            label: "Expended",
-            value: expended,
-            color: VIZ.actual,
-            display: compactMoney(expended),
-          },
-          {
-            label: "Encumbered",
-            value: encumbered,
-            // The purple the Encumbrances tile on the Expenditures dashboard already wears.
-            color: "var(--color-viz-4)",
-            display: compactMoney(encumbered),
-          },
-          {
-            label: "Remaining",
-            value: Math.max(0, availableBudget),
-            color: VIZ.reference,
-            display: accounting(availableBudget, { compact: true }),
-          },
-        ]}
-      />
-      {overcommitted && (
-        <div className="mt-4">
-          <KeyInsightBar tone="action">
-            Spending and encumbrances exceed the full-year budget by{" "}
-            {compactMoney(Math.abs(availableBudget))}, so there is no remaining budget to draw.
-          </KeyInsightBar>
-        </div>
-      )}
-    </SectionCard>
-  );
-
-  /**
-   * Revenues collected — the same shape, cut in half because it measures PROGRESS.
+   * The redesign redraws the two composition widgets and Key Insights as one band of
+   * translucent cards — see components/dashboard/overview-widgets.tsx for the transcription
+   * notes. The figures are the same ones the SectionCard versions carried:
    *
-   * Against the full-year revenue budget, not the budget expected by now. The two questions
-   * sit side by side on this page and must not be confused: the Revenues KPI tile and the
-   * "Revenues vs budget (YTD)" card both judge PACE, which is what the district's variance
-   * policy is set against and what raises an alert. This widget answers the simpler thing a
-   * board asks — how much of the year's money is in — and 79% in month nine is a fact, not a
-   * verdict, which is why nothing here is coloured by a threshold.
+   *   - Revenue Collected measures PROGRESS against the full-year revenue budget, not the
+   *     budget expected by now. The Revenues KPI tile and "Revenues vs budget (YTD)" judge
+   *     PACE, which is what the variance policy is set against; this answers the simpler
+   *     thing a board asks — how much of the year's money is in — and nothing here is
+   *     coloured by a threshold, because 79% in month nine is a fact, not a verdict.
+   *   - Budget Status keeps the client's word ENCUMBERED rather than "committed", which is
+   *     already a fund balance classification two screens away (see COMPONENT_COLORS in
+   *     lib/dashboard/palette.ts). Remaining stays floored at zero for DRAWING only — the
+   *     overcommitted bar under the band puts the real, negative figure in words.
    */
-  const revenueCollectedCard = (
-    <SectionCard
-      title="Revenues collected"
-      subtitle="Against the full-year revenue budget"
-      info="Collections to date as a share of the adopted revenue budget for the whole year. This is not the pace comparison — see Revenues vs budget for whether collections are on track for the point in the year."
-      footer={GO_TO.revenues}
-      footerHref={options.link("/revenues")}
-    >
-      <HalfDonut
-        title="Revenues collected"
-        summary={
-          collectedPct === null
-            ? "No revenue budget has been adopted for this period."
-            : `${compactMoney(collected)} collected of a ${compactMoney(revenueBudgetTotal)} revenue budget, or ${percent(collectedPct)}.`
-        }
-        size={225}
-        centerValue={compactMoney(collected)}
-        centerNote={revenueBudgetTotal > 0 ? `of ${compactMoney(revenueBudgetTotal)}` : undefined}
-        centerPercent={collectedPct === null ? undefined : percent(collectedPct, 0)}
-        shareOf={revenueBudgetTotal}
-        segments={[
-          {
-            label: "Collected",
-            value: collected,
-            color: VIZ.actual,
-            display: compactMoney(collected),
-          },
-          {
-            label: "Remaining",
-            value: uncollected,
-            color: VIZ.reference,
-            display: compactMoney(uncollected),
-          },
-        ]}
-      />
-    </SectionCard>
-  );
+  const monthlyRevenue = series.points.map((p, i) => {
+    const v = toNumber(p.revenueYtd);
+    if (v === null) return null;
+    if (i === 0) return v;
+    const prev = toNumber(series.points[i - 1].revenueYtd);
+    return prev === null ? null : v - prev;
+  });
 
-  const fundBalanceCard = (
-    <SectionCard
-      title="Fund balance trend"
-      subtitle={scopeDescription(scope)}
-      badge={
-        scope.fundLevelOnly ? (
-          <FundLevelOnly what="Fund balance is" />
-        ) : isGeneralFund ? (
-          <StatusBadge status={reserveRung} size="sm" className="uppercase" />
-        ) : (
-          <span className="rounded-full border border-line bg-panel px-2 py-[2px] text-[9.5px] font-medium normal-case tracking-normal text-muted-2">
-            Policy targets apply to the General Fund only
-          </span>
-        )
-      }
-      footer={GO_TO.fundBalance}
-      footerHref={options.link("/fund-balance")}
-      footerNote="All amounts are unaudited"
-    >
-      <LineChart
-        title="Fund balance trend"
-        summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
-        categories={labels}
-        format={(v) => compactMoney(v, 0)}
-        height={280}
-        series={[
-          {
-            key: "total",
-            label: isGeneralFund ? "Ending fund balance" : "Total fund balance",
-            color: "var(--color-viz-budget)",
-            points: fundBalanceTrend,
-            labelLast: true,
-          },
-          ...(isGeneralFund
-            ? [
-                {
-                  key: "unassigned",
-                  label: "Unassigned fund balance",
-                  color: "var(--color-viz-actual)",
-                  points: unassignedTrend,
-                  labelLast: true,
-                },
-              ]
-            : []),
-        ]}
-      />
-      <div className="mt-4 flex flex-col gap-3">
-        <MetricStrip items={fundBalanceMetrics} cols={isGeneralFund ? 5 : 4} />
-        {fundBalanceInsight && (
-          <KeyInsightBar tone={isGeneralFund && reserveRung !== "Strong" ? "monitor" : "info"}>
-            {fundBalanceInsight}
-          </KeyInsightBar>
-        )}
-      </div>
-    </SectionCard>
-  );
-
-  const cashCard = (
-    <SectionCard
-      title="Cash position"
-      subtitle={`As of ${scope.label} (FY ${scope.fiscalYear})`}
-      badge={scope.fundLevelOnly ? <FundLevelOnly what="Cash is" /> : undefined}
-      footer={GO_TO.cash}
-      footerHref={options.link("/cash")}
-    >
-      <MetricStrip
-        cols={5}
-        items={[
-          { label: "Beginning cash", value: compactMoney(flow.beginningCash) },
-          { label: "Receipts (YTD)", value: compactMoney(flow.receipts), tone: "positive" },
-          {
-            label: "Disbursements (YTD)",
-            value: accounting(flow.disbursements?.negated(), { compact: true }),
-            tone: "negative",
-          },
-          {
-            label: "Net cash flow",
-            value: accounting(flow.net, { compact: true }),
-            tone: flow.net?.isNegative() ? "negative" : "positive",
-          },
-          { label: "Ending cash", value: compactMoney(point?.endingCash) },
-        ]}
-      />
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)] sm:items-center">
-        <div className="flex flex-col items-center">
-          <Gauge
-            value={daysCash}
-            bands={statusBands(cashT)}
-            rung={cashRung}
-            unit="days of cash in reserve"
-            size={170}
-            title="Days cash on hand"
-            summary={
-              daysCash === null
-                ? "Days cash on hand cannot be computed for this period."
-                : `${fmtDays(daysCash)} days of cash on hand, against a policy minimum of ${cashT.warning}.`
-            }
-          />
-          <StatusBadge status={cashRung} size="sm" className="mt-1" />
-        </div>
-
-        <MetricStrip
-          items={[
-            { label: "Cash balance", value: compactMoney(point?.endingCash) },
-            { label: "Avg monthly spend", value: compactMoney(avgMonthlySpend) },
-            {
-              label: "Cash % of expenditures",
-              value: percent(cashPctOfSpend, 1),
-              note: cashPctOfSpend === null ? "Needs spending detail" : undefined,
-            },
-            {
-              label: "Trend",
-              value: cashTrendPct === null ? NOT_AVAILABLE : signedPercent(cashTrendPct),
-              note: cashTrendPct === null ? "Needs an earlier period" : "vs prior period",
-              tone: cashTrendPct === null ? "neutral" : cashTrendPct < 0 ? "negative" : "positive",
-            },
-          ]}
+  const widgetRow = (
+    <>
+      <OverviewWidgetRow>
+        <RevenueCollectedWidget
+          collectedDisplay={compactMoney(collected)}
+          ofDisplay={revenueBudgetTotal > 0 ? `of ${compactMoney(revenueBudgetTotal)}` : undefined}
+          remainingDisplay={compactMoney(uncollected)}
+          collectedPct={collectedPct}
+          spark={monthlyRevenue}
         />
-      </div>
-    </SectionCard>
-  );
-
-  const healthCard = (
-    <SectionCard
-      title="Financial health summary"
-      subtitle="Key indicators compared to policy targets"
-      footer={GO_TO.policies}
-      footerHref="/policies"
-    >
-      <DataTable
-        spacious
-        columns={[
-          { key: "indicator", label: "Indicator" },
-          { key: "current", label: "Current", align: "right" },
-          { key: "target", label: "Target", align: "right" },
-          { key: "status", label: "Status", align: "right" },
-          { key: "trend", label: "Trend", align: "right" },
-        ]}
-        rows={health.map((h) => ({
-          id: h.id,
-          cells: {
-            indicator: { value: h.indicator, strong: true },
-            current: h.current,
-            target: h.target,
-            status: (
-              <span className="flex justify-end">
-                <StatusBadge status={h.rung} size="lg" dot={false} />
-              </span>
-            ),
-            trend: (
-              <span className="flex justify-end">
-                <Sparkline values={h.trend} label={`${h.indicator} trend`} />
-              </span>
-            ),
-          },
-        }))}
-      />
-    </SectionCard>
-  );
-
-  const insightsCard = (
-    <SectionCard title="Key insights" footer={GO_TO.alerts} footerHref={options.link("/alerts")}>
-      {insights.length > 0 ? (
-        <InsightList insights={insights} layout="column" />
-      ) : (
-        <p className="py-6 text-center text-[12.5px] text-muted-2">
-          Nothing stands out this period. Insights appear once there is enough committed data
-          to compare against your policies.
-        </p>
+        <BudgetStatusWidget
+          totalDisplay={budgetTotal > 0 ? compactMoney(budgetTotal) : NOT_AVAILABLE}
+          expendedDisplay={compactMoney(expended)}
+          encumberedDisplay={compactMoney(encumbered)}
+          remainingDisplay={accounting(availableBudget, { compact: true })}
+          expended={expended}
+          encumbered={encumbered}
+          remaining={Math.max(0, availableBudget)}
+        />
+        <KeyInsightsWidget insights={insights} />
+      </OverviewWidgetRow>
+      {overcommitted && (
+        <KeyInsightBar tone="action">
+          Spending and encumbrances exceed the full-year budget by{" "}
+          {compactMoney(Math.abs(availableBudget))}, so there is no remaining budget to draw.
+        </KeyInsightBar>
       )}
-    </SectionCard>
+    </>
+  );
+
+  /**
+   * ---------- the redesigned trend card (Figma 3:12327 + 3:12428 + 3:12493) ----------
+   *
+   * The chart, the white metric rail and the Key insight tip in one translucent card —
+   * see components/dashboard/overview-trend-card.tsx for the transcription notes. The
+   * figures are the same ones the SectionCard + MetricStrip version carried, and the
+   * one-page summary sheet still uses LineChart below.
+   */
+  const fundBalanceCard = (
+    <OverviewTrendCard
+      title="Fund Balance Trend"
+      subtitle={isGeneralFund ? scopeDescription(scope) : "Policy Applies to General Funds Only"}
+      ctaLabel={GO_TO.fundBalance}
+      ctaHref={options.link("/fund-balance")}
+      badge={scope.fundLevelOnly ? <FundLevelOnly what="Fund balance is" /> : undefined}
+      chartTitle={scope.fund ? scope.fund.name : "All funds"}
+      categories={labels}
+      format={(v) => compactMoney(v, 0)}
+      summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
+      series={[
+        {
+          key: "total",
+          label: isGeneralFund ? "Ending fund balance" : "Total fund balance",
+          points: fundBalanceTrend,
+        },
+        ...(isGeneralFund
+          ? [
+              {
+                key: "unassigned",
+                label: "Unassigned fund balance",
+                points: unassignedTrend,
+              },
+            ]
+          : []),
+      ]}
+      rail={fundBalanceRail}
+      insight={fundBalanceInsight}
+    />
+  );
+
+  /**
+   * ---------- the redesigned cash card (Figma 3:12343 + 3:12462 + 3:12495) ----------
+   *
+   * The big reserve gauge with the metric rail beside it and the five-figure cash flow
+   * walk beneath — see components/dashboard/overview-cash-card.tsx. The gauge's bands are
+   * still the district's own thresholds via `statusBands(cashT)`, never the mockup's.
+   */
+  const cashCard = (
+    <OverviewCashCard
+      title="Cash position"
+      // `scope.label` already ends in "(FY 2026-27)" for period scopes; appending the year
+      // again printed it twice — a duplication old enough that the mockup transcribed it.
+      subtitle={`As of ${scope.label}${scope.label.includes("FY") ? "" : ` (FY ${scope.fiscalYear})`}`}
+      ctaLabel={GO_TO.cash}
+      ctaHref={options.link("/cash")}
+      badge={scope.fundLevelOnly ? <FundLevelOnly what="Cash is" /> : undefined}
+      gauge={{
+        value: daysCash,
+        bands: statusBands(cashT),
+        rung: cashRung,
+        summary:
+          daysCash === null
+            ? "Days cash on hand cannot be computed for this period."
+            : `${fmtDays(daysCash)} days of cash on hand, against a policy minimum of ${cashT.warning}.`,
+      }}
+      rail={[
+        { label: "Cash balance", value: compactMoney(point?.endingCash) },
+        { label: "Avg monthly spend", value: compactMoney(avgMonthlySpend) },
+        {
+          label: "Cash % of Expenditures",
+          value: percent(cashPctOfSpend, 1),
+          note: cashPctOfSpend === null ? "Needs spending detail" : undefined,
+        },
+        {
+          label: "Trend",
+          value: cashTrendPct === null ? NOT_AVAILABLE : signedPercent(cashTrendPct),
+          tone:
+            cashTrendPct === null
+              ? ("default" as const)
+              : cashTrendPct < 0
+                ? ("negative" as const)
+                : ("positive" as const),
+          note: cashTrendPct === null ? "Needs an earlier period" : "vs prior period",
+        },
+      ]}
+      strip={[
+        { label: "Beginning Cash", value: compactMoney(flow.beginningCash) },
+        { label: "Receipts (YTD)", value: compactMoney(flow.receipts), tone: "positive" },
+        {
+          label: "Disbursements (YTD)",
+          value: accounting(flow.disbursements?.negated(), { compact: true }),
+          tone: "negative",
+        },
+        {
+          label: "Net cash flow",
+          value: accounting(flow.net, { compact: true }),
+          tone: flow.net?.isNegative() ? "negative" : "positive",
+        },
+        { label: "Ending cash", value: compactMoney(point?.endingCash) },
+      ]}
+    />
+  );
+
+  /**
+   * ---------- the redesigned health summary (Figma 3:12545) ----------
+   *
+   * The same five rows as before, drawn to the design's table — see
+   * components/dashboard/overview-health-card.tsx. The one-page summary sheet keeps its
+   * DataTable version of the same `health` array.
+   */
+  const healthCard = (
+    <OverviewHealthCard
+      rows={health.map((h) => ({
+        id: h.id,
+        indicator: h.indicator,
+        current: h.current,
+        target: h.target,
+        rung: h.rung,
+        trend: h.trend,
+      }))}
+    />
   );
 
   const alertsCard = (
-    <SectionCard
-      title={`Alert summary (${alerts?.alerts.length ?? 0})`}
-      footer={GO_TO.alerts}
-      footerHref={options.link("/alerts")}
-    >
-      <AlertSummary
-        alerts={alertRows}
-        critical={alerts?.criticalCount ?? 0}
-        warning={alerts?.warningCount ?? 0}
-        informational={alerts?.informationalCount ?? 0}
-        href={options.link("/alerts")}
-      />
-    </SectionCard>
+    <OverviewAlertsPanel
+      alerts={alertRows}
+      critical={alerts?.criticalCount ?? 0}
+      warning={alerts?.warningCount ?? 0}
+      informational={alerts?.informationalCount ?? 0}
+      href={options.link("/alerts")}
+    />
   );
 
   // ===================== the one-page landscape summary =====================
@@ -953,13 +956,66 @@ export default async function ExecutiveDashboard({
               sub={k.sub}
               note={k.note}
               tone={k.tone}
+              icon={k.icon}
+              accent={k.tileTone}
             />
           ))}
         </SheetBand>
 
+        {/* The widget band the redesign added under the tiles: the Revenue Collected gauge
+            and the Budget Status donut, at sheet scale, with Key Insights beside them —
+            the same three cards, in the same order, as the screen's widget row. */}
+        <SheetBand cols="1fr 1.15fr 1fr">
+          <SheetCard
+            title="Revenue Collected"
+            note={revenueBudgetTotal > 0 ? "Of full-year revenue budget" : undefined}
+          >
+            <SheetRevenueCollected
+              collectedDisplay={compactMoney(collected)}
+              ofDisplay={
+                revenueBudgetTotal > 0 ? `of ${compactMoney(revenueBudgetTotal)}` : undefined
+              }
+              remainingDisplay={compactMoney(uncollected)}
+              collectedPct={collectedPct}
+            />
+          </SheetCard>
+
+          <SheetCard
+            title="Budget Status"
+            note={
+              overcommitted
+                ? `Overcommitted by ${compactMoney(Math.abs(availableBudget))}`
+                : "Expended + encumbered vs full-year budget"
+            }
+          >
+            <SheetBudgetStatus
+              totalDisplay={budgetTotal > 0 ? compactMoney(budgetTotal) : NOT_AVAILABLE}
+              expendedDisplay={compactMoney(expended)}
+              encumberedDisplay={compactMoney(encumbered)}
+              remainingDisplay={accounting(availableBudget, { compact: true })}
+              expended={expended}
+              encumbered={encumbered}
+              remaining={Math.max(0, availableBudget)}
+            />
+          </SheetCard>
+
+          <SheetCard title="Key Insights">
+            {insights.length > 0 ? (
+              // Three, not all of them. The sheet is a fixed page and an unbounded list is
+              // the one thing on it that can grow without limit; the rest are on /alerts.
+              <InsightList insights={insights.slice(0, 3)} layout="column" />
+            ) : (
+              <p className="py-3 text-center text-[9.5px] text-muted-2">
+                Nothing stands out this period.
+              </p>
+            )}
+          </SheetCard>
+        </SheetBand>
+
         <SheetBand cols="1fr 1fr">
-          <SheetCard title="Revenues vs budget (YTD)" note="Five largest sources">
-            <BudgetBars
+          <SheetCard title="Revenues vs Budget (YTD)" note="Five largest sources">
+            <SheetBudgetBars
+              accent="green"
               title="Revenues against budget"
               summary="Actual year-to-date revenue against the budget expected by now and the full-year budget, for the five largest sources."
               rows={revenueRows}
@@ -967,8 +1023,9 @@ export default async function ExecutiveDashboard({
             />
           </SheetCard>
 
-          <SheetCard title="Expenditures vs budget (YTD)" note="By object">
-            <BudgetBars
+          <SheetCard title="Expenditures vs Budget (YTD)" note="By object">
+            <SheetBudgetBars
+              accent="purple"
               title="Expenditures against budget"
               summary="Actual year-to-date spending against the budget expected by now and the full-year budget, by object type."
               rows={expenditureRows}
@@ -977,9 +1034,9 @@ export default async function ExecutiveDashboard({
           </SheetCard>
         </SheetBand>
 
-        <SheetBand cols="1.05fr 1.25fr 0.9fr">
+        <SheetBand cols="1.2fr 1.15fr 0.85fr" grow>
           <SheetCard
-            title="Fund balance trend"
+            title="Fund Balance Trend"
             badge={
               isGeneralFund ? <StatusBadge status={reserveRung} size="sm" dot={false} /> : undefined
             }
@@ -990,7 +1047,7 @@ export default async function ExecutiveDashboard({
               summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
               categories={labels}
               format={(v) => compactMoney(v, 0)}
-              height={250}
+              height={120}
               series={[
                 {
                   key: "total",
@@ -1034,7 +1091,7 @@ export default async function ExecutiveDashboard({
             />
           </SheetCard>
 
-          <SheetCard title="Financial health summary" note="Against policy targets">
+          <SheetCard title="Financial Health Summary" note="Against policy targets">
             <DataTable
               dense
               columns={[
@@ -1059,16 +1116,38 @@ export default async function ExecutiveDashboard({
             />
           </SheetCard>
 
-          <SheetCard title="Key insights">
-            {insights.length > 0 ? (
-              // Four, not all of them. The sheet is a fixed page and an unbounded list is
-              // the one thing on it that can grow without limit; the rest are on /alerts.
-              <InsightList insights={insights.slice(0, 4)} layout="column" />
-            ) : (
-              <p className="py-3 text-center text-[9.5px] text-muted-2">
-                Nothing stands out this period.
-              </p>
-            )}
+          <SheetCard
+            title="Cash Position"
+            badge={<StatusBadge status={cashRung} size="sm" dot={false} />}
+            note={`As of ${scope.label}`}
+          >
+            <SheetStats
+              stacked
+              items={[
+                { label: "Ending cash", value: compactMoney(point?.endingCash) },
+                {
+                  label: "Days of cash",
+                  value: daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)} days`,
+                },
+                { label: "Beginning cash", value: compactMoney(flow.beginningCash) },
+                {
+                  label: "Receipts (YTD)",
+                  value: compactMoney(flow.receipts),
+                  tone: "positive",
+                },
+                {
+                  label: "Disbursements (YTD)",
+                  value: accounting(flow.disbursements?.negated(), { compact: true }),
+                  tone: "negative",
+                },
+                {
+                  label: "Net cash flow",
+                  value: accounting(flow.net, { compact: true }),
+                  tone: flow.net?.isNegative() ? "negative" : "positive",
+                },
+                { label: "Avg monthly spend", value: compactMoney(avgMonthlySpend) },
+              ]}
+            />
           </SheetCard>
         </SheetBand>
       </PrintSheet>
@@ -1077,6 +1156,9 @@ export default async function ExecutiveDashboard({
 
   return (
     <div className="animate-fade-up space-y-[18px]">
+      {/* Arms the entrance animations: stamps `.in` on every [data-reveal] card as it
+          first scrolls into view. Charts stay Server Components; this is the only JS. */}
+      <RevealManager />
       <PageHeader
         title="Executive Dashboard"
         description="Financial summary and key indicators of fiscal health."
@@ -1098,32 +1180,29 @@ export default async function ExecutiveDashboard({
       {kpis}
 
       {/*
-        The two composition widgets, directly under the tiles they restate. Placed here and
-        not further down because they are the same altitude as the KPI row — one figure each,
-        no drill-down — and a reader who has just taken in six tiles is answering "so where
-        does that leave us?", which is what these two say. The analysis cards below start
-        asking narrower questions.
+        The widget band, directly under the tiles it restates. Placed here and not further
+        down because it is the same altitude as the KPI row — one figure each, no drill-down
+        — and a reader who has just taken in six tiles is answering "so where does that
+        leave us?", which is what these three say. The analysis cards below start asking
+        narrower questions.
       */}
-      <Row cols="2">
-        {budgetStatusCard}
-        {revenueCollectedCard}
-      </Row>
+      {widgetRow}
 
-      {/* ---------- §3.2/3.3 the budget comparisons ---------- */}
-      <Row cols="2">
-        {revenueCard}
-        {expenditureCard}
-      </Row>
-
-      <Row cols="2-1">
-        {fundBalanceCard}
+      {/* ---------- §3.2/3.3 the budget comparisons, with the alerts rail beside them ---------- */}
+      {/* The design's canvas: two 812px chart cards stacked with 10px between, and the
+          273px Alerts Summary standing the full height of both — 812:273 is the 2.974fr.
+          `items-stretch` is what lets the rail's mt-auto footer sit at the charts' foot. */}
+      <div className="grid grid-cols-1 items-stretch gap-2.5 xl:grid-cols-[minmax(0,2.974fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-2.5">
+          {revenueCard}
+          {expenditureCard}
+        </div>
         {alertsCard}
-      </Row>
+      </div>
 
-      <Row cols="2-1">
-        {cashCard}
-        {insightsCard}
-      </Row>
+      {fundBalanceCard}
+
+      {cashCard}
 
       {healthCard}
 

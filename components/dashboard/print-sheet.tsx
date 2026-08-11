@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { Icon, type IconName } from "@/components/icons";
+import { TONE_INK, TONE_TINT, type TileTone } from "@/components/dashboard/kpi-tile";
 import { SheetFit } from "./print-sheet-fit";
 
 /**
@@ -161,6 +163,8 @@ export function SheetKpi({
   sub,
   note,
   tone = "neutral",
+  icon,
+  accent,
 }: {
   label: string;
   value: string;
@@ -169,10 +173,25 @@ export function SheetKpi({
   /** The judgement, if the figure has one — "Acceptable · target ≥ 5.00%". */
   note?: string;
   tone?: "neutral" | "positive" | "negative" | "monitor";
+  /** The Overview tile's icon, drawn in the same tinted disc at sheet scale. */
+  icon?: IconName;
+  /** The disc's tone — the screen tile's `tileTone`, so the two always match. */
+  accent?: TileTone;
 }) {
   return (
     <div className="sheet-kpi" data-tone={tone}>
-      <span className="sheet-kpi-label">{label}</span>
+      <span className="sheet-kpi-head">
+        <span className="sheet-kpi-label">{label}</span>
+        {icon && accent && (
+          <span
+            aria-hidden
+            className="sheet-kpi-disc"
+            style={{ background: TONE_TINT[accent], color: TONE_INK[accent] }}
+          >
+            <Icon name={icon} size={11} />
+          </span>
+        )}
+      </span>
       <span className="sheet-kpi-value">{value}</span>
       {sub && <span className="sheet-kpi-sub">{sub}</span>}
       {note && <span className="sheet-kpi-note">{note}</span>}
@@ -183,11 +202,14 @@ export function SheetKpi({
 /** A hairline key/value row for the sheet — the figures a chart needs spelled out beside it. */
 export function SheetStats({
   items,
+  stacked,
 }: {
   items: { label: string; value: string; tone?: "neutral" | "positive" | "negative" }[];
+  /** One figure per row rather than per column — for a card too narrow to run them across. */
+  stacked?: boolean;
 }) {
   return (
-    <dl className="sheet-stats">
+    <dl className="sheet-stats" data-stacked={stacked ? "" : undefined}>
       {items.map((i) => (
         <div key={i.label}>
           <dt>{i.label}</dt>

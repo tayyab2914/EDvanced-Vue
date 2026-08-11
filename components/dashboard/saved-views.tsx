@@ -7,6 +7,7 @@ import { EMPTY_FORM_STATE } from "@/lib/forms";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/icons";
 import { useScopeNavigation, Spinner } from "@/components/dashboard/scope-navigation";
+import { PILL_BUTTON, PILL_MENU, PillChevron } from "@/components/dashboard/pill";
 
 export interface SavedViewItem {
   id: string;
@@ -92,21 +93,17 @@ export function SavedViews({
         disabled={pending}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex h-9 items-center gap-1.5 rounded-lg border border-line bg-white px-3 text-[12.5px] font-medium text-ink-soft transition-colors hover:border-[#c8d3e4] disabled:cursor-not-allowed"
+        className={PILL_BUTTON}
       >
-        {pending ? <Spinner size={13} /> : <Icon name="eye" size={14} className="text-muted-2" />}
+        {pending && <Spinner size={13} />}
         {pending ? "Applying…" : "Views"}
-        {!pending && (
-          <span aria-hidden className="text-[9px] text-muted-2">
-            ▼
-          </span>
-        )}
+        {!pending && <PillChevron open={open} />}
       </button>
 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-40 mt-1 w-[300px] overflow-hidden rounded-lg border border-line bg-white shadow-lg"
+          className={cn(PILL_MENU, "absolute right-0 z-40 mt-[6px] w-[300px] overflow-hidden")}
         >
           <p className="px-3 pb-1 pt-2 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-2">
             Saved views · shared with your district

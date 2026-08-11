@@ -26,23 +26,33 @@ import {
   sharePercent,
 } from "@/lib/dashboard/format";
 import { PageHeader } from "@/components/page-header";
-import { KpiTile, KpiRow } from "@/components/dashboard/kpi-tile";
-import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/section-card";
+import { DataAsOf } from "@/components/dashboard/section-card";
 import { DataTable, MoverList } from "@/components/dashboard/data-table";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { EmptyState, SubstitutionNotice, Row, PolicyEchoCard } from "@/components/dashboard/shared";
+import { EmptyState, SubstitutionNotice } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
-import { ViewBy } from "@/components/dashboard/view-by";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
-import { ColumnChart } from "@/components/dashboard/charts/column-chart";
-import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
+import { ShareBars } from "@/components/dashboard/charts/budget-bars";
+import {
+  OverviewKpiTile,
+  OverviewSection,
+  OverviewTileRow,
+} from "@/components/dashboard/overview-kpi";
+import { OverviewPeriodSelect } from "@/components/dashboard/overview-period-select";
+import { RevealManager } from "@/components/reveal";
+import { RevenueStatusStrip } from "@/components/dashboard/revenue-status-strip";
+import { RevenueSourceTable, type SourceRow } from "@/components/dashboard/revenue-source-table";
+import { RevenueCategoryCard } from "@/components/dashboard/revenue-category-card";
+import { RevenueTrendCard } from "@/components/dashboard/revenue-trend-card";
+import { RevenueVarianceCard } from "@/components/dashboard/revenue-variance-card";
+import { RevenueMoversCard, type MoverItem } from "@/components/dashboard/revenue-movers";
+import { RevenueInsightCard } from "@/components/dashboard/revenue-insight-card";
+import { RevenueAlertsCard } from "@/components/dashboard/revenue-alerts-card";
 import { scopeOptions, moverFund, alertFunds, scopeDescription } from "@/lib/dashboard/options";
-import { GO_TO, MANAGE, VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { SERIES_SLOTS } from "@/lib/dashboard/palette";
 import { codeName, type LabelMode } from "@/lib/text";
 import { labelMode } from "@/lib/dashboard/label-mode";
-import { DimLabel } from "@/components/dashboard/dim-label";
 import { REVENUE_VIEWS, resolveView, type RevenueView } from "@/lib/dashboard/view";
 import {
   PrintSheet,
@@ -100,6 +110,17 @@ const VIEW_META: Record<
 
 /** A breakdown row's dimension, as text — for the chart labels, which are not DOM nodes. */
 const rowLabel = (r: BreakdownRow, mode: LabelMode) => codeName(r.code, r.name, mode);
+
+/**
+ * The segmented switcher's short labels — the design's own words (Figma 46:3226) for the
+ * same three views REVENUE_VIEWS names in full. The VALUES are REVENUE_VIEWS's, so the
+ * capsule and the resolver can never disagree about what a URL means.
+ */
+const CATEGORY_TABS = [
+  { value: "type", label: "Type" },
+  { value: "source", label: "Code & Name" },
+  { value: "grant", label: "Project/Grant" },
+] as const;
 
 /**
  * The Revenue dashboard (Spec §4) — performance against budget.
@@ -486,10 +507,56 @@ export default async function RevenueDashboard({
     );
   }
 
+  // ===================== the redesigned screen (Figma 46:2918) =====================
+
+  /**
+   * The monthly variance series — actual collections against the budget expected by that
+   * month, as a signed percentage. Feeds BOTH the status strip's sparkline and the variance
+   * trend columns, so the two can never disagree.
+   */
+  const monthlyVariance: (number | null)[] = series.points.map((p) => {
+    if (!p.hasData) return null;
+    const b = toNumber(p.revenueBudget) ?? 0;
+    const a = toNumber(p.revenueYtd) ?? 0;
+    const expected = (b * p.period) / 12;
+    return expected ? ((a - expected) / expected) * 100 : null;
+  });
+
+  const revenueDetailHref = `/data/revenue-detail?fy=${scope.fiscalYear}&period=${scope.period}`;
+  const totalStatus = revenuePace(toNumber(bySource.total.pace.percent), revT);
+
+  const sourceRows: SourceRow[] = bySource.rows.map((r) => ({
+    id: r.id,
+    label: codeName(r.code, r.name, scope.labelMode),
+    budget: compactMoney(r.budget),
+    actual: compactMoney(r.actualYtd),
+    pctBudget: percent(r.consumption.percent),
+    variance: accounting(r.pace.amount, { compact: true }),
+    variancePct: signedPercent(r.pace.percent),
+    negative: r.pace.amount.isNegative(),
+    status: revenuePace(toNumber(r.pace.percent), revT),
+  }));
+
+  const moverItems = (
+    rows: typeof movers.positive,
+    tone: "positive" | "negative",
+  ): MoverItem[] =>
+    rows.map((r) => ({
+      id: r.id,
+      name: codeName(r.code, r.name, scope.labelMode),
+      fund: moverFund(scope, "/revenues", r.fund),
+      value: accounting(r.pace.amount, { compact: true }),
+      percent: signedPercent(r.pace.percent),
+      tone,
+      status: revenuePace(toNumber(r.pace.percent), revT),
+    }));
+
   return (
     <div className="animate-fade-up space-y-[18px]">
+      {/* Arms the entrance animations — same one-liner the Executive redesign carries. */}
+      <RevealManager />
       <PageHeader
-        title="Revenue Dashboard"
+        title="Revenue"
         description="Track revenue performance against budget."
         actions={
           <DashboardFilters
@@ -499,440 +566,227 @@ export default async function RevenueDashboard({
           />
         }
       />
-      {scope.substituted && <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />}
+      {scope.substituted && (
+        <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />
+      )}
       <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
-      {/* ---------- KPI CARDS ---------- */}
-      <KpiRow count={6}>
-        <KpiTile
-          icon="dollar"
-          tone="green"
-          label="Total revenues"
-          caption="Year to date"
-          value={compactMoney(bySource.total.actualYtd)}
-          sub={`${percent(bySource.total.consumption.percent)} of budget collected`}
-          delta={
-            collectedPct === null
-              ? undefined
-              : {
-                  text: `${percent(collectedPct)} collected`,
-                  tone: "neutral",
-                }
-          }
-        />
+      {/* ---------- the Overview band: four tiles, then the status strip ---------- */}
+      <OverviewSection
+        action={
+          <OverviewPeriodSelect
+            label={scope.label}
+            periods={options.periods}
+            value={options.period}
+          />
+        }
+      >
+        <OverviewTileRow>
+          <OverviewKpiTile
+            arrow={false}
+            icon="dollar"
+            tone="green"
+            label="Total Revenue (YTD)"
+            value={compactMoney(bySource.total.actualYtd)}
+            sub="Of Annual budget collected"
+            subPct={collectedPct}
+            delta={
+              varPct === null
+                ? undefined
+                : {
+                    text: `${percent(Math.abs(varPct))} ${varPct < 0 ? "decrease" : "increase"} vs budget up to date`,
+                    tone: deltaTone(varPct, "up"),
+                    direction: varPct < 0 ? "down" : varPct > 0 ? "up" : "flat",
+                  }
+            }
+          />
 
-        <KpiTile
-          icon="pie"
-          tone="blue"
-          label="Revenue variance"
-          caption="Year to date"
-          info="Actual collections against the budget expected by now, pro-rated across the year."
-          value={accounting(bySource.total.pace.amount, { compact: true })}
-          sub="Compared to expected YTD collections"
-          delta={
-            varPct === null
-              ? undefined
-              : {
-                  text: `${signedPercent(varPct)} ${varPct < 0 ? "below" : "above"} budget`,
-                  tone: deltaTone(varPct, "up"),
-                  direction: varPct < 0 ? "down" : varPct > 0 ? "up" : "flat",
-                }
-          }
-        />
+          <OverviewKpiTile
+            arrow={false}
+            icon="pie"
+            tone="blue"
+            label="Revenue variance"
+            caption="Year to date"
+            value={accounting(bySource.total.pace.amount, { compact: true })}
+            sub="Compared to expected YTD collections"
+            delta={
+              varPct === null
+                ? undefined
+                : {
+                    text: `${percent(Math.abs(varPct))} ${varPct < 0 ? "below" : "above"} budget`,
+                    tone: deltaTone(varPct, "up"),
+                    direction: varPct < 0 ? "down" : varPct > 0 ? "up" : "flat",
+                  }
+            }
+          />
 
-        <KpiTile
-          icon="chart"
-          tone="purple"
-          label="Remaining to collect"
-          caption="Current budget less collections"
-          info="Current budget − actual revenue year to date. Not a forecast: no growth or seasonality is assumed."
-          value={compactMoney(overCollected ? remaining.abs() : remaining)}
-          sub={
-            overCollected
-              ? "collected above the full-year budget"
-              : "Remaining of annual revenue budget"
-          }
-          delta={
-            overCollected
-              ? { text: "Over-collected", tone: "positive" }
-              : { text: `${percent(100 - (collectedPct ?? 0))} outstanding`, tone: "neutral" }
-          }
-        />
+          <OverviewKpiTile
+            arrow={false}
+            icon="chart"
+            tone="purple"
+            label="Remaining to collect"
+            caption="Year to date"
+            value={compactMoney(overCollected ? remaining.abs() : remaining)}
+            chip={
+              overCollected
+                ? "Over-collected"
+                : `${percent(100 - (collectedPct ?? 0))} outstanding`
+            }
+          />
 
-        <KpiTile
-          icon="trend-up"
-          tone="amber"
-          label="Month over month change"
-          caption={previous ? `vs period ${previous.period}` : "no earlier period"}
-          value={compactMoney(point?.revenueMtd)}
-          sub="Revenue collected this period"
-          delta={
-            momPct === null
-              ? undefined
-              : {
-                  text: `${signedPercent(momPct)} ${momPct < 0 ? "decrease" : "increase"}`,
-                  tone: deltaTone(momPct, "up"),
-                  direction: momPct < 0 ? "down" : momPct > 0 ? "up" : "flat",
-                }
-          }
-        />
+          <OverviewKpiTile
+            arrow={false}
+            icon="trend-up"
+            tone="amber"
+            label="Month over month change"
+            caption={previous ? `vs period ${previous.period}` : "no earlier period"}
+            value={compactMoney(point?.revenueMtd)}
+            delta={
+              momPct === null
+                ? undefined
+                : {
+                    text: `${signedPercent(momPct)} ${momPct < 0 ? "decrease" : "increase"}`,
+                    tone: deltaTone(momPct, "up"),
+                    direction: momPct < 0 ? "down" : momPct > 0 ? "up" : "flat",
+                  }
+            }
+          />
+        </OverviewTileRow>
 
-        <KpiTile
-          icon="target"
-          tone={statusRung === "Action Required" ? "red" : statusRung === "Monitor" ? "amber" : "green"}
-          label="Revenue status"
-          caption="Year to date"
-          value={statusRung === "N/A" ? "Not available" : statusRung}
-          valueStatus={statusRung}
-          sub={
-            varPct === null
-              ? "needs a revenue budget for the year"
-              : Math.abs(varPct) < revT.warning
-                ? "Within revenue collection target"
-                : "Outside revenue collection target"
-          }
-          statusNote={`Policy ± ${revT.warning.toFixed(2)}%`}
+        <RevenueStatusStrip
+          rung={statusRung}
+          policyNote={`Policy ± ${revT.warning.toFixed(2)}%`}
+          spark={monthlyVariance}
+          days={String(daysIn.elapsed)}
+          elapsedNote={`${((daysIn.elapsed / daysIn.total) * 100).toFixed(1)}% elapsed`}
         />
+      </OverviewSection>
 
-        <KpiTile
-          icon="calendar"
-          tone="teal"
-          label="Days in fiscal year"
-          caption={`Through ${scope.label}`}
-          value={String(daysIn.elapsed)}
-          sub="Fiscal year completed"
-          delta={{
-            text: `${((daysIn.elapsed / daysIn.total) * 100).toFixed(1)}% elapsed`,
-            tone: "neutral",
+      {/* ---------- the card grid — the design's 702 / 399 columns on a 10px gutter ---------- */}
+      <div className="grid grid-cols-1 items-stretch gap-x-[10px] gap-y-[12px] xl:grid-cols-[minmax(0,1.76fr)_minmax(0,1fr)]">
+        {/* row 1 — the by-source table beside the category share card */}
+        <RevenueSourceTable
+          ctaHref={revenueDetailHref}
+          rows={sourceRows}
+          total={{
+            id: "total",
+            label: "Total Revenue",
+            budget: compactMoney(bySource.total.budget),
+            actual: compactMoney(bySource.total.actualYtd),
+            pctBudget: percent(bySource.total.consumption.percent),
+            variance: accounting(bySource.total.pace.amount, { compact: true }),
+            variancePct: signedPercent(bySource.total.pace.percent),
+            negative: bySource.total.pace.amount.isNegative(),
+            status: totalStatus,
           }}
         />
-      </KpiRow>
-
-      {/* ---------- ROW 2: budget vs actual · by major source · policy + top positives ---------- */}
-      <Row cols="2-2-1">
-        <SectionCard
-          title="Revenues — budget vs actual"
-          subtitle={`Year to date through ${scope.label}`}
-          info="Actual collections against the budget expected by now, with the full-year budget drawn as a reference."
-        >
-          <LineChart
-            title="Revenues, budget against actual"
-            summary={`Actual collections year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
-            categories={labels}
-            format={(v) => compactMoney(v, 0)}
-            height={280}
-            series={[
-              {
-                key: "actual",
-                label: "Actual (YTD)",
-                color: "var(--color-viz-actual)",
-                labelLast: true,
-                points: series.points.map((p) => ({
-                  value: toNumber(p.revenueYtd),
-                  label: compactMoney(p.revenueYtd),
-                })),
-              },
-              {
-                key: "budget",
-                // The client's terminology change: "Budget (to date)" → "Budget (YTD)".
-                label: "Budget (YTD)",
-                color: "var(--color-viz-budget)",
-                points: series.points.map((p) => ({
-                  value: p.hasData ? ((toNumber(p.revenueBudget) ?? 0) * p.period) / 12 : null,
-                })),
-              },
-              {
-                key: "full",
-                label: "Budget (full year)",
-                color: "var(--color-viz-reference)",
-                dashed: true,
-                markers: false,
-                points: series.points.map(() => ({ value: fullYearBudget })),
-              },
-            ]}
-          />
-          <div className="mt-4">
-            <MetricStrip
-              items={[
-                { label: "Actual (YTD)", value: compactMoney(bySource.total.actualYtd) },
-                { label: "Budget (YTD)", value: compactMoney(bySource.total.pace.budget) },
-                {
-                  label: "Variance (YTD)",
-                  value: accounting(bySource.total.pace.amount, { compact: true }),
-                  note: signedPercent(bySource.total.pace.percent),
-                  tone: bySource.total.pace.amount.isNegative() ? "negative" : "positive",
-                },
-                {
-                  label: "Remaining to collect",
-                  value: compactMoney(overCollected ? remaining.abs() : remaining),
-                  note: overCollected ? "over-collected" : "current budget less actual",
-                },
-              ]}
-            />
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Revenue by major source"
-          info="Ranked by budget. Variance is measured against the budget expected by now."
-          footer={VIEW_DETAILS.revenueDetail}
-          footerHref={`/data/revenue-detail?fy=${scope.fiscalYear}&period=${scope.period}`}
-        >
-          <DataTable
-            dense
-            columns={[
-              { key: "source", label: "Revenue source" },
-              { key: "budget", label: "Budget (full year)", align: "right" },
-              { key: "actual", label: "Actual (YTD)", align: "right" },
-              { key: "pctBudget", label: "% of budget", align: "right" },
-              { key: "variance", label: "Variance $", align: "right" },
-              { key: "variancePct", label: "Variance %", align: "right" },
-              { key: "status", label: "Status", align: "right" },
-            ]}
-            rows={bySource.rows.map((r) => {
-              const pace = revenuePace(toNumber(r.pace.percent), revT);
-              const negative = r.pace.amount.isNegative();
-              return {
-                id: r.id,
-                cells: {
-                  source: {
-                    value: <DimLabel code={r.code} name={r.name} mode={scope.labelMode} />,
-                    strong: true,
-                  },
-                  budget: compactMoney(r.budget),
-                  actual: compactMoney(r.actualYtd),
-                  pctBudget: percent(r.consumption.percent),
-                  variance: {
-                    value: accounting(r.pace.amount, { compact: true }),
-                    tone: negative ? ("negative" as const) : ("positive" as const),
-                    strong: true,
-                  },
-                  variancePct: {
-                    value: signedPercent(r.pace.percent),
-                    tone: negative ? ("negative" as const) : ("positive" as const),
-                  },
-                  status: (
-                    <span className="flex justify-end">
-                      <StatusBadge status={pace.rung} label={pace.label} size="sm" dot={false} />
-                    </span>
-                  ),
-                },
-              };
-            })}
-            total={{
-              id: "total",
-              total: true,
-              cells: {
-                source: "Total revenues",
-                budget: compactMoney(bySource.total.budget),
-                actual: compactMoney(bySource.total.actualYtd),
-                pctBudget: percent(bySource.total.consumption.percent),
-                variance: {
-                  value: accounting(bySource.total.pace.amount, { compact: true }),
-                  tone: bySource.total.pace.amount.isNegative()
-                    ? ("negative" as const)
-                    : ("positive" as const),
-                },
-                variancePct: {
-                  value: signedPercent(bySource.total.pace.percent),
-                  tone: bySource.total.pace.amount.isNegative()
-                    ? ("negative" as const)
-                    : ("positive" as const),
-                },
-                status: (
-                  <span className="flex justify-end">
-                    <StatusBadge
-                      status={revenuePace(toNumber(bySource.total.pace.percent), revT).rung}
-                      label={revenuePace(toNumber(bySource.total.pace.percent), revT).label}
-                      size="sm"
-                      dot={false}
-                    />
-                  </span>
-                ),
-              },
-            }}
-          />
-        </SectionCard>
-
-        <div className="grid content-start gap-4">
-          <SectionCard
-            title="Revenue policy"
-            subtitle="Your own thresholds"
-            info="Every revenue alert and status badge on this page is judged against these."
-          >
-            <PolicyEchoCard
-              rows={[
-                { label: "Variance — warning", value: `± ${Number(policy.revenue.varianceWarning).toFixed(2)}%` },
-                { label: "Variance — critical", value: `± ${Number(policy.revenue.varianceCritical).toFixed(2)}%` },
-                { label: "Forecast — warning", value: `± ${Number(policy.revenue.forecastVarianceWarning).toFixed(2)}%` },
-                { label: "Forecast — critical", value: `± ${Number(policy.revenue.forecastVarianceCritical).toFixed(2)}%` },
-                { label: "Month-over-month change", value: `± ${Number(policy.revenue.significantChange).toFixed(2)}%` },
-              ]}
-              manageHref={userCan(user, "configure_district") ? "/policies" : undefined}
-              manageLabel={MANAGE.revenuePolicies}
-            />
-          </SectionCard>
-
-          <SectionCard
-            title="Top positive variances"
-            subtitle="Collections above expected levels"
-            bodyClassName="min-h-0"
-          >
-            <MoverList
-              items={movers.positive.map((r) => ({
-                id: r.id,
-                name: codeName(r.code, r.name, scope.labelMode),
-                fund: moverFund(scope, "/revenues", r.fund),
-                value: accounting(r.pace.amount, { compact: true }),
-                percent: signedPercent(r.pace.percent),
-                tone: "positive" as const,
-                status: (
-                  <StatusBadge
-                    status={revenuePace(toNumber(r.pace.percent), revT).rung}
-                    label={revenuePace(toNumber(r.pace.percent), revT).label}
-                    size="sm"
-                    dot={false}
-                  />
-                ),
-              }))}
-              empty="Nothing is running ahead of budget."
-            />
-          </SectionCard>
-        </div>
-      </Row>
-
-      {/* ---------- ROW 3: variance trend · by category · top negatives + alerts ---------- */}
-      <Row cols="2-2-1">
-        <SectionCard
-          title="Revenue variance trend"
-          subtitle="Actual against the budget expected by each month"
-          info="A bar above the line means collections ran ahead of the pro-rated budget that month."
-        >
-          <ColumnChart
-            title="Revenue variance by month"
-            summary="How far collections ran ahead of or behind the pro-rated budget in each month of the year."
-            format={(v) => `${v.toFixed(0)}%`}
-            height={280}
-            thresholds={[
-              { at: revT.warning, label: `Warning +${revT.warning}%`, color: "var(--color-monitor-mark)" },
-              { at: -revT.warning, label: `Warning −${revT.warning}%`, color: "var(--color-monitor-mark)" },
-            ]}
-            columns={series.points
-              .filter((p) => p.hasData)
-              .map((p) => {
-                const b = toNumber(p.revenueBudget) ?? 0;
-                const a = toNumber(p.revenueYtd) ?? 0;
-                const expected = (b * p.period) / 12;
-                const v = expected ? ((a - expected) / expected) * 100 : 0;
-                return { label: labels[p.period - 1], value: v, display: `${v.toFixed(1)}%` };
-              })}
-          />
-        </SectionCard>
 
         {/*
-          THE "VIEW BY" CARD — "Revenue Type, Revenue Code & Name, Grant".
-
-          One card, three perspectives, per the client's M5 note: a district asking "which
-          grants brought this in?" should not need a second report to find out. All three
-          are dimensions on the revenue detail grain, so each is one grouped aggregate into
-          the same shape.
-
-          The KPI row and the variance trend above are deliberately NOT re-grouped — total
-          revenue and its variance are the same figures however the detail is sliced.
+          THE "VIEW BY" CARD — "Revenue Type, Revenue Code & Name, Grant", now the design's
+          segmented capsule rather than a dropdown. Same URL parameter, same server-side
+          regrouping — see the note on VIEW_META above.
         */}
-        <SectionCard
+        <RevenueCategoryCard
           title={meta.title}
           subtitle={meta.subtitle}
-          info={meta.info}
-          control={<ViewBy options={REVENUE_VIEWS} value={view} />}
-          footer={VIEW_DETAILS.revenueDetail}
-          footerHref={`/data/revenue-detail?fy=${scope.fiscalYear}&period=${scope.period}`}
-        >
-          <ShareBars
-            title={meta.title}
-            summary={`Share of year-to-date collections by ${meta.noun.toLowerCase().replace(/s$/, "")}.`}
-            rows={categories.rows.map((r, i) => ({
-              id: r.id,
-              label: rowLabel(r, scope.labelMode),
-              value: toNumber(r.actualYtd) ?? 0,
-              display: compactMoney(r.actualYtd),
-              share: percent(sharePercent(r.actualYtd, categories.total.actualYtd), 1),
-              color: SERIES_SLOTS[i % SERIES_SLOTS.length],
-            }))}
-          />
-          <div className="mt-4">
-            {/*
-              The totals come from the UNFOLDED breakdown — `foldTail` keeps `total` intact
-              precisely so a card that hides its tail still agrees with the KPI tile above
-              it. The count is the real one too: "Projects 84" after folding to six bars is
-              the honest statement, and "6" would not be.
-            */}
-            <MetricStrip
-              cols={3}
-              items={[
-                { label: "Total actual (YTD)", value: compactMoney(categories.total.actualYtd) },
-                { label: "Total budget", value: compactMoney(categories.total.budget) },
-                { label: meta.noun, value: String(regroupedSource.rows.length) },
-              ]}
-            />
-          </div>
-        </SectionCard>
+          view={view}
+          viewOptions={CATEGORY_TABS}
+          rows={categories.rows.map((r, i) => ({
+            id: r.id,
+            label: rowLabel(r, scope.labelMode),
+            display: compactMoney(r.actualYtd),
+            share: percent(sharePercent(r.actualYtd, categories.total.actualYtd), 1),
+            sharePct: sharePercent(r.actualYtd, categories.total.actualYtd) ?? 0,
+            color: SERIES_SLOTS[i % SERIES_SLOTS.length],
+          }))}
+          stats={[
+            { label: "Actual (YTD)", value: compactMoney(categories.total.actualYtd) },
+            { label: "Budget (YTD)", value: compactMoney(categories.total.pace.budget) },
+            {
+              label: "Variance (YTD)",
+              value: accounting(categories.total.pace.amount, { compact: true }),
+              tone: categories.total.pace.amount.isNegative() ? "negative" : "positive",
+              note: signedPercent(categories.total.pace.percent),
+            },
+          ]}
+          ctaHref={revenueDetailHref}
+        />
 
-        <div className="grid content-start gap-4">
-          <SectionCard
-            title="Top negative variances"
-            subtitle="Collections below expected levels"
-            bodyClassName="min-h-0"
-          >
-            <MoverList
-              items={movers.negative.map((r) => ({
-                id: r.id,
-                name: codeName(r.code, r.name, scope.labelMode),
-                fund: moverFund(scope, "/revenues", r.fund),
-                value: accounting(r.pace.amount, { compact: true }),
-                percent: signedPercent(r.pace.percent),
-                tone: "negative" as const,
-                status: (
-                  <StatusBadge
-                    status={revenuePace(toNumber(r.pace.percent), revT).rung}
-                    label={revenuePace(toNumber(r.pace.percent), revT).label}
-                    size="sm"
-                    dot={false}
-                  />
-                ),
-              }))}
-              empty="Nothing is running behind budget."
-            />
-          </SectionCard>
+        {/* row 2 — budget vs actual beside the positive movers */}
+        <RevenueTrendCard
+          title="Revenues — budget vs actual"
+          subtitle={`Year to date through ${scope.label}`}
+          categories={labels}
+          actual={series.points.map((p) => ({ value: toNumber(p.revenueYtd) }))}
+          budget={series.points.map((p) => ({
+            value: p.hasData ? ((toNumber(p.revenueBudget) ?? 0) * p.period) / 12 : null,
+          }))}
+          reference={fullYearBudget > 0 ? fullYearBudget : null}
+          format={(v) => compactMoney(v, 0)}
+          summary={`Actual collections year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
+          stats={[
+            { label: "Actual (YTD)", value: compactMoney(bySource.total.actualYtd) },
+            { label: "Budget (YTD)", value: compactMoney(bySource.total.pace.budget) },
+            {
+              label: "Variance (YTD)",
+              value: accounting(bySource.total.pace.amount, { compact: true }),
+              tone: bySource.total.pace.amount.isNegative() ? "negative" : "positive",
+              note: signedPercent(bySource.total.pace.percent),
+            },
+            {
+              label: "Remaining to collect",
+              value: compactMoney(overCollected ? remaining.abs() : remaining),
+              note: overCollected ? "over-collected" : "current budget less actual",
+            },
+          ]}
+        />
 
-          <SectionCard
-            title={`Revenue alerts (${revenueAlerts.length})`}
-            footer={GO_TO.alerts}
-            footerHref={options.link("/alerts")}
-          >
-            <AlertList
-              mode={scope.labelMode}
-              alerts={revenueAlerts.map((a) => ({
-                id: a.id,
-                severity: a.severity,
-                title: a.title,
-                message: a.message,
-                // Which fund is under- or over-collected. The alert itself is a district
-                // figure; these say where to look, and link back to this page scoped there.
-                funds: alertFunds(scope, "/revenues", a.funds),
-              }))}
-              href={options.link("/alerts")}
-              empty="No revenue thresholds have been crossed this period."
-            />
-          </SectionCard>
-        </div>
-      </Row>
+        <RevenueMoversCard
+          title="Top positive variances"
+          subtitle="Collections above expected levels"
+          items={moverItems(movers.positive, "positive")}
+          empty="Nothing is running ahead of budget."
+        />
 
-      <FooterInfoBar action={GO_TO.policies} href="/policies">
-        Revenue figures are drawn from the detail file committed for this period. Remaining to
-        collect is current budget less actual revenue — it assumes no growth and is not a
-        forecast. Adjust the thresholds above to change when these alerts fire.
-      </FooterInfoBar>
+        {/* row 3 — the variance trend beside the negative movers */}
+        <RevenueVarianceCard
+          categories={labels}
+          points={monthlyVariance}
+          warning={revT.warning}
+          summary="How far collections ran ahead of or behind the pro-rated budget in each month of the year."
+        />
+
+        <RevenueMoversCard
+          title="Top negative variances"
+          subtitle="Collections below expected levels"
+          items={moverItems(movers.negative, "negative")}
+          empty="Nothing is running behind budget."
+        />
+
+        {/* row 4 — the key insight beside the alerts */}
+        <RevenueInsightCard ctaHref="/policies">
+          Revenue figures are drawn from the detail file committed for this period. Remaining to
+          collect is current budget less actual revenue — it assumes no growth and is not a
+          forecast. Adjust the thresholds above to change when these alerts fire.
+        </RevenueInsightCard>
+
+        <RevenueAlertsCard
+          alerts={revenueAlerts.map((a) => ({
+            id: a.id,
+            severity: a.severity,
+            message: a.message,
+            title: a.title,
+            funds: alertFunds(scope, "/revenues", a.funds).map((f) => ({
+              id: f.id,
+              label: codeName(f.code, f.name, scope.labelMode),
+              detail: f.detail,
+              href: f.href,
+            })),
+          }))}
+          totalCount={alerts?.alerts.length ?? 0}
+          href={options.link("/alerts")}
+        />
+      </div>
     </div>
   );
 }
