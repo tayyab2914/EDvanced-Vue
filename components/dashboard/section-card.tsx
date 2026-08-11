@@ -141,23 +141,17 @@ export function FooterInfoBar({
 }
 
 /**
- * "Data as of 31 May 2026" — a trust signal on every dashboard.
+ * `DataAsOf` — the "🗓 Data as of 31 May 2026 · All funds" line that used to sit under every
+ * dashboard header — is gone. It stated the applied filters a SECOND time (it was handed
+ * `scopeDescription(scope)`, built from the same `scope.filters.chips` the header's chips
+ * are), so a filtered page read "Fund Type: General" twice in two adjacent lines.
  *
- * The date is the END OF THE SCOPED PERIOD, not the upload timestamp. A district that
- * uploads April's figures in June is looking at April's position, and stamping the page
- * with the upload date would date the numbers wrongly.
+ * The date itself survives, at the end of the header's "Showing:" row — see
+ * components/dashboard/filter-bar.tsx, which also keeps the rule the old component carried:
+ * the date is the END OF THE SCOPED PERIOD, not the upload timestamp. A district that uploads
+ * April's figures in June is looking at April's position, and stamping the page with the
+ * upload date would date the numbers wrongly.
  */
-export function DataAsOf({ date, note }: { date: Date | null; note?: string }) {
-  if (!date) return null;
-  return (
-    <p className="flex items-center justify-end gap-1.5 text-[11.5px] text-muted-2">
-      <span aria-hidden>🗓</span>
-      Data as of{" "}
-      {date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}
-      {note && <span className="text-faint">· {note}</span>}
-    </p>
-  );
-}
 
 /** A row of small label/value pairs under a chart — §7.2's 12-month high/low strip.
  *  Speaks the redesign's rail ramp: sentence-case grey label over a near-black figure. */

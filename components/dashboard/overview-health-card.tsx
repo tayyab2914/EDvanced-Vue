@@ -115,10 +115,10 @@ export function OverviewHealthCard({ rows }: { rows: HealthRow[] }) {
   return (
     <OverviewPanel>
       <header>
-        <h2 className="text-[20px] font-normal leading-[18px] tracking-[0.16px] text-[#060606]">
+        <h2 className="text-[16px] font-normal leading-[2] tracking-[0.16px] text-[#060606]">
           Financial health summary
         </h2>
-        <p className="mt-[4px] text-[10px] leading-[18px] tracking-[0.1px] text-[#060606]/[0.56]">
+        <p className="text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
           Key indicators compared to policy targets
         </p>
       </header>

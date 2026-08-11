@@ -47,7 +47,7 @@ import {
   OverviewTileRow,
 } from "@/components/dashboard/overview-kpi";
 import { OverviewPeriodSelect } from "@/components/dashboard/overview-period-select";
-import { DataAsOf, FooterInfoBar } from "@/components/dashboard/section-card";
+import { FooterInfoBar } from "@/components/dashboard/section-card";
 import { DataTable } from "@/components/dashboard/data-table";
 import { InsightList } from "@/components/dashboard/alert-list";
 import { OverviewBudgetCard } from "@/components/dashboard/overview-budget-card";
@@ -662,8 +662,15 @@ export default async function ExecutiveDashboard({
           tone={k.tileTone}
           label={k.label}
           value={k.value}
+          // Only the first two tiles carry a sub-line in the design (Figma 3:11594/3:11604);
+          // the reserve and days-cash tiles show just badge + target note. The reserve
+          // basis wording still lives on the Fund Balance dashboard itself.
           sub={
-            i < 2 && typeof k.sub === "string" ? withoutLeadingPercent(k.sub) : k.sub
+            i < 2
+              ? typeof k.sub === "string"
+                ? withoutLeadingPercent(k.sub)
+                : k.sub
+              : undefined
           }
           subPct={i === 0 ? collectedPct : i === 1 ? expendedPct : null}
           delta={k.delta}
@@ -1174,7 +1181,6 @@ export default async function ExecutiveDashboard({
       {scope.substituted && (
         <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />
       )}
-      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
       {/* ---------- §3.1 KPI row ---------- */}
       {kpis}

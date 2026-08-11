@@ -27,7 +27,7 @@ import {
 } from "@/lib/dashboard/format";
 import { PageHeader } from "@/components/page-header";
 import { KpiTile, KpiRow, MiniStat } from "@/components/dashboard/kpi-tile";
-import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/section-card";
+import { SectionCard, FooterInfoBar } from "@/components/dashboard/section-card";
 import { DataTable } from "@/components/dashboard/data-table";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
@@ -37,7 +37,7 @@ import { ViewBy } from "@/components/dashboard/view-by";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { Gauge } from "@/components/dashboard/charts/gauge";
 import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
-import { scopeOptions, alertFunds, scopeDescription } from "@/lib/dashboard/options";
+import { scopeOptions, alertFunds } from "@/lib/dashboard/options";
 import { GO_TO, VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { CASH_COLORS, SERIES_SLOTS } from "@/lib/dashboard/palette";
 import { codeName } from "@/lib/text";
@@ -475,7 +475,6 @@ export default async function CashDashboard({
         }
       />
       {scope.substituted && <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />}
-      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
       {scope.fundLevelOnly && <FundLevelNotice subject="Cash position" />}
 
       {/* ---------- KPI CARDS ---------- */}

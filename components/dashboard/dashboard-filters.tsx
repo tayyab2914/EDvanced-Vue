@@ -1,5 +1,6 @@
 import { getTenantDb } from "@/lib/auth/dal";
 import { scopeOptions } from "@/lib/dashboard/options";
+import { sheetAsOf } from "@/lib/dashboard/summary";
 import type { DashboardScope } from "@/lib/dashboard/scope";
 import { FilterBar } from "@/components/dashboard/filter-bar";
 
@@ -43,6 +44,9 @@ export async function DashboardFilters({
       active={scope.filters.active}
       pruned={scope.filters.pruned}
       savedViews={views}
+      /* Formatted here, not in the bar: `sheetAsOf` is the one place this product spells a
+         date, and the printed sheet's colophon reads from the same function. */
+      asOf={sheetAsOf(scope.dataAsOf)}
       exportHref={exportHref}
       summaryHref={summaryHref}
     />

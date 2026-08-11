@@ -57,6 +57,7 @@ export function FilterBar({
   active,
   pruned,
   savedViews,
+  asOf,
   exportHref,
   summaryHref,
 }: {
@@ -69,6 +70,11 @@ export function FilterBar({
   active: boolean;
   pruned: boolean;
   savedViews: SavedViewItem[];
+  /**
+   * "Data as of August 31, 2026" — pre-formatted by the server wrapper. See the note beside
+   * where it renders for why it lives in this row rather than on a line of its own.
+   */
+  asOf?: string;
   exportHref?: string;
   /** Only the Executive dashboard has a one-page summary view. */
   summaryHref?: string;
@@ -321,6 +327,27 @@ export function FilterBar({
             {pending && <Spinner size={11} />}
             {pending ? "Clearing…" : "Clear filters"}
           </button>
+        )}
+
+        {/*
+          THE AS-OF DATE, at the end of the row that already names the slice.
+
+          It used to be a line of its own beneath this one — `DataAsOf`, since deleted — and
+          that line carried the applied filters a second time, word for word, because it was
+          given `scopeDescription(scope)` and the chips above are built from the same
+          `scope.filters.chips`. Reading "Fund Type: General" twice in two lines is how a
+          reader learns to stop reading either.
+
+          The DAY is the part that was never duplicated. "August 2026" on the period chip does
+          not say whether the month is complete; "August 31, 2026" does, and the date is the
+          end of the scoped period rather than the upload time (lib/dashboard/scope.ts), which
+          is the whole reason it is worth stating. So the date stays and the repetition goes.
+        */}
+        {asOf && (
+          <span className="flex items-center gap-[5px] text-[11px] leading-[16px] text-[#797979]">
+            <span aria-hidden>🗓</span>
+            {asOf}
+          </span>
         )}
 
         {/*

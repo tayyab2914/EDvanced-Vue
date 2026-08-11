@@ -26,7 +26,6 @@ import {
   sharePercent,
 } from "@/lib/dashboard/format";
 import { PageHeader } from "@/components/page-header";
-import { DataAsOf } from "@/components/dashboard/section-card";
 import { DataTable, MoverList } from "@/components/dashboard/data-table";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
@@ -49,7 +48,7 @@ import { RevenueVarianceCard } from "@/components/dashboard/revenue-variance-car
 import { RevenueMoversCard, type MoverItem } from "@/components/dashboard/revenue-movers";
 import { RevenueInsightCard } from "@/components/dashboard/revenue-insight-card";
 import { RevenueAlertsCard } from "@/components/dashboard/revenue-alerts-card";
-import { scopeOptions, moverFund, alertFunds, scopeDescription } from "@/lib/dashboard/options";
+import { scopeOptions, moverFund, alertFunds } from "@/lib/dashboard/options";
 import { SERIES_SLOTS } from "@/lib/dashboard/palette";
 import { codeName, type LabelMode } from "@/lib/text";
 import { labelMode } from "@/lib/dashboard/label-mode";
@@ -569,7 +568,6 @@ export default async function RevenueDashboard({
       {scope.substituted && (
         <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />
       )}
-      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
       {/* ---------- the Overview band: four tiles, then the status strip ---------- */}
       <OverviewSection

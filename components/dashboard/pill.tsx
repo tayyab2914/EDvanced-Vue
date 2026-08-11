@@ -30,8 +30,8 @@ import { cn } from "@/lib/cn";
 export const PILL_FACE =
   "flex flex-none items-center rounded-full bg-white text-[14px] font-semibold leading-normal tracking-[0.14px] text-[#060606]";
 
-/** The header controls' box. The Overview period pill sets its own, one notch shorter. */
-export const PILL_SIZE = "h-[36px] gap-[10px] px-[16px]";
+/** The header controls' box — the design's 34px capsule (Figma 3:11570). */
+export const PILL_SIZE = "h-[34px] gap-[12px] px-[14px]";
 
 /**
  * What a capsule does when it is a button. The focus ring is drawn OUTSIDE the pill rather

@@ -35,7 +35,7 @@ import {
 } from "@/lib/dashboard/format";
 import { PageHeader } from "@/components/page-header";
 import { KpiTile, KpiRow } from "@/components/dashboard/kpi-tile";
-import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/section-card";
+import { SectionCard, FooterInfoBar } from "@/components/dashboard/section-card";
 import { DataTable, MoverList } from "@/components/dashboard/data-table";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
@@ -45,7 +45,7 @@ import { ViewBy } from "@/components/dashboard/view-by";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { ColumnChart } from "@/components/dashboard/charts/column-chart";
 import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
-import { scopeOptions, moverFund, alertFunds, scopeDescription } from "@/lib/dashboard/options";
+import { scopeOptions, moverFund, alertFunds } from "@/lib/dashboard/options";
 import { GO_TO, MANAGE, VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { SERIES_SLOTS } from "@/lib/dashboard/palette";
 import {
@@ -586,7 +586,6 @@ export default async function ExpenditureDashboard({
         }
       />
       {scope.substituted && <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />}
-      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
       {/* ---------- KPI CARDS ---------- */}
       <KpiRow count={6}>

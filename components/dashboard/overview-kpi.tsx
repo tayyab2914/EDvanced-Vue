@@ -29,7 +29,10 @@ import { NOT_AVAILABLE } from "@/lib/dashboard/format";
  *
  *   1. `min-h` rather than a hard `h-[196px]`. The design's own first card stacks to ~205px
  *      inside a 196px frame — Figma clips it, a browser would spill it over the rounded
- *      corner. The design's height becomes the floor.
+ *      corner. A floor the grid can grow past replaces it.
+ *   1b. The label sits beside the icon rather than under it, and the floor came down with it.
+ *      The design's stack spends two rows on a 46px disc and a 16px label; one row costs the
+ *      disc's height alone.
  *   2. One badge size. The mockup sets "Acceptable" at 10px/px-8 and "On going" at 7px/px-4
  *      on a 5px-tall text box. The 10px pair is used throughout.
  *
@@ -60,32 +63,44 @@ function CornerArrow({ tone }: { tone: TileTone }) {
 /**
  * The ring beside "Of annual budget collected", with its own percentage in the middle.
  *
- * SIZED WELL ABOVE THE MOCKUP. The design draws this at 20px with the figure set at 6px,
- * which is a decorative dot — the number inside is unreadable at a normal viewing distance
- * and the arc is too short to show a fill level. At 38px the arc reads as a proportion and
- * the figure inside is legible, which is the only reason the element is on the card.
- *
  * Drawn as an arc rather than shipped as the design's flat image, because the image is a
  * fixed 35% — this reports the district's actual figure, and a ring stuck at a third full
  * while the text beside it says 93% is worse than no ring.
+ *
+ * ONE DEPARTURE: 28px, not the design's 20px (Figma 3:11651). At 20px the figure inside had
+ * to be set at 6px, which is below the size at which a percentage can actually be read — the
+ * ring rendered as decoration with an illegible smudge in it. 28px leaves a 22px well, enough
+ * for "100%" at 9px. The stroke stays at the design's weight relative to the disc.
  */
+const RING_PX = 28;
+
 function MiniRing({ pct, tone }: { pct: number; tone: TileTone }) {
   const clamped = Math.max(0, Math.min(100, pct));
-  const r = 15.5;
+  const mid = RING_PX / 2;
+  const r = 12;
   const c = 2 * Math.PI * r;
   return (
-    <span className="relative flex size-[38px] flex-none items-center justify-center">
-      <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden className="-rotate-90">
-        <circle cx="19" cy="19" r={r} fill="none" stroke="rgba(0,6,6,0.12)" strokeWidth="5" />
+    <span
+      className="relative flex flex-none items-center justify-center"
+      style={{ width: RING_PX, height: RING_PX }}
+    >
+      <svg
+        width={RING_PX}
+        height={RING_PX}
+        viewBox={`0 0 ${RING_PX} ${RING_PX}`}
+        aria-hidden
+        className="-rotate-90"
+      >
+        <circle cx={mid} cy={mid} r={r} fill="none" stroke="rgba(0,6,6,0.12)" strokeWidth="3" />
         {/* Full-circumference dash with the gap offset out — same arc as before, but in a
             form the entrance CSS can wind to zero and release (see .anim-ring). */}
         <circle
-          cx="19"
-          cy="19"
+          cx={mid}
+          cy={mid}
           r={r}
           fill="none"
           stroke={TONE_INK[tone]}
-          strokeWidth="5"
+          strokeWidth="3"
           strokeLinecap="round"
           strokeDasharray={c}
           strokeDashoffset={(c * (100 - clamped)) / 100}
@@ -93,7 +108,7 @@ function MiniRing({ pct, tone }: { pct: number; tone: TileTone }) {
           style={{ ["--c" as string]: `${c}` }}
         />
       </svg>
-      <span className="absolute text-[10px] font-bold leading-none tracking-[-0.2px] text-[#060606]">
+      <span className="absolute text-[9px] font-bold leading-none tracking-[-0.3px] text-[#060606]">
         <CountUp value={`${Math.round(clamped)}%`} />
       </span>
     </span>
@@ -157,39 +172,52 @@ export function OverviewKpiTile({
       {arrow && <CornerArrow tone={tone} />}
 
       <div className="flex flex-col items-start gap-[12px]">
-        {icon && (
-          <span
-            className="flex size-[46px] flex-none items-center justify-center rounded-full"
-            style={{ background: TONE_TINT[tone], color: TONE_INK[tone] }}
-          >
-            <Icon name={icon} size={24} />
-          </span>
-        )}
-        <div className="flex flex-col items-start gap-[4px]">
-          <span className="text-[14px] font-semibold leading-normal text-[#797979]">
+        {/**
+         * Icon and label share a row rather than stacking. The design stacks them — disc,
+         * 20px gap, label, 10px gap, figure — which spends ~66px of the tile's height on two
+         * short things sitting one above the other. Side by side the pair costs only the
+         * disc's own 46px and the tile reads as one compact block.
+         *
+         * `pr` when the corner arrow is present: the arrow is absolutely positioned and takes
+         * no width from the flow, so without it a long label runs underneath the disc.
+         */}
+        <div className={cn("flex w-full items-center gap-[12px]", arrow && "pr-[26px]")}>
+          {icon && (
+            <span
+              className="flex size-[46px] flex-none items-center justify-center rounded-full"
+              style={{ background: TONE_TINT[tone], color: TONE_INK[tone] }}
+            >
+              <Icon name={icon} size={24} />
+            </span>
+          )}
+          <span className="min-w-0 text-[14px] font-semibold leading-[16px] text-[#797979]">
             {label}
             {caption && (
               <span className="block font-normal text-[rgba(121,121,121,0.55)]">{caption}</span>
             )}
           </span>
-          <span
-            className={cn(
-              // Proportional figures, not tabular: at 28px, tabular-nums gives every digit
-              // the width of a zero and "121" reads loose. `tabular-nums` belongs in columns.
-              "text-[28px] font-bold leading-normal tracking-[0.28px] [font-variant-numeric:proportional-nums]",
-              unavailable ? "text-[#797979]" : "text-[#060606]",
-            )}
-            title={
-              unavailable
-                ? (unavailableReason ?? "Not enough data to work this out yet.")
-                : undefined
-            }
-          >
-            <CountUp value={value} />
-          </span>
         </div>
+        <span
+          className={cn(
+            // Proportional figures, not tabular: at 28px, tabular-nums gives every digit
+            // the width of a zero and "121" reads loose. `tabular-nums` belongs in columns.
+            "text-[28px] font-bold leading-[32px] tracking-[0.28px] [font-variant-numeric:proportional-nums]",
+            unavailable ? "text-[#797979]" : "text-[#060606]",
+          )}
+          title={
+            unavailable
+              ? (unavailableReason ?? "Not enough data to work this out yet.")
+              : undefined
+          }
+        >
+          <CountUp value={value} />
+        </span>
       </div>
 
+      {/* Footer block: pinned to the card's floor with `mt-auto`, so whatever slack the row's
+          shared height leaves is absorbed between the figure and this block rather than
+          below it — the badges of four tiles stay on one line as they do in the design. */}
+      <div className="mt-auto flex w-full flex-col items-start gap-[5px] pt-[4px]">
       {sub && (
         /**
          * `-mr` reclaims the card's 43px right padding for this line only.
@@ -201,7 +229,7 @@ export function OverviewKpiTile({
          */
         <span
           className={cn(
-            "flex gap-[8px] text-[13px] font-semibold leading-[1.25] tracking-[0.075px] text-[rgba(0,6,6,0.62)]",
+            "flex gap-[4px] text-[12px] font-semibold leading-[16px] tracking-[0.075px] text-[rgba(0,6,6,0.62)]",
             /**
              * A TERNARY, not `items-start` plus a conditional `items-center`.
              *
@@ -224,24 +252,15 @@ export function OverviewKpiTile({
         </span>
       )}
 
-      {/**
-       * NOT pinned to the card's floor any more.
-       *
-       * This used to carry `mt-auto`, which pushed the badge and footnote down so they lined
-       * up across the row. With the tiles equalised by the grid, that turned every card
-       * shorter than the tallest into a block of dead space with two lines stranded at the
-       * bottom. Flowing straight on from the sub-line keeps each card as tall as its own
-       * content and the row as tight as its fullest member.
-       */}
-      <div className="flex flex-col items-start gap-[6px]">
+      <div className="flex flex-col items-start gap-[5px]">
         {chip && (
-          <span className="inline-flex items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-black">
+          <span className="inline-flex items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-[11px] tracking-[0.1px] text-black">
             {chip}
           </span>
         )}
         {status && (
           <span
-            className="inline-flex items-center rounded-[20px] px-[9px] py-[2px] text-[10px] font-bold leading-normal tracking-[0.1px]"
+            className="inline-flex items-center rounded-[20px] px-[8px] py-[1px] text-[10px] font-bold leading-[11px] tracking-[0.1px]"
             style={{ background: RUNG_PILL[status].bg, color: RUNG_PILL[status].fg }}
             title={unavailableReason}
           >
@@ -250,7 +269,7 @@ export function OverviewKpiTile({
         )}
 
         {delta && (
-          <span className="flex items-center gap-[5px] text-[12px] font-bold leading-[14px] tracking-[0.24px] text-[#060606]">
+          <span className="flex items-center gap-[4px] text-[12px] font-bold leading-[12px] tracking-[0.24px] text-[#060606]">
             {delta.direction && (
               <span
                 style={{
@@ -273,7 +292,7 @@ export function OverviewKpiTile({
         )}
 
         {statusNote && (
-          <span className="flex items-center gap-[5px] text-[12px] font-bold leading-[14px] tracking-[0.24px] text-[#060606]">
+          <span className="flex items-center gap-[4px] text-[12px] font-bold leading-[12px] tracking-[0.24px] text-[#060606]">
             <span style={{ color: TONE_INK[tone] }}>
               <DiagonalArrow size={14} />
             </span>
@@ -281,22 +300,26 @@ export function OverviewKpiTile({
           </span>
         )}
       </div>
+      </div>
     </>
   );
 
   /**
-   * A 14px radius on 62% white — the design's card, and the reason the row reads as one band
-   * rather than four boxes. It carries no border, which works only because these sit directly
-   * on the canvas; on a white surface they would vanish.
+   * A 14px radius on #FFFFFF9E — the design's card fill, and the reason the row reads as one
+   * band rather than four boxes. It carries no border, which works only because these sit
+   * directly on the canvas; on a white surface they would vanish.
    *
-   * `h-full w-full`, NOT the design's fixed 268×196. The tile is a grid cell now (see
-   * `OverviewTileRow`), which is what makes all four the same height however many lines each
-   * one's sub-text wraps to, and what stops the fourth dropping to a second row at 1440px.
-   * 268 is still the target width — at 1440 the grid resolves within a few pixels of it — but
-   * it is no longer a floor that can force a wrap.
+   * Written as the design's eight-digit hex rather than `bg-white/[0.62]`. The two are the
+   * same colour (0x9E = 158/255 = 62%), but the hex is the value the mockup states, so a
+   * reader comparing the two does not have to convert one to check.
+   *
+   * `min-h-[176px]`, not the design's 196: with the label moved up beside the icon the tile's
+   * content no longer reaches 196, and a floor a stack cannot touch is just empty space at the
+   * bottom of every card. The floor tracks the content. `h-full` still lets the grid equalise
+   * the row when one card's sub-text wraps to an extra line.
    */
   const className =
-    "group relative flex h-full w-full flex-col gap-[8px] rounded-[14px] bg-white/[0.62] px-[18px] pb-[16px] pt-[16px]";
+    "group relative flex h-full min-h-[176px] w-full flex-col rounded-[14px] bg-[#FFFFFF9E] px-[18px] pb-[10px] pt-[18px]";
 
   if (href) {
     return (
@@ -418,7 +441,7 @@ export function OverviewSplitCard({
   return (
     <div
       data-reveal
-      className="mx-auto flex w-[676px] max-w-full flex-col gap-[8px] rounded-[24px] border border-[#e7e7e7] bg-white py-[8px]"
+      className="mx-auto flex w-[676px] max-w-full flex-col gap-[8px] rounded-[24px] border border-[#e7e7e7] bg-white py-[4px]"
     >
       {/* `items-stretch`, not `items-center` — centring two panes of different content
           heights drops the shorter one's label below its neighbour's, and two labels at
@@ -516,7 +539,7 @@ export function OverviewSection({
   return (
     <section className="flex flex-col items-start gap-[20px]">
       <div className="flex w-full items-center justify-between gap-3">
-        <h2 className="text-[22px] font-bold leading-normal tracking-[0.22px] text-[#060606]">
+        <h2 className="text-[22px] font-bold leading-[25px] tracking-[0.22px] text-[#060606]">
           {title}
         </h2>
         {action}

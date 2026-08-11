@@ -2,9 +2,8 @@ import type { ReactNode } from "react";
 import { PageHeader } from "@/components/page-header";
 import { LinkTabs, FundLevelNotice } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
-import { DataAsOf } from "@/components/dashboard/section-card";
 import { SubstitutionNotice } from "@/components/dashboard/shared";
-import { scopeOptions, scopeDescription } from "@/lib/dashboard/options";
+import { scopeOptions } from "@/lib/dashboard/options";
 import type { DashboardScope } from "@/lib/dashboard/scope";
 
 /**
@@ -60,7 +59,6 @@ export function FundBalanceShell({
       {scope.substituted && (
         <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />
       )}
-      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
       {scope.fundLevelOnly && <FundLevelNotice subject="Fund balance" />}
 
       {children}

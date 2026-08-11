@@ -4,11 +4,11 @@ import { resolveScope } from "@/lib/dashboard/scope";
 import { labelMode } from "@/lib/dashboard/label-mode";
 import { loadCore } from "@/lib/dashboard/load";
 import { PageHeader } from "@/components/page-header";
-import { SectionCard, DataAsOf, FooterInfoBar } from "@/components/dashboard/section-card";
+import { SectionCard, FooterInfoBar } from "@/components/dashboard/section-card";
 import { AlertList, AlertSummary } from "@/components/dashboard/alert-list";
 import { EmptyState, SubstitutionNotice, Row } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
-import { alertFunds, scopeDescription, scopeOptions } from "@/lib/dashboard/options";
+import { alertFunds, scopeOptions } from "@/lib/dashboard/options";
 import { GO_TO } from "@/lib/dashboard/cta";
 import type { AlertGroup } from "@/lib/alerts/catalog";
 
@@ -67,7 +67,6 @@ export default async function AlertsPage({
         }
       />
       {scope.substituted && <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />}
-      <DataAsOf date={scope.dataAsOf} note={scopeDescription(scope)} />
 
       <Row cols="1-2">
         <SectionCard title="Summary" footer={GO_TO.policies} footerHref="/policies">

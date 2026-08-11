@@ -62,8 +62,11 @@ export function sheetScope(scope: {
 }
 
 /**
- * The end of the scoped period, not the moment the sheet was printed — the same rule
- * `DataAsOf` follows on screen, and for the same reason.
+ * The end of the scoped period, not the moment the sheet was printed.
+ *
+ * The screen reads from here too: the header's "Showing:" row ends with this same string
+ * (components/dashboard/dashboard-filters.tsx), so the date a board packet carries and the
+ * date on the page it was printed from cannot drift apart in wording or in timezone.
  */
 export function sheetAsOf(date: Date | null): string | undefined {
   if (!date) return undefined;

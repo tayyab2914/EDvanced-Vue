@@ -352,7 +352,9 @@ export function ShellMain({ children }: { children: ReactNode }) {
        */
       aria-busy={busy || undefined}
       className={cn(
-        "mx-auto w-full max-w-[1200px] flex-1 px-4 py-5 transition-[max-width,opacity] duration-200 ease-out sm:px-6 sm:py-6 lg:px-7 lg:py-7",
+        // lg gutters are the design's: 34px off the sidebar, 30px off the right edge, so a
+        // 1440 viewport yields the mockup's 1120px content column (290..1410).
+        "mx-auto w-full max-w-[1184px] flex-1 px-4 py-5 transition-[max-width,opacity] duration-200 ease-out sm:px-6 sm:py-6 lg:py-7 lg:pl-[34px] lg:pr-[30px]",
         collapsed && "lg:max-w-[1440px]",
         busy && "opacity-55",
       )}
