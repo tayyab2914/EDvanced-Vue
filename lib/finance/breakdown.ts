@@ -718,6 +718,18 @@ export interface FundBreakdownRow {
    * lib/finance/fund-balance.ts for why those are deliberately two different figures.
    */
   budgetedFundBalance: Prisma.Decimal | null;
+  /**
+   * The cash file's own four columns, per fund — beginning, the month's movement both
+   * ways, and ending. All four or none: they come off the same rows in one `_sum`, so a
+   * fund that reported cash reports the whole walk and a fund that did not gets nulls.
+   *
+   * Carried for §7.2's Cash Balance by Fund, whose redesign prints the walk rather than
+   * the ending figure alone — same licence as `beginning` above: the reader could see the
+   * answer and none of the inputs.
+   */
+  beginningCash: Prisma.Decimal | null;
+  receiptsMtd: Prisma.Decimal | null;
+  disbursementsMtd: Prisma.Decimal | null;
   endingCash: Prisma.Decimal | null;
   /**
    * The fund's opening components, when an opening fund balance was imported.
@@ -823,7 +835,9 @@ export async function byFund(
       ? db.cashPosition.groupBy({
           by: ["fundId"],
           where: { versionId: args.cashVersionId, ...funds_ },
-          _sum: { endingCash: true },
+          // The whole walk, not just the ending figure — beginning, receipts and
+          // disbursements ride in the SUM the ending balance was already paying for.
+          _sum: { beginningCash: true, receiptsMtd: true, disbursementsMtd: true, endingCash: true },
         })
       : Promise.resolve([]),
     args.openingVersionId
@@ -851,7 +865,7 @@ export async function byFund(
   const expById = new Map(spending.map((r) => [r.fundId, r._sum.actualYtd ?? ZERO]));
   const revBudgetById = new Map(revenue.map((r) => [r.fundId, r._sum.budget ?? ZERO]));
   const expBudgetById = new Map(spending.map((r) => [r.fundId, r._sum.budget ?? ZERO]));
-  const cashById = new Map(cash.map((r) => [r.fundId, r._sum.endingCash]));
+  const cashById = new Map(cash.map((r) => [r.fundId, r._sum]));
   const openById = new Map(opening.map((r) => [r.fundId, r._sum.begTotal]));
   const componentsById = new Map(
     opening.map((r) => [
@@ -872,7 +886,8 @@ export async function byFund(
     const expenditureYtd = expById.get(f.id) ?? ZERO;
     const revenueBudget = revBudgetById.get(f.id) ?? ZERO;
     const expenditureBudget = expBudgetById.get(f.id) ?? ZERO;
-    const endingCash = cashById.get(f.id) ?? null;
+    const cashSums = cashById.get(f.id) ?? null;
+    const endingCash = cashSums?.endingCash ?? null;
     const openingTotal = openById.get(f.id) ?? null;
 
     const touched =
@@ -897,6 +912,9 @@ export async function byFund(
       // opening balance this is the budgeted net CHANGE, not a budgeted balance.
       budgetedFundBalance:
         openingTotal === null ? null : openingTotal.plus(revenueBudget).minus(expenditureBudget),
+      beginningCash: cashSums?.beginningCash ?? null,
+      receiptsMtd: cashSums?.receiptsMtd ?? null,
+      disbursementsMtd: cashSums?.disbursementsMtd ?? null,
       endingCash,
       components: componentsById.get(f.id) ?? null,
     });

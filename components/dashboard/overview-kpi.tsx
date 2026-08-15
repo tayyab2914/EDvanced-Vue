@@ -125,8 +125,11 @@ export function OverviewKpiTile({
   tone = "blue",
   status,
   statusNote,
+  statusInline = false,
   delta,
   chip,
+  chipRow,
+  valueInk,
   arrow = true,
   href,
   unavailableReason,
@@ -147,12 +150,30 @@ export function OverviewKpiTile({
   status?: StatusRung;
   /** The rule the status was judged against — "Target ≥ 5.00%". */
   statusNote?: string;
+  /**
+   * Lays the status pill and its note on ONE line — the Expenditure redesign's utilization
+   * tile (Figma 55:3178) sets "Strong" beside "Warning at 80.00% · critical at 95.00%",
+   * where the Executive band stacks the pair. Only meaningful when both are passed.
+   */
+  statusInline?: boolean;
   delta?: KpiDelta;
   /**
    * The Revenue design's outlined white capsule — "88.18% outstanding" — a statement
    * pill where `delta` is a judgement line. Both can coexist; the chip draws first.
    */
   chip?: string;
+  /**
+   * A row of caller-drawn capsules where `chip` would go — the Forecast band's Board
+   * policy tile (Figma 55:4554/55:4556) sets its warning AND critical rules side by side,
+   * which one string cannot carry.
+   */
+  chipRow?: ReactNode;
+  /**
+   * Colours the 28px figure — the Forecast band letters its 3-year change in the loss red
+   * and the Board policy target in green (Figma 55:4519 / 55:4552). Ignored while the
+   * value is unavailable, which keeps the grey that means "no figure".
+   */
+  valueInk?: string;
   /**
    * The corner disc. The Executive band's tiles all carry it; the Revenue redesign's four
    * (Figma 46:3438) carry none, so that page passes false.
@@ -204,6 +225,7 @@ export function OverviewKpiTile({
             "text-[28px] font-bold leading-[32px] tracking-[0.28px] [font-variant-numeric:proportional-nums]",
             unavailable ? "text-[#797979]" : "text-[#060606]",
           )}
+          style={!unavailable && valueInk ? { color: valueInk } : undefined}
           title={
             unavailable
               ? (unavailableReason ?? "Not enough data to work this out yet.")
@@ -258,15 +280,31 @@ export function OverviewKpiTile({
             {chip}
           </span>
         )}
-        {status && (
-          <span
-            className="inline-flex items-center rounded-[20px] px-[8px] py-[1px] text-[10px] font-bold leading-[11px] tracking-[0.1px]"
-            style={{ background: RUNG_PILL[status].bg, color: RUNG_PILL[status].fg }}
-            title={unavailableReason}
-          >
-            {status}
-          </span>
-        )}
+        {chipRow && <span className="flex flex-wrap items-center gap-[5px]">{chipRow}</span>}
+        {status &&
+          (statusInline && statusNote ? (
+            /* The pill and its rule on one line — see `statusInline` above. */
+            <span className="flex flex-wrap items-center gap-[7px]">
+              <span
+                className="inline-flex items-center rounded-[20px] px-[8px] py-[1px] text-[10px] font-bold leading-[11px] tracking-[0.1px]"
+                style={{ background: RUNG_PILL[status].bg, color: RUNG_PILL[status].fg }}
+                title={unavailableReason}
+              >
+                {status}
+              </span>
+              <span className="text-[10px] leading-[12px] tracking-[0.2px] text-[#060606]">
+                {statusNote}
+              </span>
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center rounded-[20px] px-[8px] py-[1px] text-[10px] font-bold leading-[11px] tracking-[0.1px]"
+              style={{ background: RUNG_PILL[status].bg, color: RUNG_PILL[status].fg }}
+              title={unavailableReason}
+            >
+              {status}
+            </span>
+          ))}
 
         {delta && (
           <span className="flex items-center gap-[4px] text-[12px] font-bold leading-[12px] tracking-[0.24px] text-[#060606]">
@@ -291,7 +329,7 @@ export function OverviewKpiTile({
           </span>
         )}
 
-        {statusNote && (
+        {statusNote && !(statusInline && status) && (
           <span className="flex items-center gap-[4px] text-[12px] font-bold leading-[12px] tracking-[0.24px] text-[#060606]">
             <span style={{ color: TONE_INK[tone] }}>
               <DiagonalArrow size={14} />
@@ -348,24 +386,27 @@ export function OverviewKpiTile({
 function SplitPane({
   label,
   value,
-  widthClass,
+  layout = "stack",
   children,
 }: {
   label: string;
   value: string;
   /**
-   * The design's pane width, applied from `sm` up only. Below that the pane is full width
-   * and free to shrink — a `flex-none` 301px pane cannot, which is what pushed this card off
-   * the side of a phone no matter what `max-w` the card carried.
+   * `stack` puts the children under the figure (the Available Budget pane's badge + note);
+   * `side` stands them beside it, vertically centred and pushed to the pane's right edge —
+   * the Alerts pane's critical row and CTA, which otherwise left the pane's right half
+   * empty once the design's sparkline was removed (see the note below).
    */
-  widthClass: string;
+  layout?: "stack" | "side";
   children?: ReactNode;
 }) {
   return (
     <div
       className={cn(
-        "flex w-full min-w-0 flex-col gap-[10px] rounded-[16px] px-[16px] py-[12px] sm:flex-none",
-        widthClass,
+        "flex w-full min-w-0 rounded-[16px] px-[16px] py-[12px] sm:flex-1",
+        layout === "side"
+          ? "flex-row flex-wrap items-center justify-between gap-x-[12px] gap-y-[8px]"
+          : "flex-col gap-[10px]",
       )}
     >
       {/**
@@ -384,7 +425,14 @@ function SplitPane({
           <CountUp value={value} />
         </span>
       </div>
-      <div className="flex w-full flex-col gap-[6px]">{children}</div>
+      <div
+        className={cn(
+          "flex flex-col gap-[6px]",
+          layout === "side" ? "min-w-0 items-end" : "w-full",
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -409,8 +457,9 @@ function SplitDivider() {
  * Available Budget and Alerts, sharing one bordered card.
  *
  * In the design these are the fifth and sixth figures of the Overview — the same two the
- * old six-up row carried as tiles five and six. They are not tiles here: white on a border
- * rather than translucent, DM Sans rather than Aeonik, 32px rather than 28px.
+ * old six-up row carried as tiles five and six. They keep the pane anatomy (DM Sans ramp,
+ * 32px figures) but wear the tiles' own 62% white rather than the mockup's bordered solid
+ * card — the user's call, so the band's two rows read as one surface.
  */
 export function OverviewSplitCard({
   budget,
@@ -441,7 +490,7 @@ export function OverviewSplitCard({
   return (
     <div
       data-reveal
-      className="mx-auto flex w-[676px] max-w-full flex-col gap-[8px] rounded-[24px] border border-[#e7e7e7] bg-white py-[4px]"
+      className="mx-auto flex w-[676px] max-w-full flex-col gap-[8px] rounded-[24px] bg-[#FFFFFF9E] py-[4px]"
     >
       {/* `items-stretch`, not `items-center` — centring two panes of different content
           heights drops the shorter one's label below its neighbour's, and two labels at
@@ -450,7 +499,7 @@ export function OverviewSplitCard({
           Stacked below `sm`. Side by side, the two panes need ~624px before either can
           shrink, which is wider than any phone. */}
       <div className="flex w-full flex-col items-stretch gap-[8px] px-[8px] sm:flex-row sm:gap-[16px]">
-        <SplitPane label={budget.label} value={budget.value} widthClass="sm:w-[301px]">
+        <SplitPane label={budget.label} value={budget.value}>
           {budget.badge && (
             <span
               className="inline-flex w-fit items-center rounded-[20px] px-[9px] py-[2px] text-[10px] font-bold leading-normal tracking-[0.1px]"
@@ -484,35 +533,32 @@ export function OverviewSplitCard({
 
         <SplitDivider />
 
-        <SplitPane
-          label={alerts.label}
-          value={alerts.value}
-          widthClass="sm:w-[290px]"
-        >
-          <div className="flex flex-wrap items-center gap-x-[10px] gap-y-[6px]">
-            <span className="flex items-center gap-[4px]">
-              <span className="text-[#fd4438]">
-                <Icon name="warning" size={20} />
-              </span>
-              <span className="text-[15px] font-bold leading-[24px] text-[#fd4438]">
-                {alerts.criticalCount}
-              </span>
-              <span className="text-[15px] font-semibold leading-[24px] text-[rgba(31,31,33,0.74)]">
-                CRITICAL
-              </span>
+        <SplitPane label={alerts.label} value={alerts.value} layout="side">
+          {/* The critical tally and the way out stand beside the count rather than under
+              it — with the design's sparkline gone, stacking them left the pane's right
+              half and its floor empty. */}
+          <span className="flex items-center gap-[4px]">
+            <span className="text-[#fd4438]">
+              <Icon name="warning" size={20} />
             </span>
-            {alerts.href && (
-              <Link
-                href={alerts.href}
-                className="inline-flex h-[20px] items-center gap-[3px] rounded-[22px] bg-[#ffeded] px-[7px] text-[10px] font-bold leading-[12px] tracking-[0.2px] text-black transition-opacity hover:opacity-80"
-              >
-                <span className="text-[#fd4438]">
-                  <DiagonalArrow size={14} />
-                </span>
-                {alerts.hrefLabel}
-              </Link>
-            )}
-          </div>
+            <span className="text-[15px] font-bold leading-[24px] text-[#fd4438]">
+              {alerts.criticalCount}
+            </span>
+            <span className="text-[15px] font-semibold leading-[24px] text-[rgba(31,31,33,0.74)]">
+              CRITICAL
+            </span>
+          </span>
+          {alerts.href && (
+            <Link
+              href={alerts.href}
+              className="inline-flex h-[20px] items-center gap-[3px] rounded-[22px] bg-[#ffeded] px-[7px] text-[10px] font-bold leading-[12px] tracking-[0.2px] text-black transition-opacity hover:opacity-80"
+            >
+              <span className="text-[#fd4438]">
+                <DiagonalArrow size={14} />
+              </span>
+              {alerts.hrefLabel}
+            </Link>
+          )}
         </SplitPane>
       </div>
     </div>

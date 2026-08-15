@@ -4,6 +4,7 @@ import { LinkTabs, FundLevelNotice } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { SubstitutionNotice } from "@/components/dashboard/shared";
 import { scopeOptions } from "@/lib/dashboard/options";
+import { RevealManager } from "@/components/reveal";
 import type { DashboardScope } from "@/lib/dashboard/scope";
 
 /**
@@ -32,6 +33,8 @@ export function FundBalanceShell({
 
   return (
     <div className="animate-fade-up space-y-[18px]">
+      {/* Arms the entrance animations — same one-liner the Revenue redesign carries. */}
+      <RevealManager />
       <PageHeader
         title="Fund Balance"
         description="Track fund balance, reserve levels, and plan for the future."

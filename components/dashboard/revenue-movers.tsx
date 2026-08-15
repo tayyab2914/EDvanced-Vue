@@ -32,24 +32,40 @@ export function RevenueMoversCard({
   subtitle,
   items,
   empty,
+  fit,
 }: {
   title: string;
   subtitle: string;
   items: MoverItem[];
   empty: string;
+  /**
+   * The 64:8848 revision sizes the POSITIVE card to its content (64:9410 stands 176px tall
+   * beside the 539px category card) while the negative card keeps its four slots to match
+   * the chart it shares a row with. `fit` renders only the rows there are and lets the card
+   * stand at its own height inside a stretched grid row.
+   */
+  fit?: boolean;
 }) {
-  // The design's four slots, always — see the card comment.
-  const slots: (MoverItem | null)[] = Array.from({ length: 4 }, (_, i) => items[i] ?? null);
+  // The design's four slots, always — see the card comment. The `fit` card renders only
+  // what it has (one slot minimum, so the empty message keeps its home).
+  const slots: (MoverItem | null)[] = fit
+    ? items.length > 0
+      ? items
+      : [null]
+    : Array.from({ length: 4 }, (_, i) => items[i] ?? null);
 
   return (
-    <OverviewPanel className="flex flex-col p-[18px] pt-[17px]">
+    <OverviewPanel className={cn("flex flex-col p-[18px] pt-[17px]", fit && "self-start")}>
       <OverviewPanelHeader title={title} subtitle={subtitle} />
 
-      <ul className="mt-[10px] flex flex-1 flex-col">
+      <ul className={cn("mt-[10px] flex flex-col", !fit && "flex-1")}>
         {slots.map((item, i) => (
           <li
             key={item?.id ?? `empty-${i}`}
-            className={cn("flex flex-1 items-center border-t border-[#ececec]", "min-h-[83px]")}
+            className={cn(
+              "flex items-center border-t border-[#ececec]",
+              fit ? "min-h-[70px] py-[8px]" : "min-h-[83px] flex-1",
+            )}
           >
             {item ? (
               <div className="flex w-full items-center gap-[10px]">

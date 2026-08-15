@@ -25,16 +25,39 @@ import {
   changePercent,
   sharePercent,
 } from "@/lib/dashboard/format";
-import { SectionCard, FooterInfoBar } from "@/components/dashboard/section-card";
-import { KpiTile, KpiRow } from "@/components/dashboard/kpi-tile";
 import { DataTable } from "@/components/dashboard/data-table";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { EmptyState, Row, KeyInsightBar } from "@/components/dashboard/shared";
+import { EmptyState, KeyInsightBar } from "@/components/dashboard/shared";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
-import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
+import { ShareBars } from "@/components/dashboard/charts/budget-bars";
 import { WaterfallChart, waterfallFoots } from "@/components/dashboard/charts/waterfall-chart";
-import { BenchmarkBand } from "@/components/dashboard/charts/benchmark-band";
-import { ViewBy } from "@/components/dashboard/view-by";
+import {
+  OverviewKpiTile,
+  OverviewSection,
+  OverviewTileRow,
+} from "@/components/dashboard/overview-kpi";
+import { OverviewPeriodSelect } from "@/components/dashboard/overview-period-select";
+import {
+  OverviewPanel,
+  OverviewPanelHeader,
+  PanelRungPill,
+  ArrowGlyph,
+} from "@/components/dashboard/overview-panel";
+import { PillSelect } from "@/components/dashboard/pill-select";
+import { FundBalanceStatusCard } from "@/components/dashboard/fund-balance-status-card";
+import {
+  FundBalanceByFundTable,
+  type FundBalanceFundRow,
+} from "@/components/dashboard/fund-balance-by-fund-table";
+import { FundBalanceTrendCard } from "@/components/dashboard/fund-balance-trend-card";
+import {
+  FundBalanceCompositionCard,
+  type CompositionRow,
+} from "@/components/dashboard/fund-balance-composition-card";
+import { FundBalanceWaterfallCard } from "@/components/dashboard/fund-balance-waterfall-card";
+import { FundBalanceBenchmarkCard } from "@/components/dashboard/fund-balance-benchmark-card";
+import type { CapsuleStat } from "@/components/dashboard/revenue-shared";
+import { cn } from "@/lib/cn";
 import { FundBalanceShell } from "./shell";
 import { COMPONENT_COLORS, SERIES_SLOTS } from "@/lib/dashboard/palette";
 import { codeName } from "@/lib/text";
@@ -333,11 +356,8 @@ export default async function FundBalancePage({
     : [];
   const componentTotal = components.reduce((a, c) => a + c.value, 0);
 
-  /** "Actual" / "Budgeted", and the sentence that says which figure that actually is. */
+  /** "Actual" / "Budgeted" — the word every card on this basis prints. */
   const basisLabel = budgetBasis ? "Budgeted" : "Actual";
-  const basisNote = budgetBasis
-    ? "Opening balance plus the latest amended budget. Moves only when the board amends."
-    : "Opening balance plus revenues collected and spending made through the scoped month.";
 
   /**
    * ===================================================================================
@@ -405,36 +425,36 @@ export default async function FundBalancePage({
       ] as const).filter((c) => !c.amount.isZero())
     : [];
 
-  const breakdownRows = [
+  const breakdownLines: {
+    id: string;
+    label: string;
+    amount: string;
+    share: string;
+    strong?: boolean;
+    /** The excess line's ink — green above the floor, red in shortfall. */
+    tone?: "positive" | "negative";
+  }[] = [
     ...designated.map((c) => ({
       id: c.label,
-      cells: {
-        line: c.label,
-        amount: { value: money(c.amount), strong: false },
-        share: breakdownShare(c.amount),
-      },
+      label: c.label,
+      amount: money(c.amount),
+      share: breakdownShare(c.amount),
     })),
     {
       id: "required",
-      cells: {
-        line: `Required reserve (${reserve?.requiredPercent.toFixed(2) ?? "—"}%)`,
-        amount: { value: money(requiredReserve), strong: true },
-        share: breakdownShare(requiredReserve),
-      },
+      label: `Required reserve (${reserve?.requiredPercent.toFixed(2) ?? "—"}%)`,
+      amount: money(requiredReserve),
+      share: breakdownShare(requiredReserve),
+      strong: true,
     },
     {
       id: "excess",
-      // The shortfall case tints the row and renames the line. See the note above.
-      flag: isShort ? ("negative" as const) : undefined,
-      cells: {
-        line: isShort ? "Shortfall against required reserve" : "Excess unassigned above required reserve",
-        amount: {
-          value: money(isShort && excessUnassigned ? excessUnassigned.abs() : excessUnassigned),
-          tone: isShort ? ("negative" as const) : ("positive" as const),
-          strong: true,
-        },
-        share: breakdownShare(excessUnassigned === null ? null : excessUnassigned.abs()),
-      },
+      // The shortfall case tints the line and renames it. See the note above.
+      label: isShort ? "Shortfall against required reserve" : "Excess unassigned above required reserve",
+      amount: money(isShort && excessUnassigned ? excessUnassigned.abs() : excessUnassigned),
+      share: breakdownShare(excessUnassigned === null ? null : excessUnassigned.abs()),
+      strong: true,
+      tone: isShort ? "negative" : "positive",
     },
   ];
 
@@ -757,6 +777,185 @@ export default async function FundBalancePage({
     );
   }
 
+  /**
+   * ===================================================================================
+   * THE REDESIGNED PAGE — a transcription of Figma 55:3640, on the same vocabulary the
+   * Executive, Revenue and Expenditure redesigns already speak: the Overview tile band
+   * with the reserve verdict card centred beneath it, the by-fund ledger full width with
+   * its "Basis" capsule, then the 702/400 card grid — trend beside composition, waterfall
+   * beside the policy benchmark, the reserve components beside the ending position — and
+   * the key-insight bar at the floor. Every figure keeps the calculation it always had;
+   * only the clothes changed.
+   * ===================================================================================
+   */
+
+  // ---------- the by-fund ledger's rows, on the basis the capsule chose ----------
+  // The STATUS and the deficit tint follow the basis on show, so a row cannot read
+  // "Healthy" beside a negative figure — or the reverse.
+  const tableRows: FundBalanceFundRow[] = withBalance.map((f) => {
+    const isGeneral = core.generalFund?.id === f.fundId;
+    const ending = budgetBasis ? f.budgetedFundBalance : f.fundBalance;
+    const balance = toNumber(ending);
+    const rung =
+      isGeneral
+        ? reserveRung
+        : balance === null
+          ? ("N/A" as const)
+          : balance < 0
+            ? ("Action Required" as const)
+            : ("Strong" as const);
+    const label = isGeneral
+      ? reserveRung === "Strong"
+        ? "Healthy"
+        : reserveRung === "N/A"
+          ? "N/A"
+          : reserveRung
+      : balance !== null && balance < 0
+        ? "Deficit"
+        : "Healthy";
+    return {
+      id: f.fundId,
+      fund: <DimLabel code={f.code} name={f.name} mode={scope.labelMode} />,
+      // Fixed for the year, and identical on either basis — the one column the toggle
+      // does not move, which is itself the point the district was making.
+      beginning: money(f.beginning),
+      revenues: money(budgetBasis ? f.revenueBudget : f.revenueYtd),
+      expenditures: money(budgetBasis ? f.expenditureBudget : f.expenditureYtd),
+      ending: money(ending),
+      endingNegative: balance !== null && balance < 0,
+      // The unassigned figure follows the basis too; the label says which figure it is.
+      // The reserve PERCENTAGE stays on its own tile, on its own basis, above.
+      classification: isGeneral ? (
+        <span>
+          Unassigned
+          <span className="block text-[10px] text-[#797979]">
+            {money(rowUnassigned)} {rowUnassignedBasis}
+          </span>
+        </span>
+      ) : (
+        (primaryClassification(f) ?? "—")
+      ),
+      status: { label, rung },
+    };
+  });
+
+  // ---------- the trend card's capsule strip ----------
+  const trendStats: CapsuleStat[] = [
+    {
+      label: "Ending FB (Actual)",
+      value: compactMoney(totalNow),
+      // The budgeted figure as the note rather than the reserve percentage: that
+      // percentage is computed on the projected balance, so printing it under an actual
+      // dollar amount invited exactly the reconciliation that cannot be done.
+      note: budgetedNow ? `${compactMoney(budgetedNow)} budgeted` : undefined,
+    },
+    { label: "Unassigned (Actual)", value: compactMoney(unassignedNow) },
+    {
+      label: "Status",
+      value: reserveRung === "N/A" ? "Not available" : reserveRung,
+      tone:
+        reserveRung === "Strong" || reserveRung === "Acceptable"
+          ? "positive"
+          : reserveRung === "N/A"
+            ? "default"
+            : "negative",
+    },
+    { label: "Target", value: `${reserveT.target.toFixed(2)}%` },
+    { label: "Minimum", value: `${statutoryMinimum.toFixed(2)}%` },
+  ];
+
+  // ---------- the composition card's bars and strip, on the chosen view ----------
+  const compositionUnavailable = budgetBasis && view === "classification" && !budgetBasisAvailable;
+  const compositionRows: CompositionRow[] = compositionUnavailable
+    ? []
+    : view === "fund"
+      ? foldedFundSlices.map((f, i) => ({
+          id: f.id,
+          label: f.label,
+          display: compactMoney(f.value),
+          share: percent(sharePercent(f.value, fundSliceTotal), 1),
+          sharePct: sharePercent(f.value, fundSliceTotal) ?? 0,
+          color: SERIES_SLOTS[i % SERIES_SLOTS.length],
+        }))
+      : components.map((c) => ({
+          id: c.label,
+          label: c.label,
+          display: compactMoney(c.amount),
+          share: percent(sharePercent(c.value, componentTotal), 1),
+          sharePct: sharePercent(c.value, componentTotal) ?? 0,
+          color: COMPONENT_COLORS[c.label],
+        }));
+  const compositionStats: CapsuleStat[] = [
+    {
+      // The by-fund ledger's own total on the fund view, the scoped total on the
+      // classification view — so the two cards in this column cannot print different
+      // totals for one district.
+      label: `Total FB (${basisLabel})`,
+      value: compactMoney(
+        view === "fund" ? (budgetBasis ? allFundsBudgetedTotal : allFundsTotal) : compositionTotal,
+      ),
+    },
+    { label: `Unassigned (${basisLabel})`, value: compactMoney(compositionUnassigned) },
+    view === "fund"
+      ? { label: "Funds", value: String(fundSlices.length) }
+      : { label: "Components", value: String(components.length) },
+  ];
+  const compositionEmpty = compositionUnavailable
+    ? "The budgeted basis is not available under a cost centre filter. The budget figures carry the whole filter while the opening balance is fund-level, so the two would not be a balance. Clear the cost centre filter, or switch to Actual."
+    : view === "fund"
+      ? "No fund has a positive ending balance for this period."
+      : "No opening fund balance has been committed for this year.";
+
+  // ---------- the ending position card's cells ----------
+  const positionCells: {
+    label: string;
+    value: string;
+    note?: string;
+    tone?: "positive" | "negative" | "neutral";
+  }[] = [
+    {
+      label: "Beginning fund balance",
+      value: compactMoney(position.beginning),
+      note: "Fixed for the year",
+    },
+    {
+      label: isOutturn ? "Actual revenues" : "Budgeted revenues",
+      value: compactMoney(position.revenue),
+      note: isOutturn ? "Collected to date" : "Latest amended budget",
+    },
+    {
+      label: isOutturn ? "Actual expenditures" : "Budgeted expenditures",
+      value: compactMoney(position.expenditure),
+      note: isOutturn ? "Spent to date" : "Latest amended budget",
+    },
+    {
+      label: isOutturn ? "Ending fund balance" : "Projected ending fund balance",
+      value: compactMoney(position.ending),
+      note: "Beginning + revenues − expenditures",
+    },
+    // The fifth cell is the reserve test where the reserve test applies, and the change
+    // in the balance everywhere else — same rule as before the redesign.
+    isGeneralScope
+      ? {
+          label: isShort ? "Shortfall to required reserve" : "Room above required reserve",
+          value: compactMoney(
+            isShort && excessUnassigned ? excessUnassigned.abs() : excessUnassigned,
+          ),
+          tone: isShort ? ("negative" as const) : ("positive" as const),
+        }
+      : {
+          label: isOutturn ? "Change in fund balance" : "Projected change",
+          value: accounting(positionChange, { compact: true }),
+          note: "Against the beginning balance",
+          tone: positionTone,
+        },
+  ];
+  const CELL_INK = { positive: "#1a932e", negative: "#fd4438", neutral: "#060606" } as const;
+
+  /** The reserve components card's column grid — label, amount, share. */
+  const BREAKDOWN_COLS =
+    "grid grid-cols-[minmax(150px,1fr)_minmax(96px,auto)_minmax(150px,auto)] items-center gap-x-[12px]";
+
   return (
     <FundBalanceShell
       scope={scope}
@@ -764,224 +963,134 @@ export default async function FundBalancePage({
       alertCount={fbAlerts.length}
       summaryHref={summaryHref}
     >
-      {/* ---------- KPI CARDS ---------- */}
-      <KpiRow count={5}>
-        <KpiTile
-          icon="dollar"
-          tone="green"
-          label="Total fund balance"
-          caption={scope.fund ? scope.fund.name : "All funds"}
-          value={compactMoney(totalNow)}
-          sub={previous ? "from prior period" : "no earlier period"}
-          delta={
-            change === null
-              ? undefined
-              : {
-                  text: `${accounting(change, { compact: true })}${changePct === null ? "" : ` (${signedPercent(changePct)})`}`,
-                  tone: deltaTone(toNumber(change), "up"),
-                  direction: change.isNegative() ? "down" : "up",
-                }
-          }
-          unavailableReason="Needs an opening fund balance for the year."
-        />
-
-        <KpiTile
-          icon="trend-up"
-          tone="teal"
-          label="Change from prior month"
-          caption={previous ? `Since period ${previous.period}` : "No earlier period"}
-          value={accounting(change, { compact: true })}
-          sub="Monthly change in total fund balance"
-          delta={
-            change === null
-              ? undefined
-              : {
-                  text: signedPercent(changePct),
-                  tone: deltaTone(toNumber(change), "up"),
-                  direction: change.isNegative() ? "down" : "up",
-                }
-          }
-        />
-
-        <KpiTile
-          icon="shield"
-          tone="blue"
-          label="Unassigned fund balance"
-          caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
-          value={compactMoney(unassignedNow)}
-          sub="Available General Fund reserve"
-          delta={
-            unassignedChange === null
-              ? undefined
-              : {
-                  text: accounting(unassignedChange, { compact: true }),
-                  tone: deltaTone(toNumber(unassignedChange), "up"),
-                  direction: unassignedChange.isNegative() ? "down" : "up",
-                  note: previous ? `vs period ${previous.period}` : undefined,
-                }
-          }
-        />
-
-        <KpiTile
-          icon="pie"
-          tone="purple"
-          label={reserveTileLabel(reserve)}
-          caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
-          value={percent(reserve?.percent)}
-          sub={`As a % ${reserveOf}`}
-          status={reserveRung}
-          statusNote={`Target ≥ ${reserveT.target.toFixed(2)}%`}
-          unavailableReason={reserveUnavailableReason(reserve?.basis ?? "REVENUE")}
-        />
-
-        <KpiTile
-          icon="scale"
-          tone={reserveRung === "Action Required" ? "red" : reserveRung === "Monitor" ? "amber" : "green"}
-          label="Reserve status"
-          caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
-          value={reserveRung === "N/A" ? "Not available" : reserveRung}
-          valueStatus={reserveRung}
-          sub="Compared to Board reserve policy"
-          statusNote={`Warning below ${reserveT.warning.toFixed(2)}%`}
-        />
-      </KpiRow>
-
-      {/* ---------- ROW 2: by fund · trend ---------- */}
-      {/*
-        THE TABLE TAKES THE WIDE SLOT NOW (2-1, not 1-2).
-
-        It carries the whole calculation per fund — beginning, revenues, expenditures, ending
-        — rather than the ending balance alone, and seven columns in a third of the page is a
-        horizontal scrollbar pretending to be a table. The trend chart reads perfectly well
-        narrow; a ledger does not.
-      */}
-      <Row cols="2-1">
-        <SectionCard
-          title="Fund balance by fund"
-          subtitle={`${basisLabel} · beginning + revenues − expenditures`}
-          /*
-            ONE TOGGLE, NOT TWO TABLES.
-
-            The district asked which it should be. Two tables would repeat Fund, Primary
-            classification and Status in both and put the two ending balances a scroll apart,
-            which is the comparison the table exists to make easy. A toggle keeps one row per
-            fund and swaps the three figures that actually differ — and it is the same
-            `basis` parameter the composition card below reads, so the page states one basis
-            rather than disagreeing with itself card by card.
-          */
-          control={<ViewBy options={FUND_BALANCE_BASES} value={basis} param={BASIS_PARAM} label="Basis" />}
-          info="ACTUAL is the balance as it stands in the selected month — beginning balance plus revenues collected less expenditures made, so it moves every month as actuals land. BUDGETED is beginning balance plus the amended revenue budget less the amended expenditure budget: the projection the board approved, which moves only when the board amends the budget. Beginning fund balance is fixed for the year and is the same on either basis. Unassigned applies to the General Fund only; other funds show their primary fund balance classification."
-          footerNote="All amounts are unaudited"
-        >
-          <DataTable
-            columns={[
-              { key: "fund", label: "Fund" },
-              { key: "beginning", label: "Beginning fund balance", align: "right" },
-              { key: "revenues", label: `Revenues (${basisLabel})`, align: "right" },
-              { key: "expenditures", label: `Expenditures (${basisLabel})`, align: "right" },
-              { key: "ending", label: `Ending fund balance (${basisLabel})`, align: "right" },
-              { key: "class", label: "Primary classification" },
-              { key: "status", label: "Status", align: "right" },
-            ]}
-            rows={withBalance.map((f) => {
-              const isGeneral = core.generalFund?.id === f.fundId;
-              // The STATUS and the deficit tint follow the basis on show, so a row cannot
-              // read "Healthy" beside a negative figure — or the reverse.
-              const ending = budgetBasis ? f.budgetedFundBalance : f.fundBalance;
-              const balance = toNumber(ending);
-              const rung = isGeneral
-                ? reserveRung
-                : balance === null
-                  ? "N/A"
-                  : balance < 0
-                    ? "Action Required"
-                    : "Strong";
-              const label = isGeneral
-                ? reserveRung === "Strong"
-                  ? "Healthy"
-                  : reserveRung === "N/A"
-                    ? undefined
-                    : reserveRung
-                : balance !== null && balance < 0
-                  ? "Deficit"
-                  : "Healthy";
-
-              return {
-                id: f.fundId,
-                flag: balance !== null && balance < 0 ? ("negative" as const) : undefined,
-                cells: {
-                  fund: {
-                    value: <DimLabel code={f.code} name={f.name} mode={scope.labelMode} />,
-                    strong: true,
-                  },
-                  // Fixed for the year, and identical on either basis — the one column the
-                  // toggle does not move, which is itself the point the district was making.
-                  beginning: money(f.beginning),
-                  revenues: money(budgetBasis ? f.revenueBudget : f.revenueYtd),
-                  expenditures: money(budgetBasis ? f.expenditureBudget : f.expenditureYtd),
-                  ending: { value: money(ending), strong: true },
-                  // The unassigned figure follows the basis too. It used to carry the reserve
-                  // percentage next to it, which is computed on the PROJECTED balance over
-                  // projected revenue — so the dollar figure and the percentage beside it
-                  // were two different quantities that could not be reconciled to each other.
-                  // The percentage has its own tile, on its own basis, above.
-                  class: isGeneral ? (
-                    <span>
-                      Unassigned
-                      <span className="block text-[11px] text-muted-2">
-                        {money(rowUnassigned)} {rowUnassignedBasis}
-                      </span>
-                    </span>
-                  ) : (
-                    (primaryClassification(f) ?? "—")
-                  ),
-                  status: (
-                    <span className="flex justify-end">
-                      <StatusBadge status={rung} label={label} size="sm" dot={false} />
-                    </span>
-                  ),
-                },
-              };
-            })}
-            total={{
-              id: "total",
-              total: true,
-              cells: {
-                fund: "Total all funds",
-                beginning: money(allFundsBeginning),
-                revenues: money(budgetBasis ? allFundsRevenueBudget : allFundsRevenue),
-                expenditures: money(
-                  budgetBasis ? allFundsExpenditureBudget : allFundsExpenditure,
-                ),
-                ending: money(budgetBasis ? allFundsBudgetedTotal : allFundsTotal),
-                class: "—",
-                status: "—",
-              },
-            }}
-            empty="No fund has a committed opening balance for this year."
+      {/* ---------- the Overview band: four tiles, then the reserve verdict ---------- */}
+      <OverviewSection
+        action={
+          <OverviewPeriodSelect
+            label={scope.label}
+            periods={options.periods}
+            value={options.period}
           />
-          {/*
-            A CORRECTION IS PER FUND, so the link has to name one — and it never did.
+        }
+      >
+        <OverviewTileRow>
+          <OverviewKpiTile
+            arrow={false}
+            icon="dollar"
+            tone="green"
+            label="Total fund balance"
+            caption={scope.fund ? scope.fund.name : "All funds"}
+            value={compactMoney(totalNow)}
+            sub={previous ? "from prior period" : "no earlier period"}
+            delta={
+              change === null
+                ? undefined
+                : {
+                    text: `${accounting(change, { compact: true })}${changePct === null ? "" : ` (${signedPercent(changePct)})`}`,
+                    tone: deltaTone(toNumber(change), "up"),
+                    direction: change.isNegative() ? "down" : "up",
+                  }
+            }
+            unavailableReason="Needs an opening fund balance for the year."
+          />
 
-            `/fund-balance/override` calls `notFound()` without a `fund` parameter, because a
-            SET of funds has no single figure to correct: three funds have three corrections
-            and applying one of them to their sum would misstate the other two (the same rule
-            `findOverride` enforces in lib/finance/fund-balance.ts). This link omitted the
-            parameter in every case, so "Corrections" was a 404 from every state of this page.
+          <OverviewKpiTile
+            arrow={false}
+            icon="gauge"
+            tone="teal"
+            label="Change from prior month"
+            caption={previous ? `Since period ${previous.period}` : "No earlier period"}
+            value={accounting(change, { compact: true })}
+            sub="Monthly change in total fund balance"
+            delta={
+              change === null
+                ? undefined
+                : {
+                    text: signedPercent(changePct),
+                    tone: deltaTone(toNumber(change), "up"),
+                    direction: change.isNegative() ? "down" : "up",
+                  }
+            }
+          />
 
-            Gated on `override_fund_balance` rather than `configure_district` as well: the
-            target screen redirects anyone without it, and a link that bounces the reader back
-            to where they started is worse than no link.
-          */}
-          {userCan(user, "override_fund_balance") && (
-            <p className="mt-3 text-[11.5px] text-muted-2">
+          <OverviewKpiTile
+            arrow={false}
+            icon="wallet"
+            tone="green"
+            label="Unassigned fund balance"
+            caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
+            value={compactMoney(unassignedNow)}
+            chip="Available General Fund reserve"
+            delta={
+              unassignedChange === null
+                ? undefined
+                : {
+                    text: accounting(unassignedChange, { compact: true }),
+                    tone: deltaTone(toNumber(unassignedChange), "up"),
+                    direction: unassignedChange.isNegative() ? "down" : "up",
+                    note: previous ? `vs period ${previous.period}` : undefined,
+                  }
+            }
+          />
+
+          <OverviewKpiTile
+            arrow={false}
+            icon="chart"
+            tone="red"
+            label={reserveTileLabel(reserve)}
+            caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
+            value={percent(reserve?.percent)}
+            sub={`As a % ${reserveOf}`}
+            status={reserveRung}
+            statusNote={`Target ≥ ${reserveT.target.toFixed(2)}%`}
+            statusInline
+            unavailableReason={reserveUnavailableReason(reserve?.basis ?? "REVENUE")}
+          />
+        </OverviewTileRow>
+
+        <FundBalanceStatusCard
+          rung={reserveRung}
+          note="Compared to Board reserve policy"
+          chip={`Warning below ${reserveT.warning.toFixed(2)}%`}
+        />
+      </OverviewSection>
+
+      {/* ---------- the by-fund ledger, full width ---------- */}
+      <FundBalanceByFundTable
+        subtitle={`${basisLabel} · beginning + revenues − expenditures`}
+        basisLabel={basisLabel}
+        /*
+          ONE TOGGLE, NOT TWO TABLES — same bargain as before the redesign: a capsule keeps
+          one row per fund and swaps the three figures that actually differ, and it is the
+          same `basis` parameter the composition card below reads, so the page states one
+          basis rather than disagreeing with itself card by card.
+        */
+        control={
+          <PillSelect options={FUND_BALANCE_BASES} value={basis} param={BASIS_PARAM} label="Basis" />
+        }
+        rows={tableRows}
+        total={{
+          beginning: money(allFundsBeginning),
+          revenues: money(budgetBasis ? allFundsRevenueBudget : allFundsRevenue),
+          expenditures: money(budgetBasis ? allFundsExpenditureBudget : allFundsExpenditure),
+          ending: money(budgetBasis ? allFundsBudgetedTotal : allFundsTotal),
+        }}
+        empty="No fund has a committed opening balance for this year."
+        footer={
+          /*
+            A CORRECTION IS PER FUND, so the link has to name one — `/fund-balance/override`
+            calls `notFound()` without a `fund` parameter. Gated on `override_fund_balance`:
+            the target screen redirects anyone without it.
+          */
+          userCan(user, "override_fund_balance") ? (
+            <p className="mt-[12px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
               {scope.fundId ? (
                 <>
                   {scope.fund ? scope.fund.name : "This fund"}&apos;s balance can be corrected
                   from{" "}
                   <Link
                     href={`/fund-balance/override?fy=${scope.fiscalYear}&period=${scope.period}&fund=${scope.fundId}`}
-                    className="font-medium text-brand hover:underline"
+                    className="font-bold text-[#301a93] hover:underline"
                   >
                     Corrections
                   </Link>
@@ -991,296 +1100,143 @@ export default async function FundBalancePage({
                 "Select a single fund above to correct its balance — a correction applies to one fund, not to a total."
               )}
             </p>
-          )}
-        </SectionCard>
+          ) : undefined
+        }
+      />
 
-        <SectionCard
-          title="Fund balance trend"
+      {/* ---------- the card grid — the design's 702 / 400 columns on a 10px gutter ---------- */}
+      <div className="grid grid-cols-1 items-stretch gap-x-[10px] gap-y-[12px] xl:grid-cols-[minmax(0,1.76fr)_minmax(0,1fr)]">
+        {/* row 1 — the trend beside the composition */}
+        <FundBalanceTrendCard
           subtitle={scope.fund ? scope.fund.name : "All funds"}
-          badge={<StatusBadge status={reserveRung} size="sm" />}
-          footer={GO_TO.forecast}
-          footerHref={options.link(
-            `/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`,
-          )}
-          footerNote="All amounts are unaudited"
-        >
-          <LineChart
-            title="Fund balance trend"
-            summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
-            categories={labels}
-            format={(v) => compactMoney(v, 0)}
-            height={280}
-            series={[
-              {
-                key: "total",
-                label: "Ending fund balance (Actual)",
-                color: "var(--color-viz-budget)",
-                labelLast: true,
-                points: series.points.map((p) => ({
-                  value: toNumber(p.fundBalance),
-                  label: compactMoney(p.fundBalance),
-                })),
-              },
-              {
-                key: "unassigned",
-                label: "Unassigned fund balance (Actual)",
-                color: "var(--color-viz-actual)",
-                labelLast: true,
-                points: series.points.map((p) => ({
-                  value: toNumber(p.unassignedFundBalance),
-                  label: compactMoney(p.unassignedFundBalance),
-                })),
-              },
-              // The board's approved projection, drawn behind the actuals: flat across months
-              // nobody amended, stepping only where they did. It is the reference the two
-              // lines above are tracking against, so it is dashed and unmarked — context,
-              // not a third measurement.
-              ...(budgetedTrend && hasBudgetedTrend
-                ? [
-                    {
-                      key: "budgeted",
-                      label: "Ending fund balance (Budgeted)",
-                      color: "var(--color-viz-reference)",
-                      dashed: true,
-                      markers: false,
-                      points: budgetedTrend.map((v) => ({
-                        value: toNumber(v),
-                        label: compactMoney(v),
-                      })),
-                    },
-                  ]
-                : []),
-            ]}
-          />
-          <div className="mt-4 flex flex-col gap-3">
-            <MetricStrip
-              cols={5}
-              items={[
-                {
-                  label: "Ending fund balance (Actual)",
-                  value: compactMoney(totalNow),
-                  // The budgeted figure as the note rather than the reserve percentage that
-                  // used to sit under the unassigned item beside it: that percentage is
-                  // computed on the projected balance, so printing it under an actual dollar
-                  // amount invited exactly the reconciliation that cannot be done.
-                  note: budgetedNow ? `${compactMoney(budgetedNow)} budgeted` : undefined,
-                },
-                {
-                  label: "Unassigned fund balance (Actual)",
-                  value: compactMoney(unassignedNow),
-                },
-                {
-                  label: "Status",
-                  value: reserveRung === "N/A" ? "Not available" : reserveRung,
-                  tone:
-                    reserveRung === "Strong"
-                      ? "positive"
-                      : reserveRung === "N/A"
-                        ? "neutral"
-                        : "negative",
-                },
-                { label: "Target", value: `${reserveT.target.toFixed(2)}%` },
-                { label: "Minimum", value: `${statutoryMinimum.toFixed(2)}%` },
-              ]}
-            />
-            {reservePct !== null && (
-              <KeyInsightBar tone={reserveRung === "Strong" ? "info" : "monitor"}>
-                {reserveSubject(reserve)} is {percent(reservePct)} {reserveOf}, which is{" "}
-                {reservePct >= statutoryMinimum ? "above" : "below"} the{" "}
-                {statutoryMinimum.toFixed(2)}% statutory minimum and{" "}
-                {reservePct >= reserveT.target ? "at or above" : "below"} the district target of{" "}
-                {reserveT.target.toFixed(2)}%.
-              </KeyInsightBar>
-            )}
-          </div>
-        </SectionCard>
-      </Row>
+          rung={reserveRung}
+          categories={labels}
+          total={series.points.map((p) => ({ value: toNumber(p.fundBalance) }))}
+          unassigned={series.points.map((p) => ({ value: toNumber(p.unassignedFundBalance) }))}
+          budgeted={
+            budgetedTrend && hasBudgetedTrend
+              ? budgetedTrend.map((v) => ({ value: toNumber(v) }))
+              : null
+          }
+          format={(v) => compactMoney(v, 0)}
+          summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
+          stats={trendStats}
+        />
 
-      {/* ---------- ROW 3: policy % · waterfall · composition ---------- */}
-      <Row cols="3">
-        <SectionCard
-          title="Fund balance %"
-          subtitle="Policy benchmark"
-          info="The bands are your own thresholds, so this strip and the badge above it cannot disagree."
-        >
-          <div className="pt-7">
-            <BenchmarkBand
-              value={reservePct}
-              bands={statusBands(reserveT)}
-              target={reserveT.target}
-              format={(v) => `${v.toFixed(v % 1 === 0 ? 0 : 2)}%`}
-              label={`Policy target: maintain unassigned fund balance at ${reserveT.target.toFixed(2)}% ${reserveOf}. The dotted rule marks the target.`}
-            />
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Fund balance waterfall"
-          subtitle={foots ? undefined : "Components do not reconcile to the ending balance"}
-          info="Beginning balance, this year's movements, and where the balance now stands."
-        >
-          <WaterfallChart
-            title="Fund balance waterfall"
-            summary={`How the fund balance moved from ${compactMoney(series.opening?.total)} at the start of the year to ${compactMoney(totalNow)}.`}
-            steps={steps}
-            format={(v) => compactMoney(v, 0)}
-            height={270}
-          />
-          {!foots && (
-            <p className="mt-2 text-[11.5px] text-monitor">
-              The movements shown do not add up to the ending balance. This usually means a
-              period is missing from the year.
-            </p>
-          )}
-        </SectionCard>
-
-        {/*
-          THE "VIEW BY" CARD — the client's "Fund Balance Composition is View By → Fund".
-
-          Two perspectives on one total: the GASB 54 classification split this card has
-          always drawn, and the same balance split by fund. Neither costs a query — the
-          components come from the opening balance the series already loaded, and the fund
-          rows from the `byFund` call the table above it already made.
-
-          The KPI row is not re-grouped. Total fund balance, the unassigned reserve and its
-          percentage are the same figures either way.
-        */}
-        <SectionCard
-          title="Fund balance composition"
+        <FundBalanceCompositionCard
           subtitle={`${
             view === "fund"
               ? `By fund · ${scope.fund ? scope.fund.name : "all funds"}`
               : "By classification"
           } · ${basisLabel}`}
-          info={`${
-            view === "fund"
-              ? "Each fund's ending balance as a share of the total. Funds in deficit are listed in the table above rather than drawn here — a share bar cannot show a negative slice."
-              : "Components are as reported on the opening fund balance; only unassigned moves during the year — a district re-designates the others by board action, not by amending a budget."
-          } ${basisNote}`}
-          control={
-            <div className="flex items-center gap-1.5">
-              <ViewBy options={FUND_BALANCE_VIEWS} value={view} />
-              <ViewBy
+          controls={
+            <>
+              <PillSelect
                 options={FUND_BALANCE_BASES}
                 value={basis}
                 param={BASIS_PARAM}
                 label="Basis"
+                size="sm"
               />
-            </div>
-          }
-        >
-          {budgetBasis && view === "classification" && !budgetBasisAvailable ? (
-            <p className="py-8 text-center text-[12.5px] text-muted-2">
-              The budgeted basis is not available under a cost centre filter. The budget
-              figures carry the whole filter while the opening balance is fund-level, so the
-              two would not be a balance. Clear the cost centre filter, or switch to Actual.
-            </p>
-          ) : view === "fund" ? (
-            foldedFundSlices.length > 0 ? (
-              <>
-                <ShareBars
-                  title="Fund balance composition by fund"
-                  summary="How the district's total fund balance splits across its funds."
-                  rows={foldedFundSlices.map((f, i) => ({
-                    id: f.id,
-                    label: f.label,
-                    value: f.value,
-                    display: compactMoney(f.value),
-                    share: percent(sharePercent(f.value, fundSliceTotal), 1),
-                    color: SERIES_SLOTS[i % SERIES_SLOTS.length],
-                  }))}
-                />
-                <div className="mt-4">
-                  <MetricStrip
-                    cols={3}
-                    items={[
-                      {
-                        // The by-fund table's own total row, on the same basis — so the two
-                        // cards in this column cannot print different totals for one district.
-                        label: `Total fund balance (${basisLabel})`,
-                        value: compactMoney(budgetBasis ? allFundsBudgetedTotal : allFundsTotal),
-                      },
-                      {
-                        label: `Unassigned (${basisLabel})`,
-                        value: compactMoney(compositionUnassigned),
-                      },
-                      { label: "Funds", value: String(fundSlices.length) },
-                    ]}
-                  />
-                </div>
-              </>
-            ) : (
-              <p className="py-8 text-center text-[12.5px] text-muted-2">
-                No fund has a positive ending balance for this period.
-              </p>
-            )
-          ) : components.length > 0 ? (
-            <>
-              <ShareBars
-                title="Fund balance composition"
-                summary="How the fund balance splits between its designated components and the unassigned reserve."
-                rows={components.map((c) => ({
-                  id: c.label,
-                  label: c.label,
-                  value: c.value,
-                  display: compactMoney(c.amount),
-                  share: percent(sharePercent(c.value, componentTotal), 1),
-                  color: COMPONENT_COLORS[c.label],
-                }))}
-              />
-              <div className="mt-4">
-                <MetricStrip
-                  cols={3}
-                  items={[
-                    {
-                      label: `Total fund balance (${basisLabel})`,
-                      value: compactMoney(compositionTotal),
-                    },
-                    {
-                      label: `Unassigned (${basisLabel})`,
-                      value: compactMoney(compositionUnassigned),
-                    },
-                    { label: "Components", value: String(components.length) },
-                  ]}
-                />
-              </div>
+              <PillSelect options={FUND_BALANCE_VIEWS} value={view} label="View by" size="sm" />
             </>
-          ) : (
-            <p className="py-8 text-center text-[12.5px] text-muted-2">
-              No opening fund balance has been committed for this year.
-            </p>
-          )}
-        </SectionCard>
-      </Row>
+          }
+          rows={compositionRows}
+          stats={compositionStats}
+          empty={compositionEmpty}
+        />
 
-      {/* ---------- ROW 4: the components breakdown ---------- */}
-      <Row cols="2-1">
-        <SectionCard
-          title="Reserve components"
-          subtitle={`${gf ? gf.name : "General fund"} · ${
-            isOutturn ? "Actual ending balance" : "Projected ending balance"
-          }`}
-          info={`The statutory reserve test, which applies to the General Fund only — every row here is the General Fund's, whatever the page is filtered to. Each line is stated as a share ${reserveOf}, so the column adds up to the reserve percentage above it. ${reserveMethodology(reserve)}`}
-        >
-          <DataTable
-            columns={[
-              { key: "line", label: "Component" },
-              { key: "amount", label: "Amount", align: "right", width: "24%" },
-              { key: "share", label: `% ${reserveOf}`, align: "right", width: "26%" },
-            ]}
-            rows={breakdownRows}
-            total={{
-              id: "total-unassigned",
-              total: true,
-              cells: {
-                line: "Total unassigned fund balance",
-                amount: money(reserve?.unassigned ?? null),
-                share: breakdownShare(reserve?.unassigned ?? null),
-              },
-            }}
-            empty="No opening fund balance has been committed for this year."
+        {/* row 2 — the waterfall beside the policy benchmark */}
+        <FundBalanceWaterfallCard
+          subtitle="Beginning · this year's movements · ending"
+          steps={steps}
+          format={(v) => compactMoney(v, 0)}
+          summary={`How the fund balance moved from ${compactMoney(series.opening?.total)} at the start of the year to ${compactMoney(totalNow)}.`}
+          footNote={
+            foots
+              ? null
+              : "The movements shown do not add up to the ending balance. This usually means a period is missing from the year."
+          }
+        />
+
+        <FundBalanceBenchmarkCard
+          value={reservePct}
+          rung={reserveRung}
+          bands={statusBands(reserveT)}
+          target={reserveT.target}
+          note={`Policy target: maintain unassigned fund balance at ${reserveT.target.toFixed(2)}% ${reserveOf}. The dotted rule marks the target.`}
+        />
+
+        {/* row 3 — the reserve components beside the ending position */}
+        <OverviewPanel className="flex flex-col p-[18px]">
+          <OverviewPanelHeader
+            title="Reserve components"
+            subtitle={`${gf ? gf.name : "General fund"} · ${
+              isOutturn ? "Actual ending balance" : "Projected ending balance"
+            }`}
           />
-          <p className="mt-3 text-[11.5px] text-muted-2">
+          {/*
+            The statutory reserve test, which applies to the General Fund only — every row
+            here is the General Fund's, whatever the page is filtered to. Each line is
+            stated as a share of the same denominator the reserve percentage uses, so the
+            column adds up to the reserve percentage above it.
+          */}
+          <div
+            className={cn(
+              BREAKDOWN_COLS,
+              "mt-[14px] pb-[10px] text-[14px] leading-[1.15] tracking-[0.14px] text-[#060606]",
+            )}
+          >
+            <span>Component</span>
+            <span className="text-right">Amount</span>
+            <span className="text-right">% {reserveOf}</span>
+          </div>
+          <div aria-hidden className="h-px w-full bg-[#060606]/20" />
+          <ul>
+            {breakdownLines.map((l, i) => (
+              <li
+                key={l.id}
+                className={cn(
+                  BREAKDOWN_COLS,
+                  "py-[11px]",
+                  i > 0 && "border-t border-dashed border-[#e7e7e7]",
+                )}
+              >
+                <span
+                  className={cn(
+                    "text-[14px] leading-[1.35]",
+                    l.strong && "font-bold",
+                    l.tone === "negative" ? "text-[#fd4438]" : "text-[#060606]",
+                  )}
+                >
+                  {l.label}
+                </span>
+                <span
+                  className={cn(
+                    "whitespace-nowrap text-right text-[14px] leading-normal",
+                    l.strong && "font-bold",
+                  )}
+                  style={{ color: l.tone ? CELL_INK[l.tone] : "#060606" }}
+                >
+                  {l.amount}
+                </span>
+                <span className="whitespace-nowrap text-right text-[14px] leading-normal text-[#060606]">
+                  {l.share}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div aria-hidden className="h-px w-full bg-[#060606]/20" />
+          <div className={cn(BREAKDOWN_COLS, "pb-[4px] pt-[14px] text-[14px] font-bold leading-normal text-[#060606]")}>
+            <span>Total unassigned fund balance</span>
+            <span className="whitespace-nowrap text-right">
+              {money(reserve?.unassigned ?? null)}
+            </span>
+            <span className="whitespace-nowrap text-right">
+              {breakdownShare(reserve?.unassigned ?? null)}
+            </span>
+          </div>
+          <p className="mt-auto pt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]/[0.56]">
             {reserveMethodology(reserve)}
             {reserve && !reserve.actual
               ? " The projection moves when the board amends the budget, not with month-to-month collections."
@@ -1289,76 +1245,43 @@ export default async function FundBalancePage({
               ? ` The designated components are omitted because this page is filtered away from ${gf.name}; the required reserve and the balance above it are the General Fund's regardless.`
               : ""}
           </p>
-        </SectionCard>
+        </OverviewPanel>
 
-        {/*
-          EVERY TERM OF THE PROJECTION, ON ONE STRIP.
-          The card used to print the beginning balance and the ending balance with the two
-          figures between them left out, so the one calculation on this page a district
-          cannot do by inspection was also the one it could not check — validating it meant
-          opening the Revenue and Expenditure dashboards to read each budget off separately.
-          Both come free from `reserve`, which had already summed them to get the ending
-          balance beside them.
-        */}
-        <SectionCard
-          title={isOutturn ? "Ending position" : "Projected ending position"}
-          subtitle={positionSubject}
-          // The badge is the RESERVE status, which exists for the General Fund only. On any
-          // other scope it would be a General Fund verdict pinned to another fund's figures.
-          badge={isGeneralScope ? <StatusBadge status={reserveRung} size="sm" /> : undefined}
-          info={
-            isOutturn
-              ? `Beginning fund balance plus revenues collected, less expenditures made — for ${positionSubject.toLowerCase()}.`
-              : `Beginning fund balance plus budgeted revenues, less budgeted expenditures — for ${positionSubject.toLowerCase()}. The beginning balance is fixed for the year, so the projection moves only when the board amends the budget.`
-          }
-        >
-          <MetricStrip
-            cols={5}
-            items={[
-              {
-                label: "Beginning fund balance",
-                value: compactMoney(position.beginning),
-                note: "Fixed for the year",
-              },
-              {
-                label: isOutturn ? "Actual revenues" : "Budgeted revenues",
-                value: compactMoney(position.revenue),
-                note: isOutturn ? "Collected to date" : "Latest amended budget",
-              },
-              {
-                label: isOutturn ? "Actual expenditures" : "Budgeted expenditures",
-                value: compactMoney(position.expenditure),
-                note: isOutturn ? "Spent to date" : "Latest amended budget",
-              },
-              {
-                label: isOutturn ? "Ending fund balance" : "Projected ending fund balance",
-                value: compactMoney(position.ending),
-                note: "Beginning + revenues − expenditures",
-              },
-              // The fifth slot is the reserve test where the reserve test applies, and the
-              // change in the balance everywhere else. Printing "room above required reserve"
-              // against a capital projects fund would be inventing a floor the statute does
-              // not set for it.
-              isGeneralScope
-                ? {
-                    label: isShort
-                      ? "Shortfall to required reserve"
-                      : "Room above required reserve",
-                    value: compactMoney(
-                      isShort && excessUnassigned ? excessUnassigned.abs() : excessUnassigned,
-                    ),
-                    tone: isShort ? ("negative" as const) : ("positive" as const),
-                  }
-                : {
-                    label: isOutturn ? "Change in fund balance" : "Projected change",
-                    value: accounting(positionChange, { compact: true }),
-                    note: "Against the beginning balance",
-                    tone: positionTone,
-                  },
-            ]}
-          />
+        <OverviewPanel className="flex flex-col p-[18px]">
+          <div className="flex flex-wrap items-start justify-between gap-[10px]">
+            <OverviewPanelHeader
+              title={isOutturn ? "Ending position" : "Projected ending position"}
+              subtitle={positionSubject}
+            />
+            {/* The badge is the RESERVE status, which exists for the General Fund only. */}
+            {isGeneralScope && <PanelRungPill rung={reserveRung} size="sm" />}
+          </div>
+          <div className="mt-[14px] grid grid-cols-1 gap-px overflow-clip rounded-[14px] border border-[#e7e7e7] bg-[#e7e7e7] sm:grid-cols-2">
+            {positionCells.map((c, i) => (
+              <div
+                key={c.label}
+                className={cn(
+                  "flex flex-col gap-[2px] bg-white px-[14px] py-[12px]",
+                  i === positionCells.length - 1 && positionCells.length % 2 === 1 && "sm:col-span-2",
+                )}
+              >
+                <span className="text-[12px] leading-[16px] text-[#797979]">{c.label}</span>
+                <span
+                  className="text-[20px] font-semibold leading-[26px] [font-variant-numeric:proportional-nums]"
+                  style={{ color: CELL_INK[c.tone ?? "neutral"] }}
+                >
+                  {c.value}
+                </span>
+                {c.note && (
+                  <span className="text-[10px] leading-[13px] text-[rgba(121,121,121,0.75)]">
+                    {c.note}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
           {!isGeneralScope && (
-            <p className="mt-3 text-[11.5px] text-muted-2">
+            <p className="mt-auto pt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]/[0.56]">
               {scope.fundLevelOnly && !isOutturn
                 ? "The budgeted terms are not shown under a cost centre filter: the budget figures carry the whole filter while the beginning balance is fund-level, so the subtraction would mix two grains. "
                 : ""}
@@ -1368,16 +1291,30 @@ export default async function FundBalancePage({
                 : ""}
             </p>
           )}
-        </SectionCard>
-      </Row>
+        </OverviewPanel>
+      </div>
 
-      <FooterInfoBar
-        action={GO_TO.forecast}
-        href={options.link(`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`)}
-      >
-        Want to see the future? Build a three-year projection from your own growth assumptions
-        and see how reserves hold up.
-      </FooterInfoBar>
+      {/* ---------- the key insight bar — Figma 55:4229 ---------- */}
+      <OverviewPanel className="flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[10px] p-[18px]">
+        <div className="min-w-0 flex-1 basis-[280px]">
+          <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-black/85">
+            Key insight
+          </p>
+          <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-black/50">
+            Want to see the future? Build a three-year projection from your own growth
+            assumptions and see how reserves hold up.
+          </p>
+        </div>
+        <Link
+          href={options.link(`/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`)}
+          className="flex h-[24px] flex-none items-center gap-[5px] self-end rounded-[22px] bg-[#8e62ef] pl-[7px] pr-[10px] transition-opacity hover:opacity-85"
+        >
+          <ArrowGlyph color="#ffffff" className="-rotate-45" />
+          <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-white">
+            {GO_TO.forecast}
+          </span>
+        </Link>
+      </OverviewPanel>
     </FundBalanceShell>
   );
 }

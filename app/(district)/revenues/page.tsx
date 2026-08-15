@@ -660,29 +660,33 @@ export default async function RevenueDashboard({
         />
       </OverviewSection>
 
-      {/* ---------- the card grid — the design's 702 / 399 columns on a 10px gutter ---------- */}
-      <div className="grid grid-cols-1 items-stretch gap-x-[10px] gap-y-[12px] xl:grid-cols-[minmax(0,1.76fr)_minmax(0,1fr)]">
-        {/* row 1 — the by-source table beside the category share card */}
-        <RevenueSourceTable
-          ctaHref={revenueDetailHref}
-          rows={sourceRows}
-          total={{
-            id: "total",
-            label: "Total Revenue",
-            budget: compactMoney(bySource.total.budget),
-            actual: compactMoney(bySource.total.actualYtd),
-            pctBudget: percent(bySource.total.consumption.percent),
-            variance: accounting(bySource.total.pace.amount, { compact: true }),
-            variancePct: signedPercent(bySource.total.pace.percent),
-            negative: bySource.total.pace.amount.isNegative(),
-            status: totalStatus,
-          }}
-        />
+      {/* ---------- the card grid — the 64:8848 canvas: 702 / 399 columns on a 17px gutter,
+          20px between rows, with the by-source table standing full width above them ---------- */}
+      <div className="grid grid-cols-1 items-stretch gap-x-[17px] gap-y-[20px] xl:grid-cols-[minmax(0,1.76fr)_minmax(0,1fr)]">
+        {/* row 1 — the by-source table, spanning both columns (64:8868 runs the full 1118px) */}
+        <div className="min-w-0 xl:col-span-2">
+          <RevenueSourceTable
+            ctaHref={revenueDetailHref}
+            rows={sourceRows}
+            total={{
+              id: "total",
+              label: "Total Revenue",
+              budget: compactMoney(bySource.total.budget),
+              actual: compactMoney(bySource.total.actualYtd),
+              pctBudget: percent(bySource.total.consumption.percent),
+              variance: accounting(bySource.total.pace.amount, { compact: true }),
+              variancePct: signedPercent(bySource.total.pace.percent),
+              negative: bySource.total.pace.amount.isNegative(),
+              status: totalStatus,
+            }}
+          />
+        </div>
 
         {/*
-          THE "VIEW BY" CARD — "Revenue Type, Revenue Code & Name, Grant", now the design's
-          segmented capsule rather than a dropdown. Same URL parameter, same server-side
-          regrouping — see the note on VIEW_META above.
+          row 2 — THE "VIEW BY" CARD — "Revenue Type, Revenue Code & Name, Grant", the
+          design's segmented capsule rather than a dropdown. Same URL parameter, same
+          server-side regrouping — see the note on VIEW_META above. The positive movers
+          stand beside it, sized to their content (64:9410).
         */}
         <RevenueCategoryCard
           title={meta.title}
@@ -710,7 +714,15 @@ export default async function RevenueDashboard({
           ctaHref={revenueDetailHref}
         />
 
-        {/* row 2 — budget vs actual beside the positive movers */}
+        <RevenueMoversCard
+          fit
+          title="Top positive variances"
+          subtitle="Collections above expected levels"
+          items={moverItems(movers.positive, "positive")}
+          empty="Nothing is running ahead of budget."
+        />
+
+        {/* row 3 — budget vs actual beside the negative movers */}
         <RevenueTrendCard
           title="Revenues — budget vs actual"
           subtitle={`Year to date through ${scope.label}`}
@@ -740,33 +752,19 @@ export default async function RevenueDashboard({
         />
 
         <RevenueMoversCard
-          title="Top positive variances"
-          subtitle="Collections above expected levels"
-          items={moverItems(movers.positive, "positive")}
-          empty="Nothing is running ahead of budget."
-        />
-
-        {/* row 3 — the variance trend beside the negative movers */}
-        <RevenueVarianceCard
-          categories={labels}
-          points={monthlyVariance}
-          warning={revT.warning}
-          summary="How far collections ran ahead of or behind the pro-rated budget in each month of the year."
-        />
-
-        <RevenueMoversCard
           title="Top negative variances"
           subtitle="Collections below expected levels"
           items={moverItems(movers.negative, "negative")}
           empty="Nothing is running behind budget."
         />
 
-        {/* row 4 — the key insight beside the alerts */}
-        <RevenueInsightCard ctaHref="/policies">
-          Revenue figures are drawn from the detail file committed for this period. Remaining to
-          collect is current budget less actual revenue — it assumes no growth and is not a
-          forecast. Adjust the thresholds above to change when these alerts fire.
-        </RevenueInsightCard>
+        {/* row 4 — the variance trend beside the alerts */}
+        <RevenueVarianceCard
+          categories={labels}
+          points={monthlyVariance}
+          warning={revT.warning}
+          summary="How far collections ran ahead of or behind the pro-rated budget in each month of the year."
+        />
 
         <RevenueAlertsCard
           alerts={revenueAlerts.map((a) => ({
@@ -784,6 +782,13 @@ export default async function RevenueDashboard({
           totalCount={alerts?.alerts.length ?? 0}
           href={options.link("/alerts")}
         />
+
+        {/* row 5 — the key insight, standing alone in the left column (64:9404) */}
+        <RevenueInsightCard ctaHref="/policies">
+          Revenue figures are drawn from the detail file committed for this period. Remaining to
+          collect is current budget less actual revenue — it assumes no growth and is not a
+          forecast. Adjust the thresholds above to change when these alerts fire.
+        </RevenueInsightCard>
       </div>
     </div>
   );

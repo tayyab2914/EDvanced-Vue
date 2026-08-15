@@ -214,23 +214,49 @@ function NoteArrow({ direction }: { direction: "up" | "down" }) {
  * The bordered white card standing at the right of both big cards — four figures separated
  * by 189px hairlines. 243px wide beside the chart from `xl`; full width beneath it before
  * that, where the fixed column would crush the chart.
+ *
+ * `compact` is the 64:5751 revision's half-width band, where the two big cards share one
+ * row and the rail narrows to the design's slim column (64:6584): 9px labels wrapping over
+ * 14px figures. The full-width geometry survives below `xl`, where the rail drops under
+ * the chart either way.
  */
-export function OverviewMetricRail({ items }: { items: RailItem[] }) {
+export function OverviewMetricRail({ items, compact }: { items: RailItem[]; compact?: boolean }) {
   return (
-    <div className="flex w-full flex-col rounded-[24px] border border-[#e7e7e7] bg-white py-[7px] xl:w-[243px] xl:flex-none">
+    <div
+      className={cn(
+        "flex w-full flex-col rounded-[24px] border border-[#e7e7e7] bg-white py-[7px] xl:flex-none",
+        compact ? "xl:w-[118px]" : "xl:w-[243px]",
+      )}
+    >
       {items.map((item, i) => (
         <div key={item.label}>
-          {i > 0 && <div aria-hidden className="mx-auto h-px w-[189px] bg-[#ebebeb]" />}
-          <div className="flex flex-col gap-[8px] px-[23px] py-[16px]">
-            <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
+          {i > 0 && (
+            <div
+              aria-hidden
+              className={cn("mx-auto h-px bg-[#ebebeb]", compact ? "w-[90px]" : "w-[189px]")}
+            />
+          )}
+          <div
+            className={cn(
+              "flex flex-col",
+              compact ? "gap-[4px] px-[14px] py-[11px]" : "gap-[8px] px-[23px] py-[16px]",
+            )}
+          >
+            <span
+              className={cn(
+                "font-medium text-[#1f1f21]",
+                compact ? "text-[9px] leading-[12px]" : "text-[15px] leading-[20px]",
+              )}
+            >
               {item.label}
             </span>
             {item.badge ? (
-              <PanelRungPill rung={item.badge} />
+              <PanelRungPill rung={item.badge} size={compact ? "sm" : "md"} />
             ) : (
               <span
                 className={cn(
-                  "text-[32px] font-medium leading-[36px] [font-variant-numeric:proportional-nums]",
+                  "font-medium [font-variant-numeric:proportional-nums]",
+                  compact ? "text-[14px] leading-[18px]" : "text-[32px] leading-[36px]",
                   RAIL_TONE[item.tone ?? "default"],
                 )}
               >
@@ -238,7 +264,12 @@ export function OverviewMetricRail({ items }: { items: RailItem[] }) {
               </span>
             )}
             {item.note && (
-              <span className="flex items-center gap-[3px] text-[15px] font-normal leading-[24px] text-[#1f1f21]/[0.74]">
+              <span
+                className={cn(
+                  "flex items-center gap-[3px] font-normal text-[#1f1f21]/[0.74]",
+                  compact ? "text-[9px] leading-[12px]" : "text-[15px] leading-[24px]",
+                )}
+              >
                 {item.noteArrow && <NoteArrow direction={item.noteArrow} />}
                 <span className="min-w-0">{item.note}</span>
               </span>
@@ -264,27 +295,45 @@ export interface StripItem {
  * Five figures on one 56% white band with 40px hairline drivers between them — the cash
  * card's Beginning → Receipts → Disbursements → Net → Ending walk. Wraps to fewer columns
  * where five 180px cells cannot fit; the reading order survives the wrap.
+ *
+ * `compact` is the 64:5751 half-width cash card's strip (64:6687): five ~89px cells whose
+ * 9px labels wrap over 13px figures, so the walk still fits beside its neighbour card.
  */
-export function OverviewInfoStrip({ items }: { items: StripItem[] }) {
+export function OverviewInfoStrip({ items, compact }: { items: StripItem[]; compact?: boolean }) {
   return (
-    <div className="rounded-[24px] border border-[#e7e7e7] bg-white/[0.56] px-[24px] py-[12px]">
+    <div
+      className={cn(
+        "rounded-[24px] border border-[#e7e7e7] bg-white/[0.56]",
+        compact ? "px-[10px] py-[6px]" : "px-[24px] py-[12px]",
+      )}
+    >
       <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5">
         {items.map((item, i) => (
           <div
             key={item.label}
             className={cn(
-              "relative flex flex-col gap-[8px] px-[23px] py-[16px]",
+              "relative flex flex-col",
+              compact ? "gap-[4px] px-[12px] py-[10px]" : "gap-[8px] px-[23px] py-[16px]",
               // The 40px driver, drawn as a left border on every cell but the row's first.
               i > 0 &&
-                "before:absolute before:left-0 before:top-1/2 before:hidden before:h-[40px] before:w-px before:-translate-y-1/2 before:bg-[#e7e7e7] lg:before:block",
+                "before:absolute before:left-0 before:top-1/2 before:hidden before:w-px before:-translate-y-1/2 before:bg-[#e7e7e7] lg:before:block",
+              i > 0 && (compact ? "before:h-[27px]" : "before:h-[40px]"),
             )}
           >
-            <span className="whitespace-nowrap text-[15px] font-medium leading-[20px] text-[#1f1f21]">
+            <span
+              className={cn(
+                "font-medium text-[#1f1f21]",
+                compact
+                  ? "text-[9px] leading-[12px]"
+                  : "whitespace-nowrap text-[15px] leading-[20px]",
+              )}
+            >
               {item.label}
             </span>
             <span
               className={cn(
-                "whitespace-nowrap text-[32px] font-medium leading-[36px] [font-variant-numeric:proportional-nums]",
+                "whitespace-nowrap font-medium [font-variant-numeric:proportional-nums]",
+                compact ? "text-[13px] leading-[18px]" : "text-[32px] leading-[36px]",
                 RAIL_TONE[item.tone ?? "default"],
               )}
             >

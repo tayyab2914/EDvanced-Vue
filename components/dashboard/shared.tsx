@@ -25,7 +25,17 @@ export function LinkTabs({
   active: string;
 }) {
   return (
-    <nav className="flex flex-wrap gap-1 border-b border-line" aria-label="Sections">
+    /**
+     * The Fund Balance redesign's segmented capsule (Figma 55:3736): a centred #f7f7f7
+     * track at 38px radius, the active tab a white pill inside it, 10px bold labels with
+     * their 10px glyphs, and the alerts count as the design's tinted red disc. The mockup
+     * letters the labels at 10px and the disc's numeral at 7px; the numeral is set at 9px —
+     * the same smallest-legible normalisation every tiny label in this redesign gets.
+     */
+    <nav
+      aria-label="Sections"
+      className="mx-auto flex w-fit max-w-full items-center overflow-x-auto rounded-[38px] bg-[#f7f7f7] p-px"
+    >
       {tabs.map((t) => {
         const isActive = t.href === active;
         return (
@@ -34,21 +44,14 @@ export function LinkTabs({
             href={t.href}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "-mb-px flex items-center gap-1.5 border-b-2 px-3.5 py-2.5 text-[13px] font-medium transition-colors",
-              isActive
-                ? "border-brand text-brand"
-                : "border-transparent text-muted hover:text-ink-soft",
+              "flex h-[31px] flex-none items-center gap-[6px] whitespace-nowrap rounded-[38px] px-[13px] text-[10px] font-bold leading-[2] tracking-[0.1px] text-black transition-colors",
+              isActive ? "bg-white shadow-[0_1px_2px_rgba(0,6,6,0.06)]" : "hover:bg-white/60",
             )}
           >
-            {t.icon && <Icon name={t.icon} size={15} />}
+            {t.icon && <Icon name={t.icon} size={11} />}
             {t.label}
             {t.count !== undefined && t.count > 0 && (
-              <span
-                className={cn(
-                  "rounded-full px-1.5 text-[10.5px] font-semibold tabular-nums",
-                  isActive ? "bg-[#e8eef7] text-brand" : "bg-line-soft text-muted",
-                )}
-              >
+              <span className="flex size-[15px] flex-none items-center justify-center rounded-full bg-[rgba(238,32,28,0.18)] text-[9px] font-bold leading-none tabular-nums text-[#ee201c]">
                 {t.count}
               </span>
             )}

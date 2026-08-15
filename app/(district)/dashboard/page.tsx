@@ -815,6 +815,7 @@ export default async function ExecutiveDashboard({
    */
   const fundBalanceCard = (
     <OverviewTrendCard
+      compact
       title="Fund Balance Trend"
       subtitle={isGeneralFund ? scopeDescription(scope) : "Policy Applies to General Funds Only"}
       ctaLabel={GO_TO.fundBalance}
@@ -854,6 +855,7 @@ export default async function ExecutiveDashboard({
    */
   const cashCard = (
     <OverviewCashCard
+      compact
       title="Cash position"
       // `scope.label` already ends in "(FY 2026-27)" for period scopes; appending the year
       // again printed it twice — a duplication old enough that the mockup transcribed it.
@@ -1195,20 +1197,23 @@ export default async function ExecutiveDashboard({
       {widgetRow}
 
       {/* ---------- §3.2/3.3 the budget comparisons, with the alerts rail beside them ---------- */}
-      {/* The design's canvas: two 812px chart cards stacked with 10px between, and the
-          273px Alerts Summary standing the full height of both — 812:273 is the 2.974fr.
-          `items-stretch` is what lets the rail's mt-auto footer sit at the charts' foot. */}
+      {/* The 64:5751 canvas: the 812px revenue card with the 273px Alerts Summary standing
+          beside it — 812:273 is the 2.974fr — and the expenditures card on the next row of
+          the same left column, nothing beside it. `items-stretch` sizes the rail to the
+          revenue card alone, which is what lets its mt-auto footer sit at that card's foot. */}
       <div className="grid grid-cols-1 items-stretch gap-2.5 xl:grid-cols-[minmax(0,2.974fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-2.5">
-          {revenueCard}
-          {expenditureCard}
-        </div>
+        {revenueCard}
         {alertsCard}
+        {expenditureCard}
       </div>
 
-      {fundBalanceCard}
-
-      {cashCard}
+      {/* ---------- §3.2b/c — the trend and cash cards, sharing one row (64:6543 / 64:6596) ---------- */}
+      {/* The design sets the two 540px cards side by side on a 14px gutter; each runs its
+          compact anatomy — slim metric rail, small-type strip — below xl they stack. */}
+      <div className="grid grid-cols-1 items-stretch gap-[14px] xl:grid-cols-2">
+        {fundBalanceCard}
+        {cashCard}
+      </div>
 
       {healthCard}
 

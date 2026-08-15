@@ -68,6 +68,7 @@ export function CashReserveGauge({
   title,
   summary,
   max,
+  compact,
 }: {
   value: number | null;
   /** Worst-first, as `bands()` returns them — derived from the district's thresholds. */
@@ -77,6 +78,11 @@ export function CashReserveGauge({
   summary: string;
   /** The open end of the scale. Defaults to 4/3 of the best band's floor — 60 days → 80. */
   max?: number;
+  /**
+   * The 64:5751 half-width card. The SVG scales itself; this shrinks the HTML centre
+   * cluster with it (the design's ~17px headline against the full-width card's 28px).
+   */
+  compact?: boolean;
 }) {
   if (value === null || bands.length === 0) {
     return <ChartEmpty height={260}>Not enough data to work this out yet.</ChartEmpty>;
@@ -192,12 +198,30 @@ export function CashReserveGauge({
         {/* The centre cluster — badge over the headline over its caption, standing well up
             inside the arc (the design sets the headline ~88px above the pivot line, not on
             it). Positioned as a fraction of the box so it scales with the gauge. */}
-        <div className="absolute inset-x-0 bottom-[18%] flex flex-col items-center gap-[8px]">
+        <div
+          className={
+            compact
+              ? "absolute inset-x-0 bottom-[16%] flex flex-col items-center gap-[4px]"
+              : "absolute inset-x-0 bottom-[18%] flex flex-col items-center gap-[8px]"
+          }
+        >
           <PanelRungPill rung={rung} size="sm" />
-          <p className="whitespace-nowrap text-[28px] leading-[normal] tracking-[0.28px] text-[#060606] [font-variant-numeric:proportional-nums]">
+          <p
+            className={
+              compact
+                ? "whitespace-nowrap text-[17px] font-bold leading-[normal] tracking-[0.17px] text-[#060606] [font-variant-numeric:proportional-nums]"
+                : "whitespace-nowrap text-[28px] leading-[normal] tracking-[0.28px] text-[#060606] [font-variant-numeric:proportional-nums]"
+            }
+          >
             <CountUp value={`${Math.round(value)} Days of Cash Reserve`} />
           </p>
-          <p className="text-[14px] leading-[normal] tracking-[0.14px] text-[#9a9a9a]">
+          <p
+            className={
+              compact
+                ? "text-[11px] leading-[normal] tracking-[0.11px] text-[#9a9a9a]"
+                : "text-[14px] leading-[normal] tracking-[0.14px] text-[#9a9a9a]"
+            }
+          >
             Cash Reserve
           </p>
         </div>
@@ -215,6 +239,7 @@ export function OverviewCashCard({
   gauge,
   rail,
   strip,
+  compact,
 }: {
   title: string;
   subtitle?: string;
@@ -230,9 +255,14 @@ export function OverviewCashCard({
   };
   rail: RailItem[];
   strip: StripItem[];
+  /**
+   * The 64:5751 half-width band, where this card shares a row with the fund balance trend:
+   * slim rail, small-type strip, and the gauge's centre cluster scaled down with the arc.
+   */
+  compact?: boolean;
 }) {
   return (
-    <OverviewPanel>
+    <OverviewPanel className={compact ? "flex flex-col" : undefined}>
       <OverviewPanelHeader
         title={title}
         subtitle={subtitle}
@@ -240,7 +270,13 @@ export function OverviewCashCard({
         ctaHref={ctaHref}
         badge={badge}
       />
-      <div className="mt-[24px] flex flex-col gap-[24px] xl:flex-row xl:items-center">
+      <div
+        className={
+          compact
+            ? "mt-[16px] flex flex-1 flex-col gap-[16px] xl:flex-row xl:items-center"
+            : "mt-[24px] flex flex-col gap-[24px] xl:flex-row xl:items-center"
+        }
+      >
         <div className="min-w-0 flex-1">
           <CashReserveGauge
             value={gauge.value}
@@ -249,12 +285,13 @@ export function OverviewCashCard({
             title="Days cash on hand"
             summary={gauge.summary}
             max={gauge.max}
+            compact={compact}
           />
         </div>
-        <OverviewMetricRail items={rail} />
+        <OverviewMetricRail items={rail} compact={compact} />
       </div>
-      <div className="mt-[24px]">
-        <OverviewInfoStrip items={strip} />
+      <div className={compact ? "mt-[16px]" : "mt-[24px]"}>
+        <OverviewInfoStrip items={strip} compact={compact} />
       </div>
     </OverviewPanel>
   );

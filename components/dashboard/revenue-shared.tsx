@@ -2,7 +2,6 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { CountUp } from "@/components/count-up";
 import { ArrowGlyph } from "@/components/dashboard/overview-panel";
-import type { PaceStatus } from "@/lib/dashboard/pace";
 import type { StatusRung } from "@/lib/dashboard/status";
 
 /**
@@ -30,7 +29,12 @@ export function PacePill({
   size = "sm",
   className,
 }: {
-  status: PaceStatus;
+  /**
+   * Structurally a `PaceStatus`, loosened to any word on a rung: the Expenditure band's
+   * function table letters rows "Overspent" and "Approaching" — local vocabulary the same
+   * way the strip's "Healthy" is — while the rung still comes from the shared ladder.
+   */
+  status: { label: string; rung: StatusRung };
   /** sm — the table's 10px (the mockup's 8px, normalised); md — the movers' 12px. */
   size?: "sm" | "md";
   className?: string;

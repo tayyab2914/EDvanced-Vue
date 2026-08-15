@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import type { Prisma } from "@/lib/generated/prisma/client";
 import { getTenantDb, userCan } from "@/lib/auth/dal";
 import { resolveScope } from "@/lib/dashboard/scope";
 import { loadCore, daysCashThresholds, periodAxisLabels } from "@/lib/dashboard/load";
@@ -9,6 +11,7 @@ import {
   cashStats,
   thirtyDayForecast,
   negativeCashFlowRun,
+  daysCashOnHand,
 } from "@/lib/finance/cash";
 import { trendNarrative } from "@/lib/alerts/insights";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
@@ -26,17 +29,37 @@ import {
   NOT_AVAILABLE,
 } from "@/lib/dashboard/format";
 import { PageHeader } from "@/components/page-header";
-import { KpiTile, KpiRow, MiniStat } from "@/components/dashboard/kpi-tile";
-import { SectionCard, FooterInfoBar } from "@/components/dashboard/section-card";
+import { RevealManager } from "@/components/reveal";
 import { DataTable } from "@/components/dashboard/data-table";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { EmptyState, SubstitutionNotice, KeyInsightBar, FundLevelNotice } from "@/components/dashboard/shared";
+import { EmptyState, SubstitutionNotice, FundLevelNotice } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
-import { ViewBy } from "@/components/dashboard/view-by";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { Gauge } from "@/components/dashboard/charts/gauge";
-import { ShareBars, MetricStrip } from "@/components/dashboard/charts/budget-bars";
+import { ShareBars } from "@/components/dashboard/charts/budget-bars";
+import {
+  OverviewKpiTile,
+  OverviewSection,
+  OverviewTileRow,
+} from "@/components/dashboard/overview-kpi";
+import { OverviewPeriodSelect } from "@/components/dashboard/overview-period-select";
+import { OverviewPanel, ArrowGlyph } from "@/components/dashboard/overview-panel";
+import { PillSelect } from "@/components/dashboard/pill-select";
+import { CashSplitCard } from "@/components/dashboard/cash-split-card";
+import { CashByFundTable, type CashFundRow } from "@/components/dashboard/cash-by-fund-table";
+import { CashHealthCard } from "@/components/dashboard/cash-health-card";
+import { CashTrendCard } from "@/components/dashboard/cash-trend-card";
+import {
+  CashCompositionCard,
+  type CashCompositionRow,
+} from "@/components/dashboard/cash-composition-card";
+import {
+  CashMonthlySummaryCard,
+  type CashSummaryStep,
+} from "@/components/dashboard/cash-monthly-summary-card";
+import { RevenueAlertsCard } from "@/components/dashboard/revenue-alerts-card";
+import type { CapsuleStat } from "@/components/dashboard/revenue-shared";
 import { scopeOptions, alertFunds } from "@/lib/dashboard/options";
 import { GO_TO, VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { CASH_COLORS, SERIES_SLOTS } from "@/lib/dashboard/palette";
@@ -85,6 +108,21 @@ import {
  * The month-over-month KPI is deliberately absent: "we do not need month over month KPI".
  * The movement is still stated, on the Cash balance tile's trend pill and in the key
  * insight, where it is context rather than a headline.
+ *
+ * ===================================================================================
+ * THE REDESIGNED PAGE — a transcription of Figma 55:5118, on the same vocabulary the
+ * Executive, Revenue, Expenditure and Fund Balance redesigns already speak: the Overview
+ * tile band with the Cash status / Cash disbursements split card centred beneath it, then
+ * the 772/315 card grid — by-fund ledger beside the Cash Health dial, the trend beside the
+ * composition bars, the monthly walk and the key insight beside the alerts — every figure
+ * keeping the calculation it always had.
+ *
+ * ONE COLUMN CAME BACK, on the client's own drawing: the by-fund table's Days Cash on
+ * Hand. The M4 objection was that the old estimate annualised each fund's own SPENDING;
+ * this one divides each fund's ending cash by its amended expenditure BUDGET ÷ 365 — the
+ * same family of calculation as the headline tile, which annualises the adopted budget —
+ * and the table's footnote names the one term that differs.
+ * ===================================================================================
  */
 export default async function CashDashboard({
   searchParams,
@@ -142,8 +180,17 @@ export default async function CashDashboard({
   /** How far the district sits from its own board target, in days. */
   const daysVsTarget = daysCash === null ? null : daysCash - cashT.warning;
 
+  /**
+   * One read for the ledger AND the composition's fund view. The expenditure version rides
+   * along for the per-fund days-cash divisor — each fund's amended annual budget, off the
+   * same grouped aggregate the fund-balance page already pays for.
+   */
   const fundRows = core.versions.get("CASH_POSITION")
-    ? await byFund(db, { cashVersionId: core.versions.get("CASH_POSITION"), filter: scope.filter })
+    ? await byFund(db, {
+        cashVersionId: core.versions.get("CASH_POSITION"),
+        expenditureVersionId: core.versions.get("EXPENDITURE_DETAIL"),
+        filter: scope.filter,
+      })
     : [];
   const totalCash = toNumber(point?.endingCash);
 
@@ -461,8 +508,159 @@ export default async function CashDashboard({
     );
   }
 
+  // ---------- the by-fund ledger's rows ----------
+  const rowsWithCash = fundRows.filter((f) => f.endingCash !== null);
+  const tableRows: CashFundRow[] = rowsWithCash.map((f) => {
+    /**
+     * Per-fund days cash: the fund's ending cash against its own amended annual
+     * expenditure budget ÷ 365 — the same shape as the headline, which reads the
+     * district's ADOPTED budget. The footnote under the table names the difference.
+     */
+    const days = toNumber(daysCashOnHand(f.endingCash, f.expenditureBudget));
+    const negative = f.endingCash!.isNegative();
+    const rung = negative ? ("Action Required" as const) : ladder(days, cashT);
+    return {
+      id: f.fundId,
+      fund: <DimLabel code={f.code} name={f.name} mode={scope.labelMode} />,
+      beginning: money(f.beginningCash),
+      receipts: money(f.receiptsMtd),
+      disbursements: money(f.disbursementsMtd),
+      ending: money(f.endingCash),
+      endingNegative: negative,
+      days: days === null ? NOT_AVAILABLE : `${fmtDays(days)} days`,
+      // A fund below zero is a DEFICIT whatever its budget divides to; a fund with no
+      // budget to divide by is N/A, which is a different and calmer sentence.
+      status: { label: negative ? "Deficit" : rung, rung },
+    };
+  });
+  const sumCash = (pick: (f: (typeof rowsWithCash)[number]) => Prisma.Decimal | null) =>
+    rowsWithCash.reduce((a, f) => a + (toNumber(pick(f)) ?? 0), 0);
+  const tableTotal = {
+    beginning: money(sumCash((f) => f.beginningCash)),
+    receipts: money(sumCash((f) => f.receiptsMtd)),
+    disbursements: money(sumCash((f) => f.disbursementsMtd)),
+    ending: money(sumCash((f) => f.endingCash)),
+    days: daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)} days`,
+  };
+
+  // ---------- the trend card's capsule strip ----------
+  const trendStats: CapsuleStat[] = [
+    {
+      label: "Period high",
+      value: compactMoney(stats.high?.value),
+      note: stats.high ? labels[stats.high.period - 1] : undefined,
+    },
+    {
+      label: "Period low",
+      value: compactMoney(stats.low?.value),
+      note: stats.low ? labels[stats.low.period - 1] : undefined,
+    },
+    { label: "Average balance", value: compactMoney(stats.average) },
+    {
+      label: "Volatility",
+      value: stats.volatility ?? NOT_AVAILABLE,
+      note: stats.volatility ? `over ${stats.observations} months` : "needs 3 months",
+    },
+  ];
+
+  /*
+    THE "VIEW BY" CARD — "Cash Composition … View By → Fund, Bank Account, Cash
+    Category", per the client's M5 note, minus Bank Account, which the M6 note asked to
+    hide for now.
+
+    The two that remain are the two the file can draw. The cash position import is one
+    row per FUND carrying beginning, receipts, disbursements and ending, plus optional
+    investment / restricted / unrestricted balances. So Cash Category is that optional
+    split (the card's original view) and Fund is the file's own grain. Bank Account had
+    no column behind it anywhere in the schema — see the note on `CASH_VIEWS` in
+    lib/dashboard/view.ts for what bringing it back would take.
+  */
+  const compositionRows: CashCompositionRow[] =
+    view === "fund"
+      ? fundSlices.map((slice, i) => ({
+          id: slice.id,
+          label: slice.label,
+          display: compactMoney(slice.value),
+          share: percent(sharePercent(slice.value, fundCashTotal), 1),
+          sharePct: sharePercent(slice.value, fundCashTotal) ?? 0,
+          color: SERIES_SLOTS[i % SERIES_SLOTS.length],
+        }))
+      : composition
+        ? [
+            { id: "operating", label: "Operating accounts", amount: composition.operating, color: CASH_COLORS.Operating },
+            { id: "investment", label: "Investment accounts", amount: composition.investment, color: CASH_COLORS.Investment },
+            { id: "restricted", label: "Restricted accounts", amount: composition.restricted, color: CASH_COLORS.Restricted },
+            { id: "other", label: "Other", amount: composition.other, color: CASH_COLORS.Other },
+          ].map((slice) => ({
+            id: slice.id,
+            label: slice.label,
+            display: compactMoney(slice.amount),
+            share: percent(sharePercent(slice.amount, composition.total), 1),
+            sharePct: sharePercent(slice.amount, composition.total) ?? 0,
+            color: slice.color,
+          }))
+        : [];
+  const compositionEmpty =
+    view === "fund"
+      ? "No cash position was committed for this period."
+      : "This period's cash file did not break the balance down by account type.";
+
+  // ---------- the monthly walk's five steps ----------
+  const netNegative = summary.netCashFlowMtd?.isNegative() ?? false;
+  const summarySteps: CashSummaryStep[] = [
+    {
+      label: "Beginning cash balance",
+      value: compactMoney(summary.beginningCash),
+      ink: "#066dff",
+      discBg: "rgba(26,147,46,0.18)",
+      icon: "wallet",
+      iconInk: "#1a932e",
+      note: previous ? `vs period ${previous.period}` : undefined,
+    },
+    {
+      label: "Cash receipts (MTD)",
+      value: compactMoney(summary.receiptsMtd),
+      ink: "#8e62ef",
+      discBg: "rgba(142,98,239,0.18)",
+      icon: "arrow-down",
+      iconInk: "#8e62ef",
+    },
+    {
+      label: "Cash disbursements (MTD)",
+      value: compactMoney(summary.disbursementsMtd),
+      ink: "#e65f2b",
+      discBg: "rgba(230,95,43,0.18)",
+      icon: "arrow-up",
+      iconInk: "#e65f2b",
+    },
+    {
+      label: "Net cash flow (MTD)",
+      value: accounting(summary.netCashFlowMtd, { compact: true }),
+      // The one figure in the walk with a direction — red when the month burned cash.
+      ink: netNegative ? "#fd4438" : "#1a932e",
+      discBg: "rgba(26,147,46,0.18)",
+      icon: "=",
+      iconInk: "#1a932e",
+      note: "Receipts − disbursements",
+    },
+    {
+      label: "Ending cash balance",
+      value: compactMoney(summary.endingCash),
+      ink: "#04877c",
+      discBg: "rgba(26,147,46,0.18)",
+      icon: "wallet",
+      iconInk: "#1a932e",
+      note: momPct === null ? undefined : `${signedPercent(momPct)} vs prior period`,
+    },
+  ];
+
+  const detailsHref = `/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`;
+  const subject = scope.fund ? scope.fund.name : "All funds";
+
   return (
     <div className="animate-fade-up space-y-[18px]">
+      {/* Arms the entrance animations — same one-liner the other redesigns carry. */}
+      <RevealManager />
       <PageHeader
         title="Cash Position"
         description="Monitor cash availability, liquidity and cash flow."
@@ -477,418 +675,206 @@ export default async function CashDashboard({
       {scope.substituted && <SubstitutionNotice asked={scope.substituted.asked} showing={scope.substituted.showing} />}
       {scope.fundLevelOnly && <FundLevelNotice subject="Cash position" />}
 
-      {/* ---------- KPI CARDS ---------- */}
-      <KpiRow count={6}>
-        <KpiTile
-          icon="dollar"
-          tone="green"
-          label="Cash balance"
-          caption={scope.fund ? scope.fund.name : "All funds"}
-          value={compactMoney(summary.endingCash)}
-          sub="Ending cash balance"
-          delta={
-            momPct === null
-              ? undefined
-              : {
-                  text: `${accounting(momAmount, { compact: true })} (${signedPercent(momPct)})`,
-                  tone: deltaTone(momPct, "up"),
-                  direction: momPct < 0 ? "down" : momPct > 0 ? "up" : "flat",
-                }
-          }
-          unavailableReason="No cash position file was committed for this period."
-        />
-
-        <KpiTile
-          icon="clock"
-          tone={cashRung === "Action Required" ? "red" : cashRung === "Monitor" ? "amber" : "green"}
-          label="Days cash on hand"
-          caption={scope.fund ? scope.fund.name : "All funds"}
-          value={daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)} days`}
-          sub="Operating days supported by available cash"
-          status={cashRung}
-          statusNote={`Policy ≥ ${cashT.warning} days`}
-          unavailableReason="Needs a cash file and an adopted expenditure budget."
-        />
-
-        <KpiTile
-          icon="trend-up"
-          tone="blue"
-          label="Net cash flow (MTD)"
-          caption={scope.label}
-          value={accounting(summary.netCashFlowMtd, { compact: true })}
-          sub="Net cash generated this month"
-          delta={
-            summary.netCashFlowMtd === null
-              ? undefined
-              : {
-                  text: summary.netCashFlowMtd.isNegative() ? "Outflow" : "Inflow",
-                  tone: deltaTone(toNumber(summary.netCashFlowMtd), "up"),
-                  direction: summary.netCashFlowMtd.isNegative() ? "down" : "up",
-                }
-          }
-        />
-
-        <KpiTile
-          icon="arrow-down"
-          tone="teal"
-          label="Cash receipts (MTD)"
-          caption="Collected this period"
-          value={compactMoney(summary.receiptsMtd)}
-          sub="Cash received during the current month"
-        />
-
-        <KpiTile
-          icon="arrow-up"
-          tone="purple"
-          label="Cash disbursements (MTD)"
-          caption="Paid out this period"
-          value={compactMoney(summary.disbursementsMtd)}
-          sub="Cash paid during the current month"
-        />
-
-        <KpiTile
-          icon="target"
-          tone={cashRung === "Action Required" ? "red" : cashRung === "Monitor" ? "amber" : "green"}
-          label="Cash status"
-          caption={scope.fund ? scope.fund.name : "All funds"}
-          value={cashRung === "N/A" ? "Not available" : cashRung}
-          valueStatus={cashRung}
-          sub="Compared to cash reserve policy"
-          statusNote={
-            daysVsTarget === null
-              ? undefined
-              : `${daysVsTarget < 0 ? "" : "+"}${Math.round(daysVsTarget)} days vs target`
-          }
-        />
-      </KpiRow>
-
-      {/* ---------- ROW 2: trend · by fund · cash health ---------- */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.85fr)]">
-        <SectionCard
-          title="Cash balance trend"
-          subtitle={scope.fund ? scope.fund.name : "All funds"}
-          footer={VIEW_DETAILS.cashPosition}
-          footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
-        >
-          <LineChart
-            title="Cash balance trend"
-            summary={`Ending cash balance by month for fiscal year ${scope.fiscalYear}${forecast ? ", with a straight-line 30-day projection" : ""}.`}
-            categories={forecastLabels}
-            format={(v) => compactMoney(v, 0)}
-            height={270}
-            series={[
-              {
-                key: "cash",
-                label: "Ending cash balance",
-                color: "var(--color-viz-actual)",
-                labelLast: true,
-                points: forecast ? [...trend, { value: null }] : trend,
-              },
-              ...(forecast
-                ? [
-                    {
-                      key: "forecast",
-                      label: "30-day projection",
-                      color: "var(--color-viz-forecast)",
-                      dashed: true,
-                      points: forecastSeries,
-                    },
-                  ]
-                : []),
-            ]}
+      {/* ---------- the Overview band: four tiles, then the split card ---------- */}
+      <OverviewSection
+        action={
+          <OverviewPeriodSelect
+            label={scope.label}
+            periods={options.periods}
+            value={options.period}
           />
-          <div className="mt-4">
-            <MetricStrip
-              items={[
-                {
-                  label: "Period high",
-                  value: compactMoney(stats.high?.value),
-                  note: stats.high ? labels[stats.high.period - 1] : undefined,
-                },
-                {
-                  label: "Period low",
-                  value: compactMoney(stats.low?.value),
-                  note: stats.low ? labels[stats.low.period - 1] : undefined,
-                },
-                { label: "Average balance", value: compactMoney(stats.average) },
-                {
-                  label: "Volatility",
-                  value: stats.volatility ?? NOT_AVAILABLE,
-                  note: stats.volatility ? `over ${stats.observations} months` : "needs 3 months",
-                },
-              ]}
-            />
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title="Cash balance by fund"
-          subtitle={scope.fund ? scope.fund.name : "All funds"}
-          footer={VIEW_DETAILS.cashPosition}
-          footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
-        >
-          <DataTable
-            columns={[
-              { key: "fund", label: "Fund" },
-              { key: "cash", label: "Ending cash balance", align: "right" },
-              { key: "share", label: "% of total", align: "right" },
-            ]}
-            rows={fundRows
-              .filter((f) => f.endingCash !== null)
-              .map((f) => ({
-                id: f.fundId,
-                flag: f.endingCash!.isNegative() ? ("negative" as const) : undefined,
-                cells: {
-                  fund: {
-                    value: <DimLabel code={f.code} name={f.name} mode={scope.labelMode} />,
-                    strong: true,
-                  },
-                  cash: {
-                    value: money(f.endingCash),
-                    strong: true,
-                    tone: f.endingCash!.isNegative() ? ("negative" as const) : undefined,
-                  },
-                  share: percent(sharePercent(f.endingCash, totalCash), 1),
-                },
-              }))}
-            total={{
-              id: "total",
-              total: true,
-              cells: {
-                fund: "Total all funds",
-                cash: money(point?.endingCash),
-                share: "100.0%",
-              },
-            }}
-            empty="No cash position was committed for this period."
+        }
+      >
+        <OverviewTileRow>
+          <OverviewKpiTile
+            arrow={false}
+            icon="dollar"
+            tone="green"
+            label="Cash balance"
+            caption={subject}
+            value={compactMoney(summary.endingCash)}
+            sub="Ending cash balance"
+            delta={
+              momPct === null
+                ? undefined
+                : {
+                    text: `${accounting(momAmount, { compact: true })} (${signedPercent(momPct)})`,
+                    tone: deltaTone(momPct, "up"),
+                    direction: momPct < 0 ? "down" : momPct > 0 ? "up" : "flat",
+                  }
+            }
+            unavailableReason="No cash position file was committed for this period."
           />
-        </SectionCard>
 
-        <SectionCard
-          title="Cash health"
-          subtitle={scope.fund ? scope.fund.name : "All funds"}
-          info="Days cash on hand = cash balance ÷ (adopted expenditure budget ÷ 365)."
-        >
-          <div className="flex flex-col items-center">
-            <Gauge
-              value={daysCash}
-              bands={statusBands(cashT)}
-              rung={cashRung}
-              unit="days cash on hand"
-              size={170}
-              title="Days cash on hand"
-              summary={
-                daysCash === null
-                  ? "Days cash on hand cannot be computed for this period."
-                  : `${fmtDays(daysCash)} days of cash on hand, against a policy minimum of ${cashT.warning}.`
-              }
-            />
-          </div>
-
-          <dl className="mt-3 flex flex-col">
-            <div className="flex items-center justify-between gap-3 border-t border-line-soft py-2.5">
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-2">
-                Status
-              </dt>
-              <dd>
-                <StatusBadge status={cashRung} size="md" />
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-line-soft py-2.5">
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-2">
-                Target (board policy)
-              </dt>
-              <dd className="text-[13px] font-semibold tabular-nums text-ink">
-                {cashT.warning} days
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-line-soft py-2.5">
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-2">
-                Critical (board policy)
-              </dt>
-              <dd className="text-[13px] font-semibold tabular-nums text-ink">
-                {cashT.critical} days
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-line-soft py-2.5">
-              <dt className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-2">
-                Current vs target
-              </dt>
-              <dd
-                className={
-                  daysVsTarget === null
-                    ? "text-[13px] font-semibold text-muted-2"
-                    : daysVsTarget < 0
-                      ? "text-[13px] font-semibold tabular-nums text-action"
-                      : "text-[13px] font-semibold tabular-nums text-strong"
-                }
-              >
-                {daysVsTarget === null
-                  ? NOT_AVAILABLE
-                  : `${daysVsTarget < 0 ? "−" : "+"}${Math.abs(Math.round(daysVsTarget))} days`}
-              </dd>
-            </div>
-          </dl>
-        </SectionCard>
-      </div>
-
-      {/* ---------- ROW 3: monthly summary · alerts · composition ---------- */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.85fr)]">
-        <SectionCard
-          title="Monthly cash summary"
-          subtitle={`${scope.label} · ${scope.fund ? scope.fund.name : "All funds"}`}
-          footer={VIEW_DETAILS.cashPosition}
-          footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
-        >
-          {/*
-            Sized by what a nine-figure balance needs, not by a viewport breakpoint. This
-            card is the 1.4fr column of a three-column row, so `lg:grid-cols-5` handed each
-            tile ~79px on a 1440px laptop and "$44.75M" ran straight out of the card. auto-fit
-            keeps five across when the column is wide enough for them and drops to four or
-            three when it is not — the figure never overflows at any width.
-          */}
-          <div className="grid gap-2.5 grid-cols-[repeat(auto-fit,minmax(96px,1fr))]">
-            <MiniStat
-              icon="wallet"
-              tone="slate"
-              label="Beginning cash balance"
-              value={compactMoney(summary.beginningCash)}
-              note={previous ? `vs period ${previous.period}` : undefined}
-            />
-            <MiniStat
-              icon="arrow-down"
-              tone="green"
-              label="Cash receipts (MTD)"
-              value={compactMoney(summary.receiptsMtd)}
-              valueTone="positive"
-            />
-            <MiniStat
-              icon="arrow-up"
-              tone="red"
-              label="Cash disbursements (MTD)"
-              value={compactMoney(summary.disbursementsMtd)}
-              valueTone="negative"
-            />
-            <MiniStat
-              icon="equals"
-              tone="blue"
-              label="Net cash flow (MTD)"
-              value={accounting(summary.netCashFlowMtd, { compact: true })}
-              valueTone={summary.netCashFlowMtd?.isNegative() ? "negative" : "positive"}
-            />
-            <MiniStat
-              icon="dollar"
-              tone="teal"
-              label="Ending cash balance"
-              value={compactMoney(summary.endingCash)}
-              note={momPct === null ? undefined : `${signedPercent(momPct)} vs prior period`}
-            />
-          </div>
-        </SectionCard>
-
-        <SectionCard
-          title={`Cash alerts (${cashAlerts.length})`}
-          footer={GO_TO.alerts}
-          footerHref={options.link("/alerts")}
-        >
-          <AlertList
-            mode={scope.labelMode}
-            alerts={cashAlerts}
-            href={options.link("/alerts")}
-            empty="No cash thresholds have been crossed this period."
+          <OverviewKpiTile
+            arrow={false}
+            icon="calendar"
+            tone="green"
+            label="Days cash on hand"
+            caption={subject}
+            value={daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)} days`}
+            sub="Operating days supported by available cash"
+            status={cashRung}
+            statusNote={`Policy ≥ ${cashT.warning} days`}
+            statusInline
+            unavailableReason="Needs a cash file and an adopted expenditure budget."
           />
-        </SectionCard>
+
+          <OverviewKpiTile
+            arrow={false}
+            icon="wallet"
+            tone="green"
+            label="Net cash flow (MTD)"
+            caption={scope.label}
+            value={accounting(summary.netCashFlowMtd, { compact: true })}
+            sub="Net cash generated this month"
+            chip={
+              summary.netCashFlowMtd === null
+                ? undefined
+                : summary.netCashFlowMtd.isNegative()
+                  ? "Outflow"
+                  : "Inflow"
+            }
+          />
+
+          <OverviewKpiTile
+            arrow={false}
+            icon="arrow-down"
+            tone="red"
+            label="Cash receipts (MTD)"
+            caption="Collected this period"
+            value={compactMoney(summary.receiptsMtd)}
+            sub="Cash received during the current month"
+          />
+        </OverviewTileRow>
 
         {/*
-          THE "VIEW BY" CARD — "Cash Composition … View By → Fund, Bank Account, Cash
-          Category", per the client's M5 note, minus Bank Account, which the M6 note asked to
-          hide for now.
-
-          The two that remain are the two the file can draw. The cash position import is one
-          row per FUND carrying beginning, receipts, disbursements and ending, plus optional
-          investment / restricted / unrestricted balances. So Cash Category is that optional
-          split (the card's original view) and Fund is the file's own grain. Bank Account had
-          no column behind it anywhere in the schema — see the note on `CASH_VIEWS` in
-          lib/dashboard/view.ts for what bringing it back would take.
+          The fifth and sixth figures, as the design's centred split card rather than two
+          more tiles — the same demotion the Executive band applies to Available Budget /
+          Alerts: the verdict and the outflow are context under the four headline figures.
         */}
-        <SectionCard
-          title="Cash composition"
-          subtitle={
-            view === "fund"
-              ? `By fund · ${scope.fund ? scope.fund.name : "all funds"}`
-              : `By cash category · ${scope.fund ? scope.fund.name : "all funds"}`
-          }
-          info="Where the balance is held, as reported on the cash file."
-          control={<ViewBy options={CASH_VIEWS} value={view} />}
-          footer={VIEW_DETAILS.cashPosition}
-          footerHref={`/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`}
-        >
-          {view === "fund" ? (
-            fundSlices.length > 0 ? (
-              <ShareBars
-                title="Cash composition by fund"
-                summary="How the ending cash balance is split across the district's funds."
-                rows={fundSlices.map((slice, i) => ({
-                  id: slice.id,
-                  label: slice.label,
-                  value: slice.value,
-                  display: compactMoney(slice.value),
-                  share: percent(sharePercent(slice.value, fundCashTotal), 1),
-                  color: SERIES_SLOTS[i % SERIES_SLOTS.length],
-                }))}
-              />
-            ) : (
-              <p className="py-8 text-center text-[12.5px] text-muted-2">
-                No cash position was committed for this period.
+        <CashSplitCard
+          status={{
+            label: "Cash status",
+            value: cashRung === "N/A" ? "N/A" : cashRung,
+            chip:
+              daysVsTarget === null
+                ? `Policy ≥ ${cashT.warning} days`
+                : `${daysVsTarget < 0 ? "−" : "+"}${Math.abs(Math.round(daysVsTarget))} days vs board target`,
+          }}
+          disbursements={{
+            label: "Cash disbursements (MTD)",
+            caption: "Paid out this period",
+            value: compactMoney(summary.disbursementsMtd),
+            note: "Cash paid during the current month",
+          }}
+        />
+      </OverviewSection>
+
+      {/* ---------- the card grid — the design's 772 / 315 columns on a 10px gutter ---------- */}
+      <div className="grid grid-cols-1 items-stretch gap-x-[10px] gap-y-[12px] xl:grid-cols-[minmax(0,2.45fr)_minmax(0,1fr)]">
+        {/* row 1 — the by-fund ledger beside the health dial */}
+        <CashByFundTable
+          subtitle={`${subject} · beginning + receipts − disbursements`}
+          ctaLabel={VIEW_DETAILS.cashPosition}
+          ctaHref={detailsHref}
+          rows={tableRows}
+          total={tableTotal}
+          empty="No cash position was committed for this period."
+          footer={
+            tableRows.length > 0 ? (
+              <p className="mt-[12px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
+                Days cash on hand per fund divides each fund&apos;s ending cash by its amended
+                annual expenditure budget ÷ 365. The headline tile reads the district&apos;s
+                adopted budget instead, so the two can differ where the board has amended.
               </p>
-            )
-          ) : composition ? (
-            <ShareBars
-              title="Cash composition by category"
-              summary="How the ending cash balance is split between operating, investment and restricted accounts."
-              rows={[
-                { id: "operating", label: "Operating accounts", amount: composition.operating },
-                { id: "investment", label: "Investment accounts", amount: composition.investment },
-                { id: "restricted", label: "Restricted accounts", amount: composition.restricted },
-                { id: "other", label: "Other", amount: composition.other },
-              ].map((slice) => ({
-                id: slice.id,
-                label: slice.label,
-                value: toNumber(slice.amount) ?? 0,
-                display: compactMoney(slice.amount),
-                share: percent(sharePercent(slice.amount, composition.total), 1),
-                color:
-                  CASH_COLORS[
-                    slice.id === "operating"
-                      ? "Operating"
-                      : slice.id === "investment"
-                        ? "Investment"
-                        : slice.id === "restricted"
-                          ? "Restricted"
-                          : "Other"
-                  ],
-              }))}
-            />
-          ) : (
-            <p className="py-8 text-center text-[12.5px] text-muted-2">
-              This period&apos;s cash file did not break the balance down by account type.
-            </p>
-          )}
-        </SectionCard>
+            ) : undefined
+          }
+        />
+
+        <CashHealthCard
+          days={daysCash}
+          rung={cashRung}
+          target={cashT.warning}
+          critical={cashT.critical}
+        />
+
+        {/* row 2 — the trend beside the composition */}
+        <CashTrendCard
+          subtitle={subject}
+          ctaLabel={VIEW_DETAILS.cashPosition}
+          ctaHref={detailsHref}
+          categories={forecastLabels}
+          cash={forecast ? [...trend.map((p) => ({ value: p.value })), { value: null }] : trend}
+          forecast={forecast ? forecastSeries : null}
+          format={(v) => compactMoney(v, 0)}
+          summary={`Ending cash balance by month for fiscal year ${scope.fiscalYear}${forecast ? ", with a straight-line 30-day projection" : ""}.`}
+          stats={trendStats}
+        />
+
+        <CashCompositionCard
+          subtitle="Where the balance is held, as reported on the cash file"
+          caption={`By ${view === "fund" ? "fund" : "cash category"} · ${scope.fund ? scope.fund.name : "all funds"}`}
+          control={<PillSelect options={CASH_VIEWS} value={view} size="sm" />}
+          rows={compositionRows}
+          ctaLabel={VIEW_DETAILS.cashPosition}
+          ctaHref={detailsHref}
+          empty={compositionEmpty}
+        />
+
+        {/* row 3 — the monthly walk and the key insight, beside the alerts */}
+        <div className="flex min-w-0 flex-col gap-[12px]">
+          <CashMonthlySummaryCard
+            subtitle={`${scope.label} · ${subject}`}
+            steps={summarySteps}
+            ctaLabel={VIEW_DETAILS.cashPosition}
+            ctaHref={detailsHref}
+          />
+
+          {/* ---------- the key insight bar — Figma 55:5479 ---------- */}
+          <OverviewPanel className="flex flex-1 flex-wrap items-center justify-between gap-x-[24px] gap-y-[10px] p-[18px]">
+            <div className="min-w-0 flex-1 basis-[280px]">
+              <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-black/85">
+                Key insight
+              </p>
+              <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-black/50">
+                {movement ? `${movement} ` : ""}
+                {coverage} Cash balances are unaudited and reflect the file committed for{" "}
+                {scope.label}; the 30-day projection is straight-lined from recent months and
+                no alert reads it.
+              </p>
+            </div>
+            <Link
+              href={options.link("/fund-balance/policies")}
+              className="flex h-[24px] flex-none items-center gap-[5px] self-end rounded-[22px] bg-[#8e62ef] pl-[7px] pr-[10px] transition-opacity hover:opacity-85"
+            >
+              <ArrowGlyph color="#ffffff" className="-rotate-45" />
+              <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-white">
+                {GO_TO.policies}
+              </span>
+            </Link>
+          </OverviewPanel>
+        </div>
+
+        <RevenueAlertsCard
+          title="Cash alerts"
+          alerts={cashAlerts.map((a) => ({
+            id: a.id,
+            severity: a.severity,
+            message: a.message,
+            title: a.title,
+            funds: ("funds" in a ? (a.funds ?? []) : []).map((f) => ({
+              id: f.id,
+              label: codeName(f.code, f.name, scope.labelMode),
+              detail: f.detail,
+              href: f.href,
+            })),
+          }))}
+          totalCount={alerts?.alerts.length ?? 0}
+          href={options.link("/alerts")}
+          empty="No cash thresholds have been crossed this period."
+        />
       </div>
-
-      {/* ---------- the narrative the client asked for ---------- */}
-      <KeyInsightBar
-        tone={cashRung === "Action Required" ? "action" : cashRung === "Monitor" ? "monitor" : "info"}
-      >
-        {movement ? `${movement} ` : ""}
-        {coverage}
-      </KeyInsightBar>
-
-      <FooterInfoBar>
-        Cash balances are unaudited and reflect the file committed for {scope.label}. The 30-day
-        projection is straight-lined from recent months and no alert reads it.
-      </FooterInfoBar>
     </div>
   );
 }

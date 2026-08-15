@@ -15,15 +15,23 @@ import {
   percent,
   toNumber,
   signedPercent,
+  deltaTone,
   days as fmtDays,
   NOT_AVAILABLE,
 } from "@/lib/dashboard/format";
-import { SectionCard, FooterInfoBar } from "@/components/dashboard/section-card";
 import { DataTable } from "@/components/dashboard/data-table";
 import { AlertList } from "@/components/dashboard/alert-list";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { EmptyState, Row } from "@/components/dashboard/shared";
+import { EmptyState } from "@/components/dashboard/shared";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
+import {
+  OverviewKpiTile,
+  OverviewSection,
+  OverviewTileRow,
+} from "@/components/dashboard/overview-kpi";
+import { OverviewPeriodSelect } from "@/components/dashboard/overview-period-select";
+import { OverviewPanel, OverviewPanelHeader } from "@/components/dashboard/overview-panel";
+import { PillLink } from "@/components/dashboard/revenue-shared";
 import { Icon } from "@/components/icons";
 import { scopeOptions } from "@/lib/dashboard/options";
 import { FundBalanceShell } from "../shell";
@@ -229,341 +237,339 @@ export default async function ForecastPage({
     componentRules.map((r) => [r.component, r.method]),
   );
 
+  /**
+   * ===================================================================================
+   * THE REDESIGNED PAGE — a transcription of Figma 55:4317, on the same vocabulary as the
+   * Current Position tab: the rail's four cards promoted to the Overview tile band (the
+   * design's own move), the two calculation-flow cards on the 62%-white panels, the
+   * reserve trend beside the forecast alerts on the 702/400 grid, and the planning note
+   * at the floor. Every figure keeps the engine it always had.
+   * ===================================================================================
+   */
+  const years = Math.max(projection.length - 1, 1);
+
   return (
     <FundBalanceShell scope={scope} active="/fund-balance/forecast" alertCount={fbAlerts.length}>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,272px)]">
-        {/* ================= the calculation flow ================= */}
-        <div className="flex min-w-0 flex-col gap-4">
-          <SectionCard
-            title="1. Forecast assumptions"
-            subtitle="Set your assumptions for revenues, expenditures and fund balance components."
-            info="A district that enters nothing gets 0% growth and every component carried forward flat — which is an assumption too, and usually an optimistic one."
-          >
-            <AssumptionsForm
-              fiscalYear={scope.fiscalYear}
-              fundId={fund.id}
-              fundName={fund.name}
-              revenueGrowth={toNumber(growth.revenuePercent)}
-              expenditureGrowth={toNumber(growth.expenditurePercent)}
-              recurringRevenueAdjustment={toNumber(growth.recurringRevenueAdjustment)}
-              oneTimeRevenueAdjustment={toNumber(growth.oneTimeRevenueAdjustment)}
-              recurringExpenditureAdjustment={toNumber(growth.recurringExpenditureAdjustment)}
-              oneTimeExpenditure={toNumber(growth.oneTimeExpenditure)}
-              totalBudgetedDisplay={compactMoney(currentYearSpend)}
-              oneTimeDisplay={accounting(oneTimeSpend?.negated() ?? 0, { compact: true })}
-              recurringBaseDisplay={compactMoney(recurringBase)}
-              components={componentRules.map((r) => ({
-                component: r.component,
-                method: r.method,
-                annualIncreasePercent: toNumber(r.annualIncreasePercent),
-                currentDisplay: compactMoney(r.current),
-              }))}
-              canEdit={canEdit}
-            />
-          </SectionCard>
+      {/* ---------- the Overview band — the old rail, as tiles ---------- */}
+      <OverviewSection
+        action={
+          <OverviewPeriodSelect
+            label={scope.label}
+            periods={options.periods}
+            value={options.period}
+          />
+        }
+      >
+        <OverviewTileRow>
+          <OverviewKpiTile
+            arrow={false}
+            icon="dollar"
+            tone="green"
+            label={`Projected ${years}-year change`}
+            caption="Unassigned fund balance"
+            value={accounting(change, { compact: true })}
+            valueInk={change === null ? undefined : change.isNegative() ? "#fd4438" : "#1a932e"}
+            sub={
+              first && last
+                ? `From ${compactMoney(first.unassigned)} to ${compactMoney(last.unassigned)}`
+                : undefined
+            }
+            delta={
+              changePct === null
+                ? undefined
+                : {
+                    text: `${signedPercent(changePct)} ${changePct < 0 ? "decrease" : "increase"}`,
+                    tone: deltaTone(changePct, "up"),
+                    direction: changePct < 0 ? "down" : "up",
+                  }
+            }
+          />
 
-          <SectionCard
-            title="2. Fund balance forecast"
-            subtitle="Financial health view · forecast results update automatically when you adjust assumptions"
-          >
-            <DataTable
-              dense
-              columns={[
-                // No basis label. It named a toggle that no longer exists, and with dollars
-                // and percentages now on the same row there is no single basis to name.
-                { key: "row", label: "" },
-                ...projection.map((y) => ({
-                  key: y.fiscalYear,
-                  label:
-                    y.index === 0
-                      ? `FY ${y.fiscalYear} · current`
-                      : `FY ${y.fiscalYear} · forecast ${y.index}`,
-                  align: "right" as const,
-                })),
-              ]}
-              rows={[
-                moneyRow("Beginning total fund balance", (y) => ({ value: y.beginning }), {
-                  emphasis: true,
-                }),
-                moneyRow("(+) Total revenues", (y) => ({ value: y.projectedRevenue }), {
-                  indent: true,
-                }),
-                moneyRow(
-                  "(−) Total expenditures (recurring + additions)",
-                  (y) => ({ value: y.projectedExpenditure, negative: true }),
-                  { indent: true, tone: "negative" },
-                ),
-                moneyRow("= Net surplus / (deficit)", (y) => ({ value: y.netChange }), {
-                  emphasis: true,
-                  tone: "auto",
-                }),
-                moneyRow("Ending total fund balance", (y) => ({ value: y.total }), {
-                  emphasis: true,
-                }),
-                componentRow("RESTRICTED"),
-                componentRow("COMMITTED"),
-                componentRow("NONSPENDABLE"),
-                componentRow("ASSIGNED"),
-                moneyRow("= Projected unassigned fund balance", (y) => ({ value: y.unassigned }), {
-                  emphasis: true,
-                  tone: "auto",
-                }),
-                {
-                  id: "reserve-percent",
-                  cells: {
-                    row: { value: "Unassigned fund balance % of revenues" },
-                    ...Object.fromEntries(
-                      projection.map((y) => [
-                        y.fiscalYear,
-                        percent(y.unassignedPercentOfRevenue),
-                      ]),
-                    ),
-                  },
-                },
-                {
-                  id: "status",
-                  cells: {
-                    row: { value: "Reserve status", strong: true },
-                    ...Object.fromEntries(
-                      projection.map((y) => [
-                        y.fiscalYear,
-                        {
-                          value: (
-                            <span className="flex justify-end">
-                              <StatusBadge
-                                status={ladder(
-                                  toNumber(y.unassignedPercentOfRevenue),
-                                  y.index === 0 ? reserveT : fcT,
-                                )}
-                                size="sm"
-                                dot={false}
-                              />
-                            </span>
-                          ),
-                        },
-                      ]),
-                    ),
-                  },
-                },
-              ]}
-            />
+          <OverviewKpiTile
+            arrow={false}
+            icon="chart"
+            tone="red"
+            label="Projected lowest point"
+            caption={lowest ? `FY ${lowest.fiscalYear}` : "Not enough data"}
+            value={percent(lowest?.unassignedPercentOfRevenue)}
+            sub="Unassigned fund balance % of revenues"
+            status={ladder(toNumber(lowest?.unassignedPercentOfRevenue), fcT)}
+          />
 
-            <p className="mt-3 text-[11.5px] leading-relaxed text-muted-2">
-              Percentages are each figure&apos;s share of that year&apos;s projected revenues.
-              Growth is applied from the current year&apos;s projected pace, not from the adopted
-              budget. Expenditure growth compounds on the recurring operating base only, so
-              one-time and carryforward spending does not build into future years.
-              {projection.some((y) => y.componentsExceedTotal) && (
-                <span className="mt-1 block text-monitor">
-                  In at least one year the designated components add up to more than the projected
-                  ending balance, which leaves a negative unassigned reserve.
-                </span>
-              )}
-            </p>
-          </SectionCard>
-        </div>
+          <OverviewKpiTile
+            arrow={false}
+            icon="calendar"
+            tone="green"
+            label="Days of operating expenses"
+            caption="Unassigned reserve, at plan end"
+            value={daysAtEnd === null ? NOT_AVAILABLE : fmtDays(daysAtEnd)}
+            chip={`Days in reserve${last ? ` by FY ${last.fiscalYear}` : ""}`}
+          />
 
-        {/* ================= the rail ================= */}
-        <div className="flex flex-col gap-4">
-          <RailCard title="Board policy" caption={`${fund.name} only`}>
-            <p className="text-[11.5px] text-muted-2">Unassigned fund balance %</p>
-            <p className="mt-1 text-[28px] font-semibold leading-none tracking-[-0.6px] text-strong">
-              {reserveT.target.toFixed(2)}%
-            </p>
-            <p className="mt-1 text-[11px] text-muted-2">Target (minimum)</p>
-
-            <div className="mt-3 grid grid-cols-2 gap-3 border-t border-line-soft pt-3">
-              <div>
-                <p className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-monitor">
-                  Warning
-                </p>
-                <p className="mt-0.5 text-[17px] font-semibold tabular-nums text-monitor">
-                  {reserveT.warning.toFixed(2)}%
-                </p>
-                <p className="text-[10.5px] text-muted-2">Below this</p>
-              </div>
-              <div>
-                <p className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-action">
-                  Critical
-                </p>
-                <p className="mt-0.5 text-[17px] font-semibold tabular-nums text-action">
-                  {reserveT.critical.toFixed(2)}%
-                </p>
-                <p className="text-[10.5px] text-muted-2">Below this</p>
-              </div>
-            </div>
-
-            <p className="mt-3 border-t border-line-soft pt-3 text-[11px] text-muted-2">
-              Statutory minimum {statutoryMinimum.toFixed(2)}% · forecast warning{" "}
-              {fcT.warning.toFixed(2)}% · forecast critical {fcT.critical.toFixed(2)}%
-            </p>
-
-            {userCan(user, "configure_district") && (
-              <Link
-                href="/policies"
-                className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-brand hover:underline"
-              >
-                <Icon name="settings" size={13} />
-                {MANAGE.fundBalancePolicies}
-              </Link>
-            )}
-          </RailCard>
-
-          <RailCard title={`Projected ${Math.max(projection.length - 1, 1)}-year change`}>
-            <p className="text-[11.5px] text-muted-2">Unassigned fund balance</p>
-            <p
-              className={cn(
-                "mt-1 text-[26px] font-semibold leading-none tracking-[-0.6px]",
-                change === null ? "text-muted-2" : change.isNegative() ? "text-action" : "text-strong",
-              )}
-            >
-              {accounting(change, { compact: true })}
-            </p>
-            {first && last && (
-              <p className="mt-1.5 text-[11.5px] text-muted-2">
-                From {compactMoney(first.unassigned)} to {compactMoney(last.unassigned)}
-              </p>
-            )}
-            {changePct !== null && (
-              <p
-                className={cn(
-                  "mt-1 text-[12px] font-semibold tabular-nums",
-                  changePct < 0 ? "text-action" : "text-strong",
-                )}
-              >
-                {signedPercent(changePct)} {changePct < 0 ? "decrease" : "increase"}
-              </p>
-            )}
-          </RailCard>
-
-          <RailCard title="Projected lowest point">
-            <p className="text-[11.5px] text-muted-2">
-              {lowest ? `FY ${lowest.fiscalYear}` : "Not enough data"}
-            </p>
-            <p className="mt-1 text-[26px] font-semibold leading-none tracking-[-0.6px] text-ink">
-              {percent(lowest?.unassignedPercentOfRevenue)}
-            </p>
-            <p className="mt-1.5 text-[11.5px] text-muted-2">
-              Unassigned fund balance % of revenues
-            </p>
-            <div className="mt-2.5">
-              <StatusBadge
-                status={ladder(toNumber(lowest?.unassignedPercentOfRevenue), fcT)}
-                size="md"
-              />
-            </div>
-          </RailCard>
-
-          <RailCard title="Days of operating expenses">
-            <div className="flex items-center gap-3">
-              <span className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-lg bg-[#ece8f8] text-[#5b4bb5]">
-                <Icon name="calendar" size={17} />
-              </span>
+          <OverviewKpiTile
+            arrow={false}
+            icon="shield"
+            tone="purple"
+            label="Board policy"
+            caption={`${fund.name} only`}
+            value={`${reserveT.target.toFixed(2)}%`}
+            valueInk="#1a932e"
+            sub={
               <span>
-                <span className="block text-[24px] font-semibold leading-none tracking-[-0.5px] text-ink">
-                  {daysAtEnd === null ? NOT_AVAILABLE : fmtDays(daysAtEnd)}
-                </span>
-                <span className="mt-1 block text-[11.5px] text-muted-2">
-                  Days in reserve{last ? ` by FY ${last.fiscalYear}` : ""}
-                </span>
+                Unassigned fund balance %
+                <span className="block font-normal text-[#797979]">Target (minimum)</span>
               </span>
-            </div>
-          </RailCard>
-        </div>
-      </div>
+            }
+            chipRow={
+              <>
+                <span
+                  className="inline-flex items-center whitespace-nowrap rounded-[20px] px-[8px] py-px text-[10px] leading-normal tracking-[0.1px]"
+                  style={{ background: "rgba(230,95,43,0.18)", color: "#e65f2b" }}
+                >
+                  Warning below {reserveT.warning.toFixed(2)}%
+                </span>
+                <span
+                  className="inline-flex items-center whitespace-nowrap rounded-[20px] px-[8px] py-px text-[10px] leading-normal tracking-[0.1px]"
+                  style={{ background: "rgba(238,32,28,0.18)", color: "#fd4438" }}
+                >
+                  Critical below {reserveT.critical.toFixed(2)}%
+                </span>
+              </>
+            }
+          />
+        </OverviewTileRow>
+      </OverviewSection>
 
-      {/* ================= trend and alerts ================= */}
-      <Row cols="2-1">
-        <SectionCard
-          title="Reserve trend"
-          subtitle="Projected unassigned fund balance as a share of revenues"
-        >
-          <LineChart
-            title="Projected reserve percentage"
-            summary={`Projected unassigned reserve as a share of projected revenues across ${projection.length} fiscal years, against the district's own thresholds.`}
-            categories={projection.map((y) => `FY${y.fiscalYear.slice(2)}`)}
-            format={(v) => `${v.toFixed(1)}%`}
-            height={260}
-            zeroBased={false}
-            legend={false}
-            thresholds={[
-              { at: reserveT.target, label: `Target ${reserveT.target}%`, color: "var(--color-strong-mark)" },
-              { at: fcT.warning, label: `Warning ${fcT.warning}%`, color: "var(--color-monitor-mark)" },
-              { at: fcT.critical, label: `Critical ${fcT.critical}%`, color: "var(--color-action-mark)" },
+      {/* ================= the calculation flow ================= */}
+      <OverviewPanel className="p-[18px]">
+        <OverviewPanelHeader
+          title="1. Forecast assumptions"
+          subtitle="Set your assumptions for revenues, expenditures and fund balance components."
+        />
+        <div className="mt-[10px]">
+          <AssumptionsForm
+            fiscalYear={scope.fiscalYear}
+            fundId={fund.id}
+            fundName={fund.name}
+            revenueGrowth={toNumber(growth.revenuePercent)}
+            expenditureGrowth={toNumber(growth.expenditurePercent)}
+            recurringRevenueAdjustment={toNumber(growth.recurringRevenueAdjustment)}
+            oneTimeRevenueAdjustment={toNumber(growth.oneTimeRevenueAdjustment)}
+            recurringExpenditureAdjustment={toNumber(growth.recurringExpenditureAdjustment)}
+            oneTimeExpenditure={toNumber(growth.oneTimeExpenditure)}
+            totalBudgetedDisplay={compactMoney(currentYearSpend)}
+            oneTimeDisplay={accounting(oneTimeSpend?.negated() ?? 0, { compact: true })}
+            recurringBaseDisplay={compactMoney(recurringBase)}
+            components={componentRules.map((r) => ({
+              component: r.component,
+              method: r.method,
+              annualIncreasePercent: toNumber(r.annualIncreasePercent),
+              currentDisplay: compactMoney(r.current),
+            }))}
+            canEdit={canEdit}
+          />
+        </div>
+      </OverviewPanel>
+
+      <OverviewPanel className="p-[18px]">
+        <OverviewPanelHeader
+          title="2. Fund balance forecast"
+          subtitle="Financial health view · forecast results update automatically when you adjust assumptions"
+        />
+        <div className="mt-[10px]">
+          <DataTable
+            dense
+            columns={[
+              // No basis label. It named a toggle that no longer exists, and with dollars
+              // and percentages now on the same row there is no single basis to name.
+              { key: "row", label: "" },
+              ...projection.map((y) => ({
+                key: y.fiscalYear,
+                label:
+                  y.index === 0
+                    ? `FY ${y.fiscalYear} · current`
+                    : `FY ${y.fiscalYear} · forecast ${y.index}`,
+                align: "right" as const,
+              })),
             ]}
-            series={[
+            rows={[
+              moneyRow("Beginning total fund balance", (y) => ({ value: y.beginning }), {
+                emphasis: true,
+              }),
+              moneyRow("(+) Total revenues", (y) => ({ value: y.projectedRevenue }), {
+                indent: true,
+              }),
+              moneyRow(
+                "(−) Total expenditures (recurring + additions)",
+                (y) => ({ value: y.projectedExpenditure, negative: true }),
+                { indent: true, tone: "negative" },
+              ),
+              moneyRow("= Net surplus / (deficit)", (y) => ({ value: y.netChange }), {
+                emphasis: true,
+                tone: "auto",
+              }),
+              moneyRow("Ending total fund balance", (y) => ({ value: y.total }), {
+                emphasis: true,
+              }),
+              componentRow("RESTRICTED"),
+              componentRow("COMMITTED"),
+              componentRow("NONSPENDABLE"),
+              componentRow("ASSIGNED"),
+              moneyRow("= Projected unassigned fund balance", (y) => ({ value: y.unassigned }), {
+                emphasis: true,
+                tone: "auto",
+              }),
               {
-                key: "reserve",
-                label: "Projected reserve %",
-                color: "var(--color-viz-forecast)",
-                labelLast: true,
-                points: projection.map((y) => ({
-                  value: toNumber(y.unassignedPercentOfRevenue),
-                  label: percent(y.unassignedPercentOfRevenue, 1),
-                })),
+                id: "reserve-percent",
+                cells: {
+                  row: { value: "Unassigned fund balance % of revenues" },
+                  ...Object.fromEntries(
+                    projection.map((y) => [
+                      y.fiscalYear,
+                      percent(y.unassignedPercentOfRevenue),
+                    ]),
+                  ),
+                },
+              },
+              {
+                id: "status",
+                cells: {
+                  row: { value: "Reserve status", strong: true },
+                  ...Object.fromEntries(
+                    projection.map((y) => [
+                      y.fiscalYear,
+                      {
+                        value: (
+                          <span className="flex justify-end">
+                            <StatusBadge
+                              status={ladder(
+                                toNumber(y.unassignedPercentOfRevenue),
+                                y.index === 0 ? reserveT : fcT,
+                              )}
+                              size="sm"
+                              dot={false}
+                            />
+                          </span>
+                        ),
+                      },
+                    ]),
+                  ),
+                },
               },
             ]}
           />
-        </SectionCard>
+        </div>
 
-        <SectionCard title="Forecast alerts" footer={GO_TO.alerts} footerHref={options.link("/alerts")}>
-          <AlertList
-            mode={scope.labelMode}
-            alerts={fbAlerts
-              .filter((a) => a.id.startsWith("FORECAST"))
-              .map((a) => ({ id: a.id, severity: a.severity, title: a.title, message: a.message }))}
-            href={options.link("/alerts")}
-            empty="The projected reserve stays within your thresholds across the plan."
+        <p className="mt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]/[0.56]">
+          Percentages are each figure&apos;s share of that year&apos;s projected revenues.
+          Growth is applied from the current year&apos;s projected pace, not from the adopted
+          budget. Expenditure growth compounds on the recurring operating base only, so
+          one-time and carryforward spending does not build into future years.
+          {projection.some((y) => y.componentsExceedTotal) && (
+            <span className="mt-1 block text-[#b76a12]">
+              In at least one year the designated components add up to more than the projected
+              ending balance, which leaves a negative unassigned reserve.
+            </span>
+          )}
+        </p>
+      </OverviewPanel>
+
+      {/* ================= trend and alerts — the 702 / 400 grid ================= */}
+      <div className="grid grid-cols-1 items-stretch gap-x-[10px] gap-y-[12px] xl:grid-cols-[minmax(0,1.76fr)_minmax(0,1fr)]">
+        <OverviewPanel className="flex flex-col p-[18px]">
+          <OverviewPanelHeader
+            title="Reserve trend"
+            subtitle="Projected unassigned fund balance as a share of revenues"
           />
+          <div className="mt-[10px]">
+            <LineChart
+              title="Projected reserve percentage"
+              summary={`Projected unassigned reserve as a share of projected revenues across ${projection.length} fiscal years, against the district's own thresholds.`}
+              categories={projection.map((y) => `FY${y.fiscalYear.slice(2)}`)}
+              format={(v) => `${v.toFixed(1)}%`}
+              height={260}
+              zeroBased={false}
+              legend={false}
+              thresholds={[
+                { at: reserveT.target, label: `Target ${reserveT.target}%`, color: "var(--color-strong-mark)" },
+                { at: fcT.warning, label: `Warning ${fcT.warning}%`, color: "var(--color-monitor-mark)" },
+                { at: fcT.critical, label: `Critical ${fcT.critical}%`, color: "var(--color-action-mark)" },
+              ]}
+              series={[
+                {
+                  key: "reserve",
+                  label: "Projected reserve %",
+                  color: "var(--color-viz-forecast)",
+                  labelLast: true,
+                  points: projection.map((y) => ({
+                    value: toNumber(y.unassignedPercentOfRevenue),
+                    label: percent(y.unassignedPercentOfRevenue, 1),
+                  })),
+                },
+              ]}
+            />
+          </div>
+        </OverviewPanel>
 
-          <dl className="mt-4 flex flex-col border-t border-line-soft pt-3">
+        <OverviewPanel className="flex flex-col p-[18px]">
+          <div className="flex flex-wrap items-center justify-between gap-[10px]">
+            <OverviewPanelHeader title="Forecast alerts" />
+            <PillLink href={options.link("/alerts")} arrow="#FD4438" className="border-[0.8px] border-[#e7e7e7]">
+              {GO_TO.alerts}
+            </PillLink>
+          </div>
+          <div className="mt-[6px]">
+            <AlertList
+              mode={scope.labelMode}
+              alerts={fbAlerts
+                .filter((a) => a.id.startsWith("FORECAST"))
+                .map((a) => ({ id: a.id, severity: a.severity, title: a.title, message: a.message }))}
+              href={options.link("/alerts")}
+              empty="The projected reserve stays within your thresholds across the plan."
+            />
+          </div>
+
+          <dl className="mt-auto flex flex-col border-t border-[#e7e7e7] pt-[10px]">
             {componentRules.map((r) => (
               <div
                 key={r.component}
-                className="flex items-baseline justify-between gap-3 py-1.5 text-[11.5px]"
+                className="flex items-baseline justify-between gap-3 py-[5px] text-[12px]"
               >
-                <dt className="text-muted">{FUND_BALANCE_COMPONENT_LABELS[r.component]}</dt>
-                <dd className="text-right font-medium text-ink-muted">
+                <dt className="text-[#797979]">{FUND_BALANCE_COMPONENT_LABELS[r.component]}</dt>
+                <dd className="text-right font-semibold text-[#060606]">
                   {methodLabel(methodOf.get(r.component))}
                 </dd>
               </div>
             ))}
           </dl>
-        </SectionCard>
-      </Row>
+        </OverviewPanel>
+      </div>
 
-      <FooterInfoBar>
-        These projections extrapolate the current year&apos;s pace and apply your own growth
-        assumptions and component rules. They are a planning aid, not a budget.
-      </FooterInfoBar>
+      {/* ---------- the planning note — Figma 55:4459 ---------- */}
+      <OverviewPanel className="p-[18px]">
+        <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-black/85">
+          Note
+        </p>
+        <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-black/50">
+          These projections extrapolate the current year&apos;s pace and apply your own growth
+          assumptions and component rules. They are a planning aid, not a budget. Statutory
+          minimum {statutoryMinimum.toFixed(2)}% · forecast warning {fcT.warning.toFixed(2)}% ·
+          forecast critical {fcT.critical.toFixed(2)}%.
+        </p>
+        {userCan(user, "configure_district") && (
+          <Link
+            href="/policies"
+            className="mt-[8px] inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#301a93] hover:underline"
+          >
+            <Icon name="settings" size={13} />
+            {MANAGE.fundBalancePolicies}
+          </Link>
+        )}
+      </OverviewPanel>
     </FundBalanceShell>
   );
 }
 
-/** A compact card for the right-hand rail — smaller chrome than a SectionCard. */
-function RailCard({
-  title,
-  caption,
-  children,
-}: {
-  title: string;
-  caption?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-xl border border-line bg-white p-4 shadow-[0_1px_2px_rgba(15,32,56,0.04)]">
-      <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.055em] text-heading">
-        {title}
-        {caption && (
-          <span className="ml-1 font-medium normal-case tracking-normal text-muted-2">
-            ({caption})
-          </span>
-        )}
-      </h3>
-      <div className="mt-2.5">{children}</div>
-    </section>
-  );
-}
 
 function methodLabel(method: ForecastMethod | undefined): string {
   switch (method) {

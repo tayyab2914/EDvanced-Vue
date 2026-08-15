@@ -139,7 +139,7 @@ export function RevenueStatusStrip({
   return (
     <div
       data-reveal
-      className="mx-auto flex w-[676px] max-w-full flex-col rounded-[24px] border border-[#e7e7e7] bg-white"
+      className="mx-auto flex w-[676px] max-w-full flex-col rounded-[24px] bg-[#FFFFFF9E]"
     >
       <div className="flex w-full flex-col items-stretch gap-[8px] px-[8px] pb-[8px] pt-0 sm:flex-row sm:gap-[16px]">
         {/* ---- Revenue status ---- */}

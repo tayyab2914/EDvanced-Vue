@@ -94,12 +94,15 @@ function TrendChart({
   title,
   summary,
   format,
+  showTitle = true,
 }: {
   series: TrendSeries[];
   categories: string[];
   title: string;
   summary: string;
   format: (v: number) => string;
+  /** The 64:5751 half-width card drops the centred heading; the legend (identity) stays. */
+  showTitle?: boolean;
 }) {
   const values = series
     .flatMap((s) => s.points.map((p) => p.value))
@@ -123,27 +126,33 @@ function TrendChart({
   }));
 
   return (
-    <div className="flex flex-col items-center gap-[28px]">
-      {/* The design's chart title — 18px Gray/700, centred over the plot. */}
-      <div className="flex flex-col items-center gap-[8px]">
-        <p className="whitespace-nowrap text-[18px] leading-[1.5] text-[#344054]">{title}</p>
-        {/* Identity must never rest on colour-matching alone: a second series gets a key.
-            The single-series card matches the mockup, whose title carries the identity. */}
-        {drawn.length > 1 && (
-          <ul className="flex items-center gap-[16px]">
-            {drawn.map((s) => (
-              <li key={s.key} className="flex items-center gap-[6px] text-[12px] text-[#667085]">
-                <span
-                  aria-hidden
-                  className="size-[9px] rounded-full border-[1.5px] bg-white"
-                  style={{ borderColor: s.color }}
-                />
-                {s.label}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+    <div className={showTitle ? "flex flex-col items-center gap-[28px]" : "flex flex-col items-center gap-[10px]"}>
+      {/* The design's chart title — 18px Gray/700, centred over the plot. The half-width
+          revision (64:6543) drops the heading; the legend survives wherever a second
+          series needs a key. */}
+      {(showTitle || drawn.length > 1) && (
+        <div className="flex flex-col items-center gap-[8px]">
+          {showTitle && (
+            <p className="whitespace-nowrap text-[18px] leading-[1.5] text-[#344054]">{title}</p>
+          )}
+          {/* Identity must never rest on colour-matching alone: a second series gets a key.
+              The single-series card matches the mockup, whose title carries the identity. */}
+          {drawn.length > 1 && (
+            <ul className="flex items-center gap-[16px]">
+              {drawn.map((s) => (
+                <li key={s.key} className="flex items-center gap-[6px] text-[12px] text-[#667085]">
+                  <span
+                    aria-hidden
+                    className="size-[9px] rounded-full border-[1.5px] bg-white"
+                    style={{ borderColor: s.color }}
+                  />
+                  {s.label}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       <ChartFigure title={title} summary={summary} className="w-full">
         <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block" }}>
@@ -268,6 +277,7 @@ export function OverviewTrendCard({
   summary,
   rail,
   insight,
+  compact,
 }: {
   title: string;
   subtitle?: string;
@@ -284,9 +294,14 @@ export function OverviewTrendCard({
   rail: RailItem[];
   /** The sentence for the Key insight tip; null renders no tip. */
   insight?: string | null;
+  /**
+   * The 64:5751 half-width band, where this card shares a row with the cash card: the
+   * centred chart heading goes, and the rail narrows to the design's slim column.
+   */
+  compact?: boolean;
 }) {
   return (
-    <OverviewPanel>
+    <OverviewPanel className={compact ? "flex flex-col" : undefined}>
       <OverviewPanelHeader
         title={title}
         subtitle={subtitle}
@@ -294,7 +309,13 @@ export function OverviewTrendCard({
         ctaHref={ctaHref}
         badge={badge}
       />
-      <div className="mt-[24px] flex flex-col gap-[24px] xl:flex-row xl:items-start">
+      <div
+        className={
+          compact
+            ? "mt-[16px] flex flex-1 flex-col gap-[16px] xl:flex-row xl:items-start"
+            : "mt-[24px] flex flex-col gap-[24px] xl:flex-row xl:items-start"
+        }
+      >
         <div className="min-w-0 flex-1">
           <TrendChart
             series={series}
@@ -302,9 +323,10 @@ export function OverviewTrendCard({
             title={chartTitle}
             summary={summary}
             format={format}
+            showTitle={!compact}
           />
         </div>
-        <OverviewMetricRail items={rail} />
+        <OverviewMetricRail items={rail} compact={compact} />
       </div>
       {insight && <OverviewInsightTip>{insight}</OverviewInsightTip>}
     </OverviewPanel>
