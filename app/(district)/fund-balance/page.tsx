@@ -774,7 +774,10 @@ export default async function FundBalancePage({
           </SheetCard>
         </SheetBand>
 
-        <SheetBand cols="1fr 1fr 1.2fr">
+        {/* The benchmark takes the widest track: its bands are as wide as the district's
+            policy ranges are, and "Monitor" between 2% and 3% has 8% of the strip to print
+            its name in. Everything else on this band reads at any width. */}
+        <SheetBand cols="0.95fr 1.3fr 1.15fr">
           <SheetCard
             title="Fund balance composition"
             note={`By classification · ${basisLabel}`}
