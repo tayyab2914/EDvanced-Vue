@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { saveForecastAssumptions, saveComponentAssumptions } from "@/app/actions/forecast";
 import { EMPTY_FORM_STATE } from "@/lib/forms";
 import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/icons";
 import { cn } from "@/lib/cn";
 import {
   FUND_BALANCE_COMPONENT_VALUES,
@@ -131,27 +132,27 @@ export function AssumptionsForm({
           />
 
           <div className="rounded-lg border border-line-soft bg-panel px-3 py-2.5">
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.05em] text-brand">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-brand">
               Recurring operating base (excludes one-time)
             </p>
             <dl className="mt-2 flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-[11.5px] text-muted">Total FY {fiscalYear} projected spending</dt>
-                <dd className="text-[12px] font-semibold tabular-nums text-ink">
+                <dt className="text-[11px] text-[#060606]">Total FY {fiscalYear} projected spending</dt>
+                <dd className="text-[12px] font-semibold tabular-nums text-[#060606]">
                   {totalBudgetedDisplay}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-[11.5px] text-muted">Less: one-time / carryforward</dt>
+                <dt className="text-[11px] text-[#060606]">Less: one-time / carryforward</dt>
                 <dd className="text-[12px] font-semibold tabular-nums text-action">
                   {oneTimeDisplay}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3 border-t border-line pt-1.5">
-                <dt className="text-[11.5px] font-semibold text-ink-soft">
+                <dt className="text-[11px] font-semibold text-[#060606]">
                   Recurring operating base
                 </dt>
-                <dd className="text-[13px] font-semibold tabular-nums text-ink">
+                <dd className="text-[13px] font-semibold tabular-nums text-[#060606]">
                   {recurringBaseDisplay}
                 </dd>
               </div>
@@ -181,10 +182,10 @@ export function AssumptionsForm({
                 {growthPending ? "Saving…" : "Save revenue & expenditure"}
               </Button>
               {growthState.success && (
-                <span className="text-[12.5px] text-strong">{growthState.success}</span>
+                <span className="text-[12px] text-strong">{growthState.success}</span>
               )}
               {growthState.error && (
-                <span className="text-[12.5px] text-action">{growthState.error}</span>
+                <span className="text-[12px] text-action">{growthState.error}</span>
               )}
             </div>
           )}
@@ -201,6 +202,7 @@ export function AssumptionsForm({
           title="Fund balance component assumptions"
           subtitle={`How each component of ${fundName} is forecast`}
           tone="purple"
+          info={<MethodHelp />}
         >
           <div className="-mx-1 overflow-x-auto">
             <table className="min-w-full">
@@ -210,7 +212,7 @@ export function AssumptionsForm({
                     <th
                       key={h}
                       scope="col"
-                      className="px-2 pb-1.5 text-left text-[9.5px] font-semibold uppercase tracking-[0.05em] text-muted-2"
+                      className="px-2 pb-1.5 text-left text-[10px] font-semibold uppercase tracking-[0.05em] text-[#060606]"
                     >
                       {h}
                     </th>
@@ -230,7 +232,7 @@ export function AssumptionsForm({
             </table>
           </div>
 
-          <p className="rounded-lg bg-panel px-3 py-2.5 text-[11.5px] leading-relaxed text-muted">
+          <p className="rounded-lg bg-panel px-3 py-2.5 text-[11px] leading-relaxed text-[#060606]">
             These amounts are subtracted from the projected total fund balance to calculate
             the projected unassigned fund balance.
           </p>
@@ -241,10 +243,10 @@ export function AssumptionsForm({
                 {componentPending ? "Saving…" : "Save component methods"}
               </Button>
               {componentState.success && (
-                <span className="text-[12.5px] text-strong">{componentState.success}</span>
+                <span className="text-[12px] text-strong">{componentState.success}</span>
               )}
               {componentState.error && (
-                <span className="text-[12.5px] text-action">{componentState.error}</span>
+                <span className="text-[12px] text-action">{componentState.error}</span>
               )}
             </div>
           )}
@@ -268,10 +270,10 @@ function ComponentRowFields({
 
   return (
     <tr className="border-t border-line-soft align-middle">
-      <td className="px-2 py-2 text-[12px] font-medium text-ink-muted">
+      <td className="px-2 py-2 text-[12px] font-medium text-[#060606]">
         {FUND_BALANCE_COMPONENT_LABELS[row.component]}
       </td>
-      <td className="px-2 py-2 text-[12px] tabular-nums text-ink">{row.currentDisplay}</td>
+      <td className="px-2 py-2 text-[12px] tabular-nums text-[#060606]">{row.currentDisplay}</td>
       <td className="px-2 py-2">
         {canEdit ? (
           <select
@@ -279,7 +281,7 @@ function ComponentRowFields({
             value={method}
             onChange={(e) => setMethod(e.target.value as ForecastMethod)}
             aria-label={`${FUND_BALANCE_COMPONENT_LABELS[row.component]} forecast method`}
-            className="h-8 w-full min-w-[150px] rounded-lg border border-line bg-white px-2 text-[12px] text-ink outline-none transition-colors focus:border-brand"
+            className="h-8 w-full min-w-[150px] rounded-lg border border-line bg-white px-2 text-[12px] text-[#060606] outline-none transition-colors focus:border-brand"
           >
             {FORECAST_METHOD_VALUES.map((m) => (
               <option key={m} value={m}>
@@ -288,7 +290,7 @@ function ComponentRowFields({
             ))}
           </select>
         ) : (
-          <span className="text-[12px] text-ink-muted">{FORECAST_METHOD_LABELS[method]}</span>
+          <span className="text-[12px] text-[#060606]">{FORECAST_METHOD_LABELS[method]}</span>
         )}
       </td>
       <td className="px-2 py-2">
@@ -304,20 +306,13 @@ function ComponentRowFields({
               defaultValue={row.annualIncreasePercent ?? ""}
               placeholder="0.00"
               aria-label={`${FUND_BALANCE_COMPONENT_LABELS[row.component]} annual increase`}
-              className="h-8 w-full rounded-lg border border-line bg-white pl-2 pr-6 text-[12px] tabular-nums text-ink outline-none transition-colors focus:border-brand disabled:bg-panel"
+              className="h-8 w-full rounded-lg border border-line bg-white pl-2 pr-6 text-[12px] tabular-nums text-[#060606] outline-none transition-colors focus:border-brand disabled:bg-panel"
             />
-            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-muted-2">
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-[#060606]">
               %
             </span>
           </div>
-        ) : (
-          <span
-            className="block max-w-[190px] text-[10.5px] leading-snug text-muted-2"
-            title={FORECAST_METHOD_HELP[method]}
-          >
-            {FORECAST_METHOD_HELP[method]}
-          </span>
-        )}
+        ) : null}
         {errors?.map((e) => (
           <span key={e} className="mt-1 block text-[11px] text-action">
             {e}
@@ -328,17 +323,62 @@ function ComponentRowFields({
   );
 }
 
+/**
+ * The forecast methods, explained — one line per method, in the order they appear in the
+ * dropdown. This used to sit in the table's fourth column, one copy per row, which spent a
+ * fifth of panel C's width restating four fixed sentences; the reader who needs them needs
+ * them once, while choosing, and never again. So they live behind the `?` in the header,
+ * where the whole set reads at once and the row a method is chosen on stays a row.
+ *
+ * Hover OR keyboard focus opens it — a tooltip that only answers a mouse is a tooltip a
+ * keyboard reader cannot get to, and this is the only place the methods are explained.
+ */
+function MethodHelp() {
+  return (
+    <span className="relative flex-none">
+      <button
+        type="button"
+        aria-label="What each forecast method does"
+        className="peer flex h-4.5 w-4.5 items-center justify-center rounded-full text-[#5b4bb5] opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:opacity-100"
+      >
+        <Icon name="help" size={15} aria-hidden="true" />
+      </button>
+      <span
+        role="tooltip"
+        // `pointer-events-none` so the panel underneath stays clickable while it is hidden —
+        // and while it is shown, since there is nothing in here to click.
+        className="pointer-events-none absolute right-0 top-5.5 z-20 w-65.5 rounded-lg border border-line bg-white p-2.5 text-left opacity-0 shadow-[0_10px_24px_rgba(9,20,38,0.14)] transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100"
+      >
+        <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#5b4bb5]">
+          Forecast methods
+        </span>
+        <span className="mt-1.5 flex flex-col gap-1.5">
+          {FORECAST_METHOD_VALUES.map((m) => (
+            <span key={m} className="block text-[11px] leading-snug text-[#060606]">
+              <span className="font-semibold">{FORECAST_METHOD_LABELS[m]}</span> —{" "}
+              {FORECAST_METHOD_HELP[m]}
+            </span>
+          ))}
+        </span>
+      </span>
+    </span>
+  );
+}
+
 function Panel({
   letter,
   title,
   subtitle,
   tone,
+  info,
   children,
 }: {
   letter: string;
   title: string;
   subtitle?: string;
   tone: "green" | "blue" | "purple";
+  /** Sits at the top-right of the header — the `?` on panel C, nothing on A and B. */
+  info?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const TONE = {
@@ -350,10 +390,13 @@ function Panel({
   return (
     <section className={cn("flex flex-col gap-3 rounded-xl border bg-white p-3.5", TONE[tone])}>
       <header>
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.055em]">
-          {letter}. {title}
-        </h3>
-        {subtitle && <p className="mt-0.5 text-[11.5px] text-muted-2">{subtitle}</p>}
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.055em]">
+            {letter}. {title}
+          </h3>
+          {info}
+        </div>
+        {subtitle && <p className="mt-0.5 text-[11px] text-[#060606]">{subtitle}</p>}
       </header>
       {children}
     </section>
@@ -389,9 +432,9 @@ function Rate({
           defaultValue={defaultValue ?? ""}
           placeholder="0.00"
           aria-describedby={`${name}-hint`}
-          className="h-9 w-full rounded-lg border border-line bg-white pl-3 pr-7 text-[13px] tabular-nums text-ink outline-none transition-colors focus:border-brand disabled:bg-panel"
+          className="h-9 w-full rounded-lg border border-line bg-white pl-3 pr-7 text-[13px] tabular-nums text-[#060606] outline-none transition-colors focus:border-brand disabled:bg-panel"
         />
-        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] text-muted-2">
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#060606]">
           %
         </span>
       </div>
@@ -417,7 +460,7 @@ function Amount({
   return (
     <Field name={name} label={label} hint={hint} errors={errors}>
       <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[12.5px] text-muted-2">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#060606]">
           $
         </span>
         <input
@@ -429,7 +472,7 @@ function Amount({
           defaultValue={defaultValue ?? ""}
           placeholder="0.00"
           aria-describedby={`${name}-hint`}
-          className="h-9 w-full rounded-lg border border-line bg-white pl-7 pr-3 text-[13px] tabular-nums text-ink outline-none transition-colors focus:border-brand disabled:bg-panel"
+          className="h-9 w-full rounded-lg border border-line bg-white pl-7 pr-3 text-[13px] tabular-nums text-[#060606] outline-none transition-colors focus:border-brand disabled:bg-panel"
         />
       </div>
     </Field>
@@ -451,15 +494,15 @@ function Field({
 }) {
   return (
     <div>
-      <label htmlFor={name} className="block text-[11.5px] font-medium text-ink-soft">
+      <label htmlFor={name} className="block text-[11px] font-medium text-[#060606]">
         {label}
       </label>
       <div className="mt-1.5">{children}</div>
-      <p id={`${name}-hint`} className="mt-1 text-[10.5px] leading-snug text-muted-2">
+      <p id={`${name}-hint`} className="mt-1 text-[11px] leading-snug text-[#060606]">
         {hint}
       </p>
       {errors?.map((e) => (
-        <p key={e} className="mt-1 text-[11.5px] text-action">
+        <p key={e} className="mt-1 text-[11px] text-action">
           {e}
         </p>
       ))}

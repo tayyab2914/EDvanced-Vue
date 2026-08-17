@@ -107,7 +107,7 @@ export function ExpenditureStatusStrip({
         <div className="flex w-full min-w-0 flex-col gap-[10px] rounded-[16px] p-[16px] sm:w-[290px] sm:min-w-[254px] sm:flex-none">
           <div className="flex items-start justify-between gap-[8px]">
             <div className="flex min-w-0 flex-col items-start gap-[8px]">
-              <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
+              <span className="text-[14px] font-medium leading-[20px] text-[#060606]">
                 Expenditure Status
               </span>
               <span
@@ -121,7 +121,7 @@ export function ExpenditureStatusStrip({
               <CubeGlyph color={ink} />
             </span>
           </div>
-          <span className="inline-flex w-fit max-w-full items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-black">
+          <span className="inline-flex w-fit max-w-full items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-[#060606]">
             <span className="truncate">{note}</span>
           </span>
         </div>
@@ -139,13 +139,13 @@ export function ExpenditureStatusStrip({
         <div className="flex w-full min-w-0 flex-col gap-[8px] rounded-[16px] p-[16px] sm:w-[301px] sm:min-w-[254px] sm:flex-none">
           <div className="flex items-start justify-between gap-[8px]">
             <div className="flex min-w-0 flex-col items-start">
-              <span className="text-[15px] font-medium leading-[20px] text-[#797979]">
+              <span className="text-[14px] font-medium leading-[20px] text-[#060606]">
                 Encumbrances
               </span>
-              <span className="text-[14px] leading-normal text-[rgba(121,121,121,0.55)]">
+              <span className="text-[14px] leading-normal text-[#060606]">
                 Committed, not yet spent
               </span>
-              <span className="whitespace-nowrap text-[25px] font-medium leading-[36px] text-[#1f1f21] [font-variant-numeric:proportional-nums]">
+              <span className="whitespace-nowrap text-[26px] font-medium leading-[36px] text-[#060606] [font-variant-numeric:proportional-nums]">
                 <CountUp value={encumbrances} />
               </span>
             </div>
@@ -158,7 +158,7 @@ export function ExpenditureStatusStrip({
           </div>
           {/* NO ARROW GLYPH. "→ 3.6% of budget" implied a movement; the figure is a share,
               and the design's own arrow was decoration on a statement. */}
-          <span className="inline-flex w-fit max-w-full items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-black">
+          <span className="inline-flex w-fit max-w-full items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-[#060606]">
             <span className="truncate">{encumbranceNote}</span>
           </span>
         </div>

@@ -41,7 +41,8 @@ export type IconName =
   | "arrow-right"
   | "equals"
   | "gauge"
-  | "layers";
+  | "layers"
+  | "help";
 
 const PATHS: Record<IconName, string> = {
   dashboard:
@@ -104,6 +105,7 @@ const PATHS: Record<IconName, string> = {
   gauge: '<path d="M3.5 17.5a9 9 0 1 1 17 0"/><path d="m12 14 4.2-4.6"/><circle cx="12" cy="15.6" r="1.6"/>',
   layers:
     '<path d="m12 2.8 9 4.8-9 4.8-9-4.8 9-4.8Z"/><path d="m3 12.2 9 4.8 9-4.8"/><path d="m3 16.8 9 4.8 9-4.8"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.7-.9 1.3v.5"/><path d="M12 16.8h.01"/>',
 };
 
 export function Icon({

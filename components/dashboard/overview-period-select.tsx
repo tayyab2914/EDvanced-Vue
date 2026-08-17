@@ -191,7 +191,7 @@ export function OverviewPeriodSelect({
             "absolute right-0 top-[calc(100%+6px)] z-30 max-h-[300px] w-[232px] overflow-y-auto p-[6px]",
           )}
         >
-          <p className="px-[10px] pb-[4px] pt-[6px] text-[10px] font-bold uppercase leading-normal tracking-[0.6px] text-[#797979]">
+          <p className="px-[10px] pb-[4px] pt-[6px] text-[10px] font-bold uppercase leading-normal tracking-[0.6px] text-[#060606]">
             Reporting period
           </p>
           {periods.map((p, i) => {
@@ -218,7 +218,7 @@ export function OverviewPeriodSelect({
                     {p.primary ?? p.label}
                   </span>
                   {p.secondary && (
-                    <span className="truncate text-[11px] font-semibold leading-[15px] text-[#797979]">
+                    <span className="truncate text-[11px] font-semibold leading-[15px] text-[#060606]">
                       {p.secondary}
                     </span>
                   )}

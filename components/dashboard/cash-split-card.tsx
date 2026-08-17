@@ -93,10 +93,10 @@ export function CashSplitCard({
         <div className="flex w-full min-w-0 flex-col rounded-[16px] px-[16px] py-[16px] sm:w-[290px] sm:flex-none">
           <div className="flex items-start justify-between gap-[10px]">
             <div className="flex min-w-0 flex-col gap-[8px]">
-              <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
+              <span className="text-[14px] font-medium leading-[20px] text-[#060606]">
                 {status.label}
               </span>
-              <span className="text-[32px] font-bold leading-[36px] text-black [font-variant-numeric:proportional-nums]">
+              <span className="text-[32px] font-bold leading-[36px] text-[#060606] [font-variant-numeric:proportional-nums]">
                 {status.value}
               </span>
             </div>
@@ -105,7 +105,7 @@ export function CashSplitCard({
             </span>
           </div>
           {status.chip && (
-            <span className="mt-[8px] inline-flex w-fit items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-black">
+            <span className="mt-[8px] inline-flex w-fit items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-[#060606]">
               {status.chip}
             </span>
           )}
@@ -121,15 +121,15 @@ export function CashSplitCard({
         <div className="flex w-full min-w-0 flex-col rounded-[16px] px-[16px] py-[16px] sm:w-[301px] sm:flex-none">
           <div className="flex items-start justify-between gap-[10px]">
             <div className="flex min-w-0 flex-col">
-              <span className="text-[15px] font-medium leading-[20px] text-[#797979]">
+              <span className="text-[14px] font-medium leading-[20px] text-[#060606]">
                 {disbursements.label}
               </span>
               {disbursements.caption && (
-                <span className="text-[14px] leading-normal text-[rgba(121,121,121,0.55)]">
+                <span className="text-[14px] leading-normal text-[#060606]">
                   {disbursements.caption}
                 </span>
               )}
-              <span className="text-[25px] font-medium leading-[36px] text-[#1f1f21] [font-variant-numeric:proportional-nums]">
+              <span className="text-[26px] font-medium leading-[36px] text-[#060606] [font-variant-numeric:proportional-nums]">
                 {disbursements.value}
               </span>
             </div>

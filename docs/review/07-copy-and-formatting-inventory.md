@@ -268,7 +268,7 @@ Source: `lib/alerts/engine.ts`.
 
 | Title | Message | Fires when | Verdict |
 |---|---|---|---|
-| Encumbrances outstanding | `{$4,120,000} is committed but not yet paid, and is already counted against available budget.` | Available budget positive and encumbrances > 0 | |
+| Encumbrances outstanding | `{$4.12M} is committed but not yet paid, and is already counted against available budget.` | Available budget positive and encumbrances > 0 | |
 | Year-end projection | `On the current pace, spending reaches {$…} against a budget of {$…}.` | A forecast exists and a budget is set | |
 | Fund balance is growing | `This year's operations have added {$…} to the fund balance.` | Change in fund balance is positive | |
 

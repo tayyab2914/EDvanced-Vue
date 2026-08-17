@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { CARD_TITLE, COLUMN_HEADER } from "@/components/dashboard/type-scale";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { PacePill, PillLink } from "@/components/dashboard/revenue-shared";
 import type { StatusRung } from "@/lib/dashboard/status";
@@ -54,12 +55,12 @@ export function ExpenditureFunctionTable({
     <OverviewPanel className="flex flex-col p-[18px]">
       {/* ---- header ---- */}
       <div className="flex flex-wrap items-center justify-between gap-[10px] pt-[9px]">
-        <h2 className="text-[20px] leading-[18px] tracking-[0.16px] text-[#060606]">{title}</h2>
+        <h2 className={CARD_TITLE}>{title}</h2>
         <PillLink href={ctaHref}>{ctaLabel}</PillLink>
       </div>
 
       {/* ---- column headers ---- */}
-      <div className={cn(COLS, "mt-[22px] pb-[10px] text-[14px] leading-normal tracking-[0.14px] text-[#060606]")}>
+      <div className={cn(COLS, "mt-[22px] pb-[10px]", COLUMN_HEADER)}>
         <span>Indicator</span>
         <span>Budget</span>
         <span>
@@ -109,7 +110,7 @@ export function ExpenditureFunctionTable({
                 >
                   {r.available}
                 </span>
-                <span className="text-[10px] text-[#797979]" title="Budget utilized">
+                <span className="text-[10px] text-[#060606]" title="Budget utilized">
                   {r.utilized} utilized
                 </span>
               </span>
@@ -141,7 +142,7 @@ export function ExpenditureFunctionTable({
           )}
         >
           <span className="text-[14px]">{total.available}</span>
-          <span className="text-[10px] opacity-75">{total.utilized} utilized</span>
+          <span className="text-[10px]">{total.utilized} utilized</span>
         </span>
         <span className="flex justify-end">
           <PacePill status={total.status} />

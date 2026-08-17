@@ -76,7 +76,7 @@ export function RevenueCategorySwitcher({
               aria-selected={o.value === active}
               onClick={() => choose(o.value)}
               className={cn(
-                "flex h-[31px] items-center whitespace-nowrap rounded-[38px] px-[18px] text-[10px] font-bold leading-[2] tracking-[0.1px] text-black transition-colors",
+                "flex h-[31px] items-center whitespace-nowrap rounded-[38px] px-[18px] text-[10px] font-bold leading-[2] tracking-[0.1px] text-[#060606] transition-colors",
                 o.value === active
                   ? "bg-white shadow-[0_1px_2px_rgba(0,6,6,0.06)]"
                   : "hover:bg-white/60",

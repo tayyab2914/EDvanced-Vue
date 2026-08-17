@@ -29,7 +29,7 @@ export function Sparkline({
   const real = values.filter((v): v is number => v !== null);
   if (real.length < 2) {
     return (
-      <span className="inline-block text-[11px] text-muted-2" style={{ width }} aria-hidden>
+      <span className="inline-block text-[11px] text-[#060606]" style={{ width }} aria-hidden>
         —
       </span>
     );

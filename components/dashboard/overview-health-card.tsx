@@ -1,6 +1,7 @@
 import type { StatusRung } from "@/lib/dashboard/status";
 import { CountUp } from "@/components/count-up";
 import { OverviewPanel, PanelRungPill } from "@/components/dashboard/overview-panel";
+import { CARD_TITLE, CARD_SUBTITLE, COLUMN_HEADER } from "@/components/dashboard/type-scale";
 
 /**
  * "Financial health summary" — a transcription of Figma 3:12545.
@@ -115,10 +116,10 @@ export function OverviewHealthCard({ rows }: { rows: HealthRow[] }) {
   return (
     <OverviewPanel>
       <header>
-        <h2 className="text-[16px] font-normal leading-[2] tracking-[0.16px] text-[#060606]">
+        <h2 className={CARD_TITLE}>
           Financial health summary
         </h2>
-        <p className="text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
+        <p className={CARD_SUBTITLE}>
           Key indicators compared to policy targets
         </p>
       </header>
@@ -127,7 +128,7 @@ export function OverviewHealthCard({ rows }: { rows: HealthRow[] }) {
         <div className="min-w-[720px]">
           <div className={COLS} aria-hidden>
             {["Indicator", "Current", "Target", "Status", "Trend"].map((h) => (
-              <span key={h} className="text-[14px] leading-[normal] tracking-[0.14px] text-[#060606]">
+              <span key={h} className={COLUMN_HEADER}>
                 {h}
               </span>
             ))}

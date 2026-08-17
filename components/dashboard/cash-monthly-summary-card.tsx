@@ -56,7 +56,7 @@ export function CashMonthlySummaryCard({
         {steps.map((s) => (
           <div
             key={s.label}
-            className="flex h-[135px] w-[105px] flex-none flex-col rounded-[11px] border-[0.4px] border-[#c4c4c4] px-[6px] pb-[8px] pt-[14px]"
+            className="flex min-h-[135px] w-[105px] flex-none flex-col rounded-[11px] border-[0.4px] border-[#c4c4c4] px-[6px] pb-[8px] pt-[14px]"
           >
             <span
               aria-hidden
@@ -69,7 +69,7 @@ export function CashMonthlySummaryCard({
                 <Icon name={s.icon} size={16} />
               )}
             </span>
-            <span className="mt-auto text-[12px] leading-[1.09] tracking-[0.12px] text-black">
+            <span className="mt-auto text-[12px] leading-[1.09] tracking-[0.12px] text-[#060606]">
               {s.label}
             </span>
             <span
@@ -78,9 +78,12 @@ export function CashMonthlySummaryCard({
             >
               <CountUp value={s.value} />
             </span>
-            {/* a fixed slot, so the five figures sit on one line whether or not a card
-                has something to compare against */}
-            <span className="mt-[5px] h-[9px] text-[8px] leading-[1.09] tracking-[0.08px] text-black/[0.56]">
+            {/* a reserved slot, so the five figures sit on one line whether or not a card
+                has something to compare against. A MINIMUM rather than a fixed height: the
+                notes are set in the dashboards' smallest step now, not the mockup's 8px, and
+                a two-line note in a hard 13px box spills over the tile's foot. The tiles
+                stretch together in the flex row, so one that grows takes the rest with it. */}
+            <span className="mt-[5px] min-h-[13px] text-[10px] leading-[1.3] tracking-[0.08px] text-[#060606]">
               {s.note}
             </span>
           </div>

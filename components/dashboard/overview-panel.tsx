@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { CountUp } from "@/components/count-up";
 import type { StatusRung } from "@/lib/dashboard/status";
+import { CARD_TITLE, CARD_SUBTITLE } from "@/components/dashboard/type-scale";
 
 /**
  * The chrome shared by the executive redesign's lower band — the Fund Balance Trend card
@@ -92,7 +93,7 @@ export function OverviewPanelHeader({
   return (
     <header className="min-w-0">
       <div className="flex flex-wrap items-center gap-[14px]">
-        <h2 className="whitespace-nowrap text-[16px] font-normal leading-[2] tracking-[0.16px] text-[#060606]">
+        <h2 className={cn("whitespace-nowrap", CARD_TITLE)}>
           {title}
         </h2>
         {ctaLabel && ctaHref && (
@@ -103,7 +104,7 @@ export function OverviewPanelHeader({
             <span className="flex size-[16px] items-center justify-center">
               <ArrowGlyph color="#1A932E" className="-rotate-45" />
             </span>
-            <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-black">
+            <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-[#060606]">
               {ctaLabel}
             </span>
           </Link>
@@ -111,7 +112,7 @@ export function OverviewPanelHeader({
         {badge}
       </div>
       {subtitle && (
-        <p className="text-[10px] font-bold leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
+        <p className={CARD_SUBTITLE}>
           {subtitle}
         </p>
       )}
@@ -189,7 +190,7 @@ export interface RailItem {
 }
 
 const RAIL_TONE = {
-  default: "text-[#1f1f21]",
+  default: "text-[#060606]",
   negative: "text-[#fd4438]",
   positive: "text-[#1a932e]",
 } as const;
@@ -244,8 +245,8 @@ export function OverviewMetricRail({ items, compact }: { items: RailItem[]; comp
           >
             <span
               className={cn(
-                "font-medium text-[#1f1f21]",
-                compact ? "text-[9px] leading-[12px]" : "text-[15px] leading-[20px]",
+                "font-semibold text-[#060606]",
+                compact ? "text-[11px] leading-[14px]" : "text-[14px] leading-[20px]",
               )}
             >
               {item.label}
@@ -255,8 +256,8 @@ export function OverviewMetricRail({ items, compact }: { items: RailItem[]; comp
             ) : (
               <span
                 className={cn(
-                  "font-medium [font-variant-numeric:proportional-nums]",
-                  compact ? "text-[14px] leading-[18px]" : "text-[32px] leading-[36px]",
+                  "font-semibold [font-variant-numeric:proportional-nums]",
+                  compact ? "text-[16px] leading-[20px]" : "text-[32px] leading-[36px]",
                   RAIL_TONE[item.tone ?? "default"],
                 )}
               >
@@ -266,8 +267,8 @@ export function OverviewMetricRail({ items, compact }: { items: RailItem[]; comp
             {item.note && (
               <span
                 className={cn(
-                  "flex items-center gap-[3px] font-normal text-[#1f1f21]/[0.74]",
-                  compact ? "text-[9px] leading-[12px]" : "text-[15px] leading-[24px]",
+                  "flex items-center gap-[3px] font-normal text-[#060606]",
+                  compact ? "text-[11px] leading-[14px]" : "text-[14px] leading-[24px]",
                 )}
               >
                 {item.noteArrow && <NoteArrow direction={item.noteArrow} />}
@@ -322,18 +323,18 @@ export function OverviewInfoStrip({ items, compact }: { items: StripItem[]; comp
           >
             <span
               className={cn(
-                "font-medium text-[#1f1f21]",
+                "font-semibold text-[#060606]",
                 compact
-                  ? "text-[9px] leading-[12px]"
-                  : "whitespace-nowrap text-[15px] leading-[20px]",
+                  ? "text-[11px] leading-[14px]"
+                  : "whitespace-nowrap text-[14px] leading-[20px]",
               )}
             >
               {item.label}
             </span>
             <span
               className={cn(
-                "whitespace-nowrap font-medium [font-variant-numeric:proportional-nums]",
-                compact ? "text-[13px] leading-[18px]" : "text-[32px] leading-[36px]",
+                "whitespace-nowrap font-semibold [font-variant-numeric:proportional-nums]",
+                compact ? "text-[16px] leading-[20px]" : "text-[32px] leading-[36px]",
                 RAIL_TONE[item.tone ?? "default"],
               )}
             >

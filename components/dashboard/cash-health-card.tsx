@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { CARD_TITLE } from "@/components/dashboard/type-scale";
 import { OverviewPanel, PanelRungPill } from "@/components/dashboard/overview-panel";
 import type { StatusRung } from "@/lib/dashboard/status";
 
@@ -97,7 +98,7 @@ export function CashHealthCard({
           className={cn(
             "text-[14px] font-semibold leading-normal tabular-nums",
             vsTarget === null
-              ? "text-[#797979]"
+              ? "text-[#060606]"
               : vsTarget < 0
                 ? "text-[#fd4438]"
                 : "text-[#1a932e]",
@@ -111,7 +112,7 @@ export function CashHealthCard({
 
   return (
     <OverviewPanel className="flex flex-col p-[18px]">
-      <h2 className="pl-[16px] text-[16px] font-normal leading-[2] tracking-[0.16px] text-[#060606]">
+      <h2 className={cn("pl-[16px]", CARD_TITLE)}>
         {title}
       </h2>
 
@@ -173,10 +174,10 @@ export function CashHealthCard({
           >
             {days === null ? "—" : Math.round(days)}
           </text>
-          <text x={SIZE / 2} y={SIZE / 2 + 62} textAnchor="middle" fontSize={11} fill="#797979">
+          <text x={SIZE / 2} y={SIZE / 2 + 62} textAnchor="middle" fontSize={11} fill="#060606">
             Days
           </text>
-          <text x={SIZE / 2} y={SIZE / 2 + 75} textAnchor="middle" fontSize={11} fill="#797979">
+          <text x={SIZE / 2} y={SIZE / 2 + 75} textAnchor="middle" fontSize={11} fill="#060606">
             Cash on hand
           </text>
         </svg>

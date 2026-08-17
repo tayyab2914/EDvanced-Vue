@@ -219,7 +219,7 @@ export function FilterBar({
         at — and the printed page would not say at all.
       */}
       <div className="flex flex-wrap items-center gap-x-[8px] gap-y-[6px]">
-        <span className="text-[11px] font-bold uppercase leading-[16px] tracking-[0.66px] text-[#797979]">
+        <span className="text-[11px] font-bold uppercase leading-[16px] tracking-[0.66px] text-[#060606]">
           Showing:
         </span>
 
@@ -232,7 +232,7 @@ export function FilterBar({
           >
             {periodOption.primary ?? periodOption.label}
             {periodOption.secondary && (
-              <span className="font-semibold opacity-75">{periodOption.secondary}</span>
+              <span className="font-semibold">{periodOption.secondary}</span>
             )}
           </span>
         )}
@@ -322,7 +322,7 @@ export function FilterBar({
             type="button"
             onClick={reset}
             disabled={pending}
-            className={cn(chipButton, "px-[8px] text-[#797979] hover:text-[#060606]")}
+            className={cn(chipButton, "px-[8px] text-[#060606] hover:text-[#060606]")}
           >
             {pending && <Spinner size={11} />}
             {pending ? "Clearing…" : "Clear filters"}
@@ -344,7 +344,7 @@ export function FilterBar({
           is the whole reason it is worth stating. So the date stays and the repetition goes.
         */}
         {asOf && (
-          <span className="flex items-center gap-[5px] text-[11px] leading-[16px] text-[#797979]">
+          <span className="flex items-center gap-[5px] text-[11px] leading-[16px] text-[#060606]">
             <span aria-hidden>🗓</span>
             {asOf}
           </span>

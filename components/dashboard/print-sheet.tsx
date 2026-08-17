@@ -6,7 +6,7 @@ import { TONE_INK, TONE_TINT, type TileTone } from "@/components/dashboard/kpi-t
 import { SheetFit } from "./print-sheet-fit";
 
 /**
- * The one-page landscape sheet every dashboard prints to.
+ * The fixed landscape sheet every dashboard prints to.
  *
  * ---------------------------------------------------------------------------
  * WHY A FIXED CANVAS AND NOT A PRINT STYLESHEET
@@ -29,9 +29,27 @@ import { SheetFit } from "./print-sheet-fit";
  * (995px), so the same sheet fits whichever paper the print dialogue is left on.
  *
  * That makes the on-screen view a true preview of the PDF, and — the part that matters — it
- * makes the height measurable BEFORE printing, which is what `SheetFit` needs. A district
- * with four insights instead of two, or fund names twice as long, still gets one page: the
- * fitter scales the canvas down a few percent rather than letting it become page two.
+ * makes the height measurable BEFORE printing, which is what `SheetFit` needs.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THE SHEET IS PAGINATED, AND WHY BY HAND
+ *
+ * The sheet used to be exactly one page, and paid for it: every dashboard dropped cards to
+ * get there. The Executive summary had no Alerts panel, Revenue and Expenditures showed a
+ * merged four-row "Largest variances" instead of the two movers cards and printed neither
+ * variance trend, Cash printed no monthly walk, Fund Balance printed neither the policy
+ * benchmark nor the reserve components. A board packet that silently omits a third of the
+ * dashboard is not a summary of it.
+ *
+ * So a sheet is now an ARRAY OF PAGES, each its own fixed 990x720 canvas, each measured and
+ * scaled on its own, with a page break between them. The pagination is authored, never
+ * discovered: the alternative — one long canvas and `break-inside: avoid` — is the exact
+ * mechanism that produced five pages, because the print engine decides where the cut lands
+ * and it has no idea which cards belong together. Here the route says "these bands, then a
+ * break, then these", and the fitter guarantees each side of the break holds its page.
+ *
+ * Pages carry a full masthead and a "Page 1 of 2" colophon each, because a printed page is
+ * separated from its packet the moment somebody photocopies one of them.
  * ---------------------------------------------------------------------------
  */
 
@@ -45,6 +63,16 @@ import { SheetFit } from "./print-sheet-fit";
 export const SHEET_WIDTH = 990;
 export const SHEET_HEIGHT = 720;
 
+/** One page of a sheet. */
+export interface SheetPage {
+  /**
+   * What this page is, printed after the title — "Detail & alerts". Page one normally has
+   * none: its label is the sheet's own title.
+   */
+  label?: string;
+  content: ReactNode;
+}
+
 export function PrintSheet({
   /** "Executive Summary" — what this sheet is. */
   title,
@@ -56,14 +84,15 @@ export function PrintSheet({
   asOf,
   /** Where the on-screen "back" link goes. Never printed. */
   backHref,
-  children,
+  /** The pages, in order. One entry per printed sheet of paper. */
+  pages,
 }: {
   title: string;
   district: string;
   scope: string;
   asOf?: string;
   backHref: string;
-  children: ReactNode;
+  pages: SheetPage[];
 }) {
   return (
     <div className="sheet-shell">
@@ -76,38 +105,51 @@ export function PrintSheet({
 
       <div className="sheet-notice print:hidden">
         <p>
-          This is the one-page <strong>{title}</strong>. Your browser&apos;s print dialogue
-          should open by itself — choose <strong>Save as PDF</strong> and leave the layout on{" "}
-          <strong>Landscape</strong>. If it did not open, press Ctrl/Cmd + P.
+          This is the {pages.length}-page <strong>{title}</strong>. Your browser&apos;s print
+          dialogue should open by itself — choose <strong>Save as PDF</strong> and leave the
+          layout on <strong>Landscape</strong>. If it did not open, press Ctrl/Cmd + P.
         </p>
         <Link href={backHref} className="sheet-back">
           ← Back to dashboard
         </Link>
       </div>
 
-      <div className="sheet-page" data-sheet>
-        <div data-sheet-fit className="sheet-fit">
-          <header className="sheet-head">
-            <div className="min-w-0">
-              <p className="sheet-district">{district}</p>
-              <h1 className="sheet-title">{title}</h1>
-            </div>
-            <div className="sheet-meta">
-              <span>{scope}</span>
-              {asOf && <span className="sheet-asof">{asOf}</span>}
-            </div>
-          </header>
+      {pages.map((page, i) => (
+        <div className="sheet-page" data-sheet key={i}>
+          {/*
+            `minHeight` rather than a CSS rule, so the one number the fitter divides by is
+            the one number the page is built to. A page shorter than the paper would leave a
+            white gutter under its last band and — worse — let a `grow` band collapse.
+          */}
+          <div data-sheet-fit className="sheet-fit" style={{ minHeight: SHEET_HEIGHT }}>
+            <header className="sheet-head">
+              <div className="min-w-0">
+                <p className="sheet-district">{district}</p>
+                <h1 className="sheet-title">
+                  {title}
+                  {page.label && <span className="sheet-title-part"> — {page.label}</span>}
+                </h1>
+              </div>
+              <div className="sheet-meta">
+                <span>{scope}</span>
+                {asOf && <span className="sheet-asof">{asOf}</span>}
+              </div>
+            </header>
 
-          <div className="sheet-body">{children}</div>
+            <div className="sheet-body">{page.content}</div>
 
-          <footer className="sheet-foot">
-            <span>All amounts are unaudited.</span>
-            <span>
-              {district} · {scope}
-            </span>
-          </footer>
+            <footer className="sheet-foot">
+              <span>All amounts are unaudited.</span>
+              <span>
+                {district} · {scope}
+              </span>
+              <span>
+                Page {i + 1} of {pages.length}
+              </span>
+            </footer>
+          </div>
         </div>
-      </div>
+      ))}
 
       <SheetFit />
     </div>

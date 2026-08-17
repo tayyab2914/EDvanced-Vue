@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { ArrowGlyph } from "@/components/dashboard/overview-panel";
+import { CARD_TITLE, CARD_SUBTITLE, METRIC_LABEL } from "@/components/dashboard/type-scale";
 
 /**
  * The card every dashboard section sits in: title, optional subtitle, an optional control
@@ -58,7 +59,7 @@ export function SectionCard({
       <header className="mb-3.5 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-x-[14px] gap-y-1">
-            <h2 className="flex min-w-0 items-center gap-1.5 text-[16px] font-normal leading-[1.4] tracking-[0.16px] text-[#060606]">
+            <h2 className={cn("flex min-w-0 items-center gap-1.5", CARD_TITLE)}>
               {/* Wraps rather than truncates: at 16px a card in a narrow rail column loses
                   half its name to an ellipsis, and a second line is cheaper than a title
                   nobody can read. */}
@@ -68,7 +69,7 @@ export function SectionCard({
                 <span
                   title={info}
                   aria-label={info}
-                  className="flex size-[14px] flex-none cursor-help items-center justify-center rounded-full bg-black/[0.07] text-[9px] font-bold text-[#797979]"
+                  className="flex size-[15px] flex-none cursor-help items-center justify-center rounded-full bg-black/[0.07] text-[10px] font-bold text-[#060606]"
                 >
                   i
                 </span>
@@ -82,14 +83,14 @@ export function SectionCard({
                 <span className="flex size-[16px] items-center justify-center">
                   <ArrowGlyph color="#1A932E" className="-rotate-45" />
                 </span>
-                <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-black">
+                <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-[#060606]">
                   {footer}
                 </span>
               </Link>
             )}
           </div>
           {subtitle && (
-            <p className="mt-[2px] text-[10px] font-bold leading-[1.8] tracking-[0.1px] text-[#060606]/[0.56]">
+            <p className={cn("mt-[2px]", CARD_SUBTITLE)}>
               {subtitle}
             </p>
           )}
@@ -100,7 +101,7 @@ export function SectionCard({
       <div className={cn("min-w-0 flex-1", bodyClassName)}>{children}</div>
 
       {footerNote && (
-        <footer className="mt-3.5 border-t border-black/10 pt-2.5 text-[10.5px] text-[#060606]/[0.56]">
+        <footer className="mt-3.5 border-t border-black/10 pt-2.5 text-[12px] leading-[1.5] text-[#060606]">
           {footerNote}
         </footer>
       )}
@@ -123,7 +124,7 @@ export function CardActionLink({ href, children }: { href: string; children: Rea
   return (
     <Link
       href={href}
-      className="flex items-center gap-[6px] whitespace-nowrap text-[11.5px] leading-[14px] tracking-[0.1px] text-[#1A932E] transition-opacity hover:opacity-70"
+      className="flex items-center gap-[6px] whitespace-nowrap text-[11px] leading-[14px] tracking-[0.1px] text-[#1A932E] transition-opacity hover:opacity-70"
     >
       <ArrowGlyph color="#1A932E" className="-rotate-45" />
       {children}
@@ -142,7 +143,7 @@ export function CardFooterLink({ href, children }: { href: string; children: Rea
   return (
     <Link
       href={href}
-      className="mt-auto inline-flex w-fit items-center gap-1.5 pt-4 text-[12.5px] font-medium text-brand transition-colors hover:text-brand-dark"
+      className="mt-auto inline-flex w-fit items-center gap-1.5 pt-4 text-[12px] font-medium text-brand transition-colors hover:text-brand-dark"
     >
       {children}
       <span aria-hidden className="text-[11px]">
@@ -166,7 +167,7 @@ export function FooterInfoBar({
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] bg-white/[0.62] px-[18px] py-3">
-      <p className="flex min-w-0 items-start gap-2 text-[12.5px] leading-relaxed text-[#060606]/[0.74]">
+      <p className="flex min-w-0 items-start gap-2 text-[12px] leading-[1.5] text-[#060606]">
         <span aria-hidden className="font-semibold text-brand">
           ⓘ
         </span>
@@ -175,7 +176,7 @@ export function FooterInfoBar({
       {action && href && (
         <Link
           href={href}
-          className="flex-none rounded-full bg-brand px-4 py-1.5 text-[12.5px] font-medium text-white transition-colors hover:bg-brand-dark"
+          className="flex-none rounded-full bg-brand px-4 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-brand-dark"
         >
           {action} →
         </Link>
@@ -198,18 +199,19 @@ export function FooterInfoBar({
  */
 
 /** A row of small label/value pairs under a chart — §7.2's 12-month high/low strip.
- *  Speaks the redesign's rail ramp: sentence-case grey label over a near-black figure. */
+ *  Speaks the redesign's rail ramp: a black label over a black figure, separated by
+ *  size and weight rather than by colour. */
 export function StatStrip({ items }: { items: { label: string; value: string; note?: string }[] }) {
   return (
     <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-black/10 pt-3.5 sm:grid-cols-4">
       {items.map((i) => (
         <div key={i.label} className="min-w-0">
-          <dt className="truncate text-[11px] font-medium text-[#797979]">{i.label}</dt>
-          <dd className="mt-1 truncate text-[15px] font-medium tabular-nums text-[#1f1f21]">
+          <dt className={cn("truncate", METRIC_LABEL)}>{i.label}</dt>
+          <dd className="mt-1 truncate text-[14px] font-semibold tabular-nums text-[#060606]">
             {i.value}
           </dd>
           {i.note && (
-            <dd className="truncate text-[11px] text-[#1f1f21]/[0.74]">{i.note}</dd>
+            <dd className="truncate text-[11px] font-normal text-[#060606]">{i.note}</dd>
           )}
         </div>
       ))}

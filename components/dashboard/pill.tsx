@@ -65,7 +65,7 @@ export function PillChevron({ open, className }: { open?: boolean; className?: s
       strokeLinecap="round"
       strokeLinejoin="round"
       className={cn(
-        "flex-none text-[#797979] transition-transform",
+        "flex-none text-[#060606] transition-transform",
         open && "rotate-180",
         className,
       )}

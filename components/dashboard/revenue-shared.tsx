@@ -59,7 +59,7 @@ export function FundChip({ children, className }: { children: React.ReactNode; c
   return (
     <span
       className={cn(
-        "inline-flex w-fit max-w-full items-center truncate rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.08px] text-black",
+        "inline-flex w-fit max-w-full items-center truncate rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.08px] text-[#060606]",
         className,
       )}
     >
@@ -95,7 +95,7 @@ export function PillLink({
       <span className="flex size-[16px] flex-none items-center justify-center">
         <ArrowGlyph color={arrow} className="-rotate-45" />
       </span>
-      <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-black">
+      <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-[#060606]">
         {children}
       </span>
     </Link>
@@ -112,7 +112,7 @@ export interface CapsuleStat {
 }
 
 const CAPSULE_TONE = {
-  default: "text-[#1f1f21]",
+  default: "text-[#060606]",
   negative: "text-[#fd4438]",
   positive: "text-[#1a932e]",
 } as const;
@@ -134,19 +134,19 @@ export function CapsuleStatStrip({ items, className }: { items: CapsuleStat[]; c
         <div key={item.label} className="contents">
           {i > 0 && <div aria-hidden className="w-px flex-none self-center bg-[#e7e7e7]" style={{ height: 27 }} />}
           <div className="flex min-w-0 flex-1 flex-col items-start gap-[2px] px-[9px]">
-            <span className="text-[10px] font-medium leading-[14px] text-[#797979]">
+            <span className="text-[10px] font-medium leading-[14px] text-[#060606]">
               {item.label}
             </span>
             <span
               className={cn(
-                "whitespace-nowrap text-[15px] font-medium leading-[14px] [font-variant-numeric:proportional-nums]",
+                "whitespace-nowrap text-[14px] font-medium leading-[14px] [font-variant-numeric:proportional-nums]",
                 CAPSULE_TONE[item.tone ?? "default"],
               )}
             >
               <CountUp value={item.value} />
             </span>
             {item.note && (
-              <span className="text-[9px] leading-[10px] tracking-[0.16px] text-[#797979]">
+              <span className="text-[10px] leading-[12px] tracking-[0.16px] text-[#060606]">
                 {item.note}
               </span>
             )}

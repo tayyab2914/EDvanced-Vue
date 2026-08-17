@@ -29,10 +29,10 @@ export function OverviewInsightTip({ children }: { children: ReactNode }) {
       />
       <div className="flex items-start gap-[12px]">
         <div className="min-w-0 flex-1">
-          <p className="text-[17px] font-semibold leading-[22px] tracking-[-0.43px] text-black/[0.85]">
+          <p className="text-[16px] font-semibold leading-[22px] tracking-[-0.43px] text-[#060606]">
             Key insight 💡
           </p>
-          <p className="mt-[4px] text-[15px] leading-[20px] tracking-[-0.23px] text-black/50">
+          <p className="mt-[4px] text-[14px] leading-[20px] tracking-[-0.23px] text-[#060606]">
             {children}
           </p>
         </div>
@@ -40,7 +40,7 @@ export function OverviewInsightTip({ children }: { children: ReactNode }) {
           type="button"
           onClick={() => setDismissed(true)}
           aria-label="Dismiss insight"
-          className="flex size-[30px] flex-none items-center justify-center rounded-full bg-[rgba(120,120,128,0.16)] text-[#808080] transition-opacity hover:opacity-75"
+          className="flex size-[30px] flex-none items-center justify-center rounded-full bg-[rgba(120,120,128,0.16)] text-[#060606] transition-opacity hover:opacity-75"
         >
           <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path

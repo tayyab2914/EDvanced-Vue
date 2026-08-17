@@ -577,7 +577,7 @@ export function FilterMenu({
                 setSection(null);
                 setTerm("");
               }}
-              className="flex flex-none items-center gap-1.5 border-b border-line-soft px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-2 transition-colors hover:bg-panel"
+              className="flex flex-none items-center gap-1.5 border-b border-line-soft px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.06em] text-[#060606] transition-colors hover:bg-panel"
             >
               <span aria-hidden className="rotate-180">
                 <Icon name="arrow-right" size={12} />
@@ -586,14 +586,14 @@ export function FilterMenu({
             </button>
           ) : (
             <div className="flex flex-none items-center justify-between border-b border-line-soft px-3 py-2">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
                 Filters
               </span>
               <button
                 type="button"
                 onClick={() => setDraft(EMPTY_SELECTION)}
                 disabled={activeCount === 0}
-                className="text-[12px] font-medium text-brand transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:text-muted-2 disabled:opacity-50"
+                className="text-[12px] font-medium text-brand transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:text-[#060606] disabled:opacity-50"
               >
                 Clear all
               </button>
@@ -621,14 +621,14 @@ export function FilterMenu({
                       isOpen && "bg-panel",
                     )}
                   >
-                    <span className={cn("flex-none", on ? "text-brand" : "text-muted-2")}>
+                    <span className={cn("flex-none", on ? "text-brand" : "text-[#060606]")}>
                       <Icon name={s.icon} size={14} />
                     </span>
-                    <span className="flex-none text-[12.5px] text-ink-soft">{s.label}</span>
+                    <span className="flex-none text-[12px] text-[#060606]">{s.label}</span>
                     <span
                       className={cn(
                         "ml-auto min-w-0 truncate text-right text-[12px]",
-                        on ? "font-semibold text-brand" : "text-muted-2",
+                        on ? "font-semibold text-brand" : "text-[#060606]",
                       )}
                     >
                       {summaryOf(s, draft)}
@@ -637,7 +637,7 @@ export function FilterMenu({
                       aria-hidden
                       className={cn(
                         "flex-none",
-                        isOpen ? "text-brand" : "text-muted-2",
+                        isOpen ? "text-brand" : "text-[#060606]",
                         // The chevron points at the side the options actually open on.
                         pos?.side === "left" && "rotate-180",
                       )}
@@ -656,7 +656,7 @@ export function FilterMenu({
             <button
               type="button"
               onClick={() => close(false)}
-              className="rounded-md border border-line bg-white px-2.5 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:border-[#c8d3e4]"
+              className="rounded-md border border-line bg-white px-2.5 py-1 text-[11px] font-medium text-[#060606] transition-colors hover:border-[#c8d3e4]"
             >
               Cancel
             </button>
@@ -664,7 +664,7 @@ export function FilterMenu({
               type="button"
               onClick={() => close(true)}
               disabled={!dirty}
-              className="rounded-md bg-brand px-2.5 py-1 text-[11.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
             >
               Apply
             </button>
@@ -712,7 +712,7 @@ function PeriodList({
   return (
     <>
       {showHeading && (
-        <p className="flex-none border-b border-line-soft px-3 py-2 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+        <p className="flex-none border-b border-line-soft px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
           Reporting period
         </p>
       )}
@@ -729,8 +729,8 @@ function PeriodList({
               aria-selected={p.value === value}
               onClick={() => onPick(p.value)}
               className={cn(
-                "block w-full px-3 py-1.5 text-left text-[12.5px] transition-colors hover:bg-panel",
-                p.value === value ? "font-semibold text-brand" : "text-ink-muted",
+                "block w-full px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-panel",
+                p.value === value ? "font-semibold text-brand" : "text-[#060606]",
               )}
             >
               {p.label}
@@ -770,14 +770,14 @@ function OptionList({
   return (
     <>
       {showHeading && (
-        <p className="flex-none border-b border-line-soft px-3 py-2 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+        <p className="flex-none border-b border-line-soft px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
           {section.label}
         </p>
       )}
 
       <div className="flex-none border-b border-line-soft p-2">
         <div className="relative">
-          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-2">
+          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[#060606]">
             <Icon name="search" size={13} />
           </span>
           <input
@@ -786,14 +786,14 @@ function OptionList({
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder={`Search ${section.label.toLowerCase()}…`}
-            className="h-8 w-full rounded-md border border-line bg-panel pl-7 pr-2 text-[12.5px] text-ink-soft outline-none placeholder:text-muted-2 focus:border-brand/50"
+            className="h-8 w-full rounded-md border border-line bg-panel pl-7 pr-2 text-[12px] text-[#060606] outline-none placeholder:text-[#060606] focus:border-brand/50"
           />
         </div>
       </div>
 
       {view.types.length > 0 && (
         <div className="flex-none border-b border-line-soft px-2 py-1.5">
-          <p className="px-1 pb-1 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+          <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
             {view.typeLabel ?? "Type"}
           </p>
           <div className="max-h-[110px] overflow-y-auto">
@@ -812,7 +812,7 @@ function OptionList({
 
       <div className="max-h-[220px] min-h-0 flex-1 overflow-y-auto px-2 py-1.5">
         {visible.length === 0 ? (
-          <p className="px-1 py-3 text-center text-[12px] text-muted-2">
+          <p className="px-1 py-3 text-center text-[12px] text-[#060606]">
             {term ? "Nothing matches that." : "Nothing to choose from."}
           </p>
         ) : (
@@ -849,7 +849,7 @@ function OptionList({
             Clear
           </Mini>
         </div>
-        <span className="pr-1 text-[11px] text-muted-2">
+        <span className="pr-1 text-[11px] text-[#060606]">
           {view.selected.length + view.selectedTypes.length || "No"} selected
         </span>
       </div>
@@ -886,13 +886,13 @@ function Check({
       <span className="min-w-0 flex-1">
         <span
           className={cn(
-            "block truncate text-[12.5px]",
-            checked ? "font-semibold text-brand" : "text-ink-muted",
+            "block truncate text-[12px]",
+            checked ? "font-semibold text-brand" : "text-[#060606]",
           )}
         >
           {label}
         </span>
-        {hint && <span className="block text-[10.5px] text-muted-2">{hint}</span>}
+        {hint && <span className="block text-[11px] text-[#060606]">{hint}</span>}
       </span>
     </label>
   );
@@ -912,7 +912,7 @@ function Mini({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="rounded-md border border-line bg-white px-2 py-1 text-[11.5px] font-medium text-ink-soft transition-colors hover:border-[#c8d3e4] disabled:cursor-not-allowed disabled:opacity-40"
+      className="rounded-md border border-line bg-white px-2 py-1 text-[11px] font-medium text-[#060606] transition-colors hover:border-[#c8d3e4] disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>

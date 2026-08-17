@@ -79,8 +79,8 @@ import {
   sheetTone,
   sheetScope,
   sheetAsOf,
-  SHEET_TABLE_ROWS,
-  SHEET_TABLE_NOTE,
+  SHEET_LEDGER_ROWS,
+  sheetTableNote,
 } from "@/lib/dashboard/summary";
 
 /**
@@ -342,7 +342,31 @@ export default async function CashDashboard({
     },
   ];
 
-  // ===================== the one-page landscape summary =====================
+  // ---------- the by-fund ledger, shared by the sheet and the screen ----------
+  const rowsWithCash = fundRows.filter((f) => f.endingCash !== null);
+  const sumCash = (pick: (f: (typeof rowsWithCash)[number]) => Prisma.Decimal | null) =>
+    rowsWithCash.reduce((a, f) => a + (toNumber(pick(f)) ?? 0), 0);
+
+  /**
+   * Per-fund days cash: the fund's ending cash against its own amended annual expenditure
+   * budget ÷ 365 — the same shape as the headline, which reads the district's ADOPTED
+   * budget. The footnote under the screen's table names the difference.
+   *
+   * A fund below zero is a DEFICIT whatever its budget divides to; a fund with no budget to
+   * divide by is N/A, which is a different and calmer sentence.
+   */
+  const fundLedger = rowsWithCash.map((f) => {
+    const days = toNumber(daysCashOnHand(f.endingCash, f.expenditureBudget));
+    const negative = f.endingCash!.isNegative();
+    return { row: f, days, negative, rung: negative ? ("Action Required" as const) : ladder(days, cashT) };
+  });
+
+  // ===================== the two-page landscape summary =====================
+  //
+  // Page one is the position: the six figures, the balance trend, the health dial and where
+  // the cash is held. Page two is the ledger — every fund's beginning, receipts,
+  // disbursements, ending and days of cover — with the monthly walk and the alerts. The
+  // one-page version printed a three-column extract of that ledger and no walk at all.
   if (isSheet) {
     return (
       <PrintSheet
@@ -351,7 +375,10 @@ export default async function CashDashboard({
         scope={sheetScope(scope)}
         asOf={sheetAsOf(scope.dataAsOf)}
         backHref={options.query ? `/cash?${options.query}` : "/cash"}
-      >
+        pages={[
+          {
+            content: (
+              <>
         <SheetBand cols="1fr 1fr 1fr 1fr 1fr 1fr">
           {kpiData.map((k) => (
             <SheetKpi
@@ -365,7 +392,7 @@ export default async function CashDashboard({
           ))}
         </SheetBand>
 
-        <SheetBand cols="1.4fr 1fr">
+        <SheetBand cols="1.4fr 1fr" grow>
           <SheetCard
             title="Cash balance trend"
             note={scope.fund ? scope.fund.name : "All funds"}
@@ -415,10 +442,10 @@ export default async function CashDashboard({
                   bands={statusBands(cashT)}
                   rung={cashRung}
                   // No unit caption at this size: the gauge's unit line sits a fixed 15px
-                  // under the figure, which at 130px lands on the hub and the needle crosses
+                  // under the figure, which at 140px lands on the hub and the needle crosses
                   // it. The card's own note says what the number is measured against.
                   unit=""
-                  size={130}
+                  size={140}
                   title="Days cash on hand"
                   summary={
                     daysCash === null
@@ -446,95 +473,179 @@ export default async function CashDashboard({
           </SheetCard>
         </SheetBand>
 
-        <SheetBand cols="1.5fr 1fr">
-          <SheetCard title="Cash balance by fund" note={SHEET_TABLE_NOTE}>
-            <DataTable
-              dense
-              columns={[
-                { key: "fund", label: "Fund" },
-                { key: "cash", label: "Ending cash", align: "right" },
-                { key: "share", label: "Share", align: "right" },
-              ]}
-              rows={fundRows
-                .filter((f) => f.endingCash !== null)
-                .slice(0, SHEET_TABLE_ROWS)
-                .map((f) => ({
-                  id: f.fundId,
-                  cells: {
-                    fund: { value: codeName(f.code, f.name, scope.labelMode), strong: true },
-                    cash: compactMoney(f.endingCash),
-                    share: percent(sharePercent(f.endingCash, point?.endingCash ?? null), 1),
-                  },
-                }))}
-              total={{
-                id: "total",
-                total: true,
-                cells: {
-                  fund: "Total cash",
-                  cash: compactMoney(totalCash),
-                  share: "100.0%",
+        {/* The monthly walk — beginning, receipts, disbursements, net, ending — which the
+            screen carries as its own card and the one-page sheet could not fit at all. */}
+        <SheetBand cols="1fr">
+          <SheetCard title="Monthly cash flow" note={`${scope.label} · receipts − disbursements`}>
+            <SheetStats
+              items={[
+                { label: "Beginning cash", value: compactMoney(summary.beginningCash) },
+                {
+                  label: "Receipts (MTD)",
+                  value: compactMoney(summary.receiptsMtd),
+                  tone: "positive",
                 },
-              }}
-              empty="No cash position committed for this period."
+                {
+                  label: "Disbursements (MTD)",
+                  value: accounting(summary.disbursementsMtd?.negated(), { compact: true }),
+                  tone: "negative",
+                },
+                {
+                  label: "Net cash flow (MTD)",
+                  value: accounting(summary.netCashFlowMtd, { compact: true }),
+                  tone: summary.netCashFlowMtd?.isNegative() ? "negative" : "positive",
+                },
+                { label: "Ending cash", value: compactMoney(summary.endingCash) },
+              ]}
             />
           </SheetCard>
-
-          <div className="flex min-w-0 flex-col gap-[7px]">
-            {/* The narrative as plain prose, not a `KeyInsightBar` — the bar prints its own
-                "KEY INSIGHT" eyebrow, which under a card already titled that read as the
-                heading having been printed twice. */}
-            <SheetCard title="Key insight" note="Cash movement and coverage">
-              <p className="text-[9.5px] leading-[1.45] text-ink-muted">
-                {movement ? `${movement} ` : ""}
-                {coverage}
-              </p>
-            </SheetCard>
-
-            <SheetCard title={`Cash alerts (${cashAlerts.length})`}>
-              <AlertList
-                mode={scope.labelMode}
-                alerts={cashAlerts.slice(0, 2).map((a) => ({
-                  id: a.id,
-                  severity: a.severity,
-                  title: a.title,
-                  message: a.message,
-                }))}
-                empty="No cash thresholds crossed."
-              />
-            </SheetCard>
-          </div>
         </SheetBand>
-      </PrintSheet>
+              </>
+            ),
+          },
+          {
+            label: "Fund ledger & alerts",
+            content: (
+              <>
+                {/* The screen's ledger, whole: the one-page sheet printed three of its six
+                    columns and eight of its rows, which is a directory with the directory
+                    taken out. */}
+                <SheetBand cols="1fr" grow>
+                  <SheetCard
+                    title="Cash balance by fund"
+                    note={
+                      fundLedger.length > SHEET_LEDGER_ROWS
+                        ? sheetTableNote(SHEET_LEDGER_ROWS)
+                        : "Beginning + receipts − disbursements"
+                    }
+                  >
+                    <DataTable
+                      dense
+                      columns={[
+                        { key: "fund", label: "Fund" },
+                        { key: "beginning", label: "Beginning", align: "right" },
+                        { key: "receipts", label: "Receipts", align: "right" },
+                        { key: "disbursements", label: "Disbursements", align: "right" },
+                        { key: "ending", label: "Ending cash", align: "right" },
+                        { key: "share", label: "Share", align: "right" },
+                        { key: "days", label: "Days cash", align: "right" },
+                        { key: "status", label: "Status", align: "right" },
+                      ]}
+                      rows={fundLedger.slice(0, SHEET_LEDGER_ROWS).map((f) => ({
+                        id: f.row.fundId,
+                        flag: f.negative ? ("negative" as const) : undefined,
+                        cells: {
+                          fund: {
+                            value: codeName(f.row.code, f.row.name, scope.labelMode),
+                            strong: true,
+                          },
+                          beginning: compactMoney(f.row.beginningCash),
+                          receipts: compactMoney(f.row.receiptsMtd),
+                          disbursements: compactMoney(f.row.disbursementsMtd),
+                          ending: {
+                            value: compactMoney(f.row.endingCash),
+                            strong: true,
+                            tone: f.negative ? ("negative" as const) : ("neutral" as const),
+                          },
+                          share: percent(
+                            sharePercent(f.row.endingCash, point?.endingCash ?? null),
+                            1,
+                          ),
+                          days: f.days === null ? NOT_AVAILABLE : `${fmtDays(f.days)} days`,
+                          status: (
+                            <span className="flex justify-end">
+                              <StatusBadge
+                                status={f.rung}
+                                label={f.negative ? "Deficit" : undefined}
+                                size="sm"
+                                dot={false}
+                              />
+                            </span>
+                          ),
+                        },
+                      }))}
+                      total={{
+                        id: "total",
+                        total: true,
+                        cells: {
+                          fund: "Total cash",
+                          beginning: compactMoney(sumCash((f) => f.beginningCash)),
+                          receipts: compactMoney(sumCash((f) => f.receiptsMtd)),
+                          disbursements: compactMoney(sumCash((f) => f.disbursementsMtd)),
+                          ending: compactMoney(totalCash),
+                          share: "100.0%",
+                          days:
+                            daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)} days`,
+                          status: "—",
+                        },
+                      }}
+                      empty="No cash position committed for this period."
+                    />
+                    <p className="text-[8.5px] leading-[1.4] text-[#060606]">
+                      Days cash on hand per fund divides each fund&apos;s ending cash by its
+                      amended annual expenditure budget ÷ 365. The headline tile reads the
+                      district&apos;s adopted budget instead, so the two can differ where the
+                      board has amended.
+                    </p>
+                  </SheetCard>
+                </SheetBand>
+
+                <SheetBand cols="1.35fr 1fr">
+                  <SheetCard
+                    title={`Cash alerts (${cashAlerts.length})`}
+                    note="Against the district's own thresholds"
+                  >
+                    <AlertList
+                      mode={scope.labelMode}
+                      alerts={cashAlerts.slice(0, 6).map((a) => ({
+                        id: a.id,
+                        severity: a.severity,
+                        title: a.title,
+                        message: a.message,
+                      }))}
+                      empty="No cash thresholds crossed."
+                      emptyNote="Cash position is within all policy thresholds."
+                    />
+                    {cashAlerts.length > 6 && (
+                      <p className="text-[8.5px] text-[#060606]">
+                        {cashAlerts.length - 6} further alert
+                        {cashAlerts.length - 6 === 1 ? "" : "s"} on the Alerts dashboard.
+                      </p>
+                    )}
+                  </SheetCard>
+
+                  {/* The narrative as plain prose, not a `KeyInsightBar` — the bar prints its
+                      own "KEY INSIGHT" eyebrow, which under a card already titled that read as
+                      the heading having been printed twice. */}
+                  <SheetCard title="Key insight" note="Cash movement and coverage">
+                    <p className="text-[10px] leading-[1.45] text-[#060606]">
+                      {movement ? `${movement} ` : ""}
+                      {coverage} Cash balances are unaudited and reflect the file committed for{" "}
+                      {scope.label}; the 30-day projection is straight-lined from recent months
+                      and no alert reads it.
+                    </p>
+                  </SheetCard>
+                </SheetBand>
+              </>
+            ),
+          },
+        ]}
+      />
     );
   }
 
   // ---------- the by-fund ledger's rows ----------
-  const rowsWithCash = fundRows.filter((f) => f.endingCash !== null);
-  const tableRows: CashFundRow[] = rowsWithCash.map((f) => {
-    /**
-     * Per-fund days cash: the fund's ending cash against its own amended annual
-     * expenditure budget ÷ 365 — the same shape as the headline, which reads the
-     * district's ADOPTED budget. The footnote under the table names the difference.
-     */
-    const days = toNumber(daysCashOnHand(f.endingCash, f.expenditureBudget));
-    const negative = f.endingCash!.isNegative();
-    const rung = negative ? ("Action Required" as const) : ladder(days, cashT);
-    return {
-      id: f.fundId,
-      fund: <DimLabel code={f.code} name={f.name} mode={scope.labelMode} />,
-      beginning: money(f.beginningCash),
-      receipts: money(f.receiptsMtd),
-      disbursements: money(f.disbursementsMtd),
-      ending: money(f.endingCash),
-      endingNegative: negative,
-      days: days === null ? NOT_AVAILABLE : `${fmtDays(days)} days`,
-      // A fund below zero is a DEFICIT whatever its budget divides to; a fund with no
-      // budget to divide by is N/A, which is a different and calmer sentence.
-      status: { label: negative ? "Deficit" : rung, rung },
-    };
-  });
-  const sumCash = (pick: (f: (typeof rowsWithCash)[number]) => Prisma.Decimal | null) =>
-    rowsWithCash.reduce((a, f) => a + (toNumber(pick(f)) ?? 0), 0);
+  const tableRows: CashFundRow[] = fundLedger.map((f) => ({
+    id: f.row.fundId,
+    fund: <DimLabel code={f.row.code} name={f.row.name} mode={scope.labelMode} />,
+    beginning: money(f.row.beginningCash),
+    receipts: money(f.row.receiptsMtd),
+    disbursements: money(f.row.disbursementsMtd),
+    ending: money(f.row.endingCash),
+    endingNegative: f.negative,
+    days: f.days === null ? NOT_AVAILABLE : `${fmtDays(f.days)} days`,
+    status: { label: f.negative ? "Deficit" : f.rung, rung: f.rung },
+  }));
   const tableTotal = {
     beginning: money(sumCash((f) => f.beginningCash)),
     receipts: money(sumCash((f) => f.receiptsMtd)),
@@ -789,7 +900,7 @@ export default async function CashDashboard({
           empty="No cash position was committed for this period."
           footer={
             tableRows.length > 0 ? (
-              <p className="mt-[12px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
+              <p className="mt-[12px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]">
                 Days cash on hand per fund divides each fund&apos;s ending cash by its amended
                 annual expenditure budget ÷ 365. The headline tile reads the district&apos;s
                 adopted budget instead, so the two can differ where the board has amended.
@@ -840,10 +951,10 @@ export default async function CashDashboard({
           {/* ---------- the key insight bar — Figma 55:5479 ---------- */}
           <OverviewPanel className="flex flex-1 flex-wrap items-center justify-between gap-x-[24px] gap-y-[10px] p-[18px]">
             <div className="min-w-0 flex-1 basis-[280px]">
-              <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-black/85">
+              <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-[#060606]">
                 Key insight
               </p>
-              <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-black/50">
+              <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-[#060606]">
                 {movement ? `${movement} ` : ""}
                 {coverage} Cash balances are unaudited and reflect the file committed for{" "}
                 {scope.label}; the 30-day projection is straight-lined from recent months and

@@ -209,8 +209,8 @@ export function CashReserveGauge({
           <p
             className={
               compact
-                ? "whitespace-nowrap text-[17px] font-bold leading-[normal] tracking-[0.17px] text-[#060606] [font-variant-numeric:proportional-nums]"
-                : "whitespace-nowrap text-[28px] leading-[normal] tracking-[0.28px] text-[#060606] [font-variant-numeric:proportional-nums]"
+                ? "whitespace-nowrap text-[16px] font-bold leading-[normal] tracking-[0.17px] text-[#060606] [font-variant-numeric:proportional-nums]"
+                : "whitespace-nowrap text-[26px] leading-[normal] tracking-[0.28px] text-[#060606] [font-variant-numeric:proportional-nums]"
             }
           >
             <CountUp value={`${Math.round(value)} Days of Cash Reserve`} />
@@ -218,8 +218,8 @@ export function CashReserveGauge({
           <p
             className={
               compact
-                ? "text-[11px] leading-[normal] tracking-[0.11px] text-[#9a9a9a]"
-                : "text-[14px] leading-[normal] tracking-[0.14px] text-[#9a9a9a]"
+                ? "text-[11px] leading-[normal] tracking-[0.11px] text-[#060606]"
+                : "text-[14px] leading-[normal] tracking-[0.14px] text-[#060606]"
             }
           >
             Cash Reserve

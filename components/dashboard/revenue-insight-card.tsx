@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { cn } from "@/lib/cn";
+import { CARD_TITLE, CARD_BODY } from "@/components/dashboard/type-scale";
 import { OverviewPanel, ArrowGlyph } from "@/components/dashboard/overview-panel";
 
 /**
@@ -21,8 +23,8 @@ export function RevenueInsightCard({
 }) {
   return (
     <OverviewPanel className="px-[57px] pb-[11px] pt-[9px]">
-      <h2 className="text-[14px] font-bold leading-[22px] text-black/[0.85]">{title}</h2>
-      <p className="text-[12px] leading-[18px] text-black/50">{children}</p>
+      <h2 className={CARD_TITLE}>{title}</h2>
+      <p className={cn("mt-[2px]", CARD_BODY)}>{children}</p>
       {ctaHref && (
         <div className="mt-[6px] flex justify-end">
           <Link

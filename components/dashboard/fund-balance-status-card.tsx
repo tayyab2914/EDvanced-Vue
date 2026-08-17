@@ -39,7 +39,7 @@ export function FundBalanceStatusCard({
     >
       <div className="flex items-start justify-between gap-[8px]">
         <div className="flex min-w-0 flex-col items-start gap-[8px]">
-          <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
+          <span className="text-[14px] font-medium leading-[20px] text-[#060606]">
             Reserve Status
           </span>
           <span
@@ -53,7 +53,7 @@ export function FundBalanceStatusCard({
           <CubeGlyph color={ink} />
         </span>
       </div>
-      <span className="text-[12px] leading-normal text-[#797979]">{note}</span>
+      <span className="text-[12px] leading-normal text-[#060606]">{note}</span>
       <span
         className="inline-flex w-fit items-center rounded-[20px] px-[8px] py-[1px] text-[10px] leading-normal tracking-[0.1px]"
         style={{ background: "rgba(230,95,43,0.18)", color: "#e65f2b" }}

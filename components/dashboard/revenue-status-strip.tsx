@@ -149,11 +149,11 @@ export function RevenueStatusStrip({
               {/* The period lives IN the heading — "Revenue Status (YTD)" — rather than on
                   a second grey line under it. The band repeated "Year to date" under four
                   headings in a row, which is where the clutter came from. */}
-              <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
+              <span className="text-[14px] font-medium leading-[20px] text-[#060606]">
                 Revenue Status (YTD)
               </span>
               <span
-                className="whitespace-nowrap text-[25px] font-medium leading-[36px]"
+                className="whitespace-nowrap text-[26px] font-medium leading-[36px]"
                 style={{ color: ink }}
               >
                 {verdict ?? (rung === "N/A" ? "Not available" : rung)}
@@ -190,10 +190,10 @@ export function RevenueStatusStrip({
         <div className="relative flex w-full min-w-0 flex-col gap-[10px] rounded-[16px] p-[16px] sm:w-[290px] sm:min-w-[254px] sm:flex-none">
           <div className="flex items-start justify-between gap-[8px]">
             <div className="flex min-w-0 flex-col items-start gap-[8px]">
-              <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
+              <span className="text-[14px] font-medium leading-[20px] text-[#060606]">
                 Days Elapsed
               </span>
-              <span className="text-[32px] font-medium leading-[36px] text-[#1f1f21] [font-variant-numeric:proportional-nums]">
+              <span className="text-[32px] font-medium leading-[36px] text-[#060606] [font-variant-numeric:proportional-nums]">
                 <CountUp value={days} />
               </span>
             </div>
@@ -202,7 +202,7 @@ export function RevenueStatusStrip({
               <Icon name="calendar" size={46} />
             </span>
           </div>
-          <span className="inline-flex w-fit items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-black">
+          <span className="inline-flex w-fit items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-[#060606]">
             {elapsedNote}
           </span>
         </div>

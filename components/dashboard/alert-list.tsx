@@ -102,11 +102,11 @@ function FundWhereRow({
     lines tall while the fund name beside it stays one, and the row renders as two detached
     boxes with a step between them. One background cannot come apart.
   */
-  const cell = "py-[7px] text-[11.5px] leading-[15px]";
+  const cell = "py-[7px] text-[11px] leading-[15px]";
   const body = (
     <>
-      <span className={cn(cell, "truncate pl-2.5 pr-5 text-ink-muted")}>{label}</span>
-      <span className={cn(cell, "pl-5 pr-2.5 text-right tabular-nums text-muted-2")}>{detail}</span>
+      <span className={cn(cell, "truncate pl-2.5 pr-5 text-[#060606]")}>{label}</span>
+      <span className={cn(cell, "pl-5 pr-2.5 text-right tabular-nums text-[#060606]")}>{detail}</span>
     </>
   );
 
@@ -154,11 +154,11 @@ export function AlertList({
           <Icon name="check-circle" size={16} />
         </span>
         <span className="min-w-0">
-          <span className="block text-[12.5px] font-semibold leading-snug text-strong">
+          <span className="block text-[12px] font-semibold leading-snug text-strong">
             {empty}
           </span>
           {emptyNote && (
-            <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-2">{emptyNote}</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-[#060606]">{emptyNote}</span>
           )}
         </span>
       </div>
@@ -185,11 +185,11 @@ export function AlertList({
             <span className="min-w-0 flex-1">
               <span
                 data-alert-message
-                className="block text-[12.5px] font-medium leading-snug text-ink-muted"
+                className="block text-[12px] font-medium leading-snug text-[#060606]"
               >
                 {a.message}
               </span>
-              <span data-alert-title className="mt-0.5 block text-[11px] text-muted-2">
+              <span data-alert-title className="mt-0.5 block text-[11px] text-[#060606]">
                 {a.title}
               </span>
             </span>
@@ -201,7 +201,7 @@ export function AlertList({
               className="mt-[1px] flex-none"
             />
             {href && (
-              <span aria-hidden className="mt-[3px] flex-none text-[11px] text-muted-2">
+              <span aria-hidden className="mt-[3px] flex-none text-[11px] text-[#060606]">
                 ›
               </span>
             )}
@@ -245,7 +245,7 @@ export function AlertList({
             */}
             {funds.length > 0 && (
               <div className="pb-3 pl-9">
-                <span className="block text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2">
+                <span className="block text-[10px] font-semibold uppercase tracking-[0.05em] text-[#060606]">
                   Where
                 </span>
                 {/*
@@ -271,7 +271,7 @@ export function AlertList({
         );
       })}
       {max && alerts.length > max && (
-        <li className="pt-2.5 text-[11.5px] text-muted-2">and {alerts.length - max} more.</li>
+        <li className="pt-2.5 text-[11px] text-[#060606]">and {alerts.length - max} more.</li>
       )}
     </ul>
   );
@@ -312,8 +312,8 @@ export function AlertOverview({
    */
   const FIGURE: Record<DisplaySeverity, string> = {
     CRITICAL: "text-action",
-    WARNING: "text-ink",
-    INFORMATIONAL: "text-ink",
+    WARNING: "text-[#060606]",
+    INFORMATIONAL: "text-[#060606]",
   };
 
   return (
@@ -334,7 +334,7 @@ export function AlertOverview({
           >
             {c.count}
           </span>
-          <span className="block max-w-full truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+          <span className="block max-w-full truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
             {c.label}
           </span>
         </li>
@@ -391,14 +391,14 @@ export function InsightList({
             <span className="min-w-0 flex-1">
               <span
                 data-insight-text
-                className="block text-[12.5px] font-medium leading-relaxed text-ink-muted"
+                className="block text-[12px] font-medium leading-relaxed text-[#060606]"
               >
                 {i.text}
               </span>
               {i.detail && (
                 <span
                   data-insight-detail
-                  className="mt-0.5 block text-[11.5px] leading-snug text-muted-2"
+                  className="mt-0.5 block text-[11px] leading-snug text-[#060606]"
                 >
                   {i.detail}
                 </span>

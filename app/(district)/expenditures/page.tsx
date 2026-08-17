@@ -40,6 +40,7 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { EmptyState, SubstitutionNotice } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
+import { ColumnChart } from "@/components/dashboard/charts/column-chart";
 import { ShareBars } from "@/components/dashboard/charts/budget-bars";
 import {
   OverviewKpiTile,
@@ -362,7 +363,26 @@ export default async function ExpenditureDashboard({
     },
   ];
 
-  // ===================== the one-page landscape summary =====================
+  /**
+   * The monthly utilisation series — spend plus encumbrances against that month's budget.
+   * Feeds the screen's utilization trend card AND the printed summary's, so the two cannot
+   * disagree. A month with no budget draws no bar rather than a fake zero.
+   */
+  const monthlyUtilization: (number | null)[] = series.points.map((p) => {
+    if (!p.hasData) return null;
+    const b = toNumber(p.expenditureBudget) ?? 0;
+    if (!b) return null;
+    const a = toNumber(p.expenditureYtd) ?? 0;
+    const e = toNumber(p.encumbrances) ?? 0;
+    return ((a + e) / b) * 100;
+  });
+
+  // ===================== the two-page landscape summary =====================
+  //
+  // Page one is the position: the six figures, spending against budget, the chosen breakdown
+  // and the by-function ledger. Page two is the diagnosis — utilization month by month
+  // against the district's warning and critical lines, which functions moved, and what has
+  // crossed a threshold. The one-page version printed none of those three.
   if (summary) {
     return (
       <PrintSheet
@@ -371,7 +391,10 @@ export default async function ExpenditureDashboard({
         scope={sheetScope(scope)}
         asOf={sheetAsOf(scope.dataAsOf)}
         backHref={options.query ? `/expenditures?${options.query}` : "/expenditures"}
-      >
+        pages={[
+          {
+            content: (
+              <>
         <SheetBand cols="1fr 1fr 1fr 1fr 1fr 1fr">
           {kpiData.map((k) => (
             <SheetKpi
@@ -392,7 +415,7 @@ export default async function ExpenditureDashboard({
               summary={`Actual spending year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
               categories={labels}
               format={(v) => compactMoney(v, 0)}
-              height={230}
+              height={210}
               series={[
                 {
                   key: "actual",
@@ -477,7 +500,7 @@ export default async function ExpenditureDashboard({
           </SheetCard>
         </SheetBand>
 
-        <SheetBand cols="1.6fr 1fr">
+        <SheetBand cols="1fr" grow>
           <SheetCard title="Expenditures by function (YTD)" note={SHEET_TABLE_NOTE}>
             <DataTable
               dense
@@ -545,54 +568,120 @@ export default async function ExpenditureDashboard({
               }}
             />
           </SheetCard>
-
-          <div className="flex min-w-0 flex-col gap-[7px]">
-            <SheetCard title="Largest variances" note="Against budget to date">
-              <MoverList
-                items={[...movers.positive, ...movers.negative].slice(0, 4).map((r) => ({
-                  id: r.id,
-                  name: codeName(r.code, r.name, scope.labelMode),
-                  value: accounting(r.pace.amount, { compact: true }),
-                  percent: signedPercent(r.pace.percent),
-                  // Over pace is the bad direction for spending.
-                  tone: r.pace.amount.isNegative() ? ("positive" as const) : ("negative" as const),
-                }))}
-                empty="Nothing is materially off budget."
-              />
-            </SheetCard>
-
-            <SheetCard title={`Expenditure alerts (${expenditureAlerts.length})`}>
-              <AlertList
-                mode={scope.labelMode}
-                alerts={expenditureAlerts.slice(0, 2).map((a) => ({
-                  id: a.id,
-                  severity: a.severity,
-                  title: a.title,
-                  message: a.message,
-                }))}
-                empty="No expenditure thresholds crossed."
-              />
-            </SheetCard>
-          </div>
         </SheetBand>
-      </PrintSheet>
+              </>
+            ),
+          },
+          {
+            label: "Utilization detail & alerts",
+            content: (
+              <>
+                <SheetBand cols="1.5fr 1fr 1fr">
+                  {/* Utilization against the district's OWN warning and critical lines — the
+                      chart the one-page sheet had no room for, and the one that says whether
+                      the year is tracking to overspend rather than what it has spent. */}
+                  <SheetCard
+                    title="Budget utilization trend"
+                    note={`Warning ≥ ${pctRule(utilT.warning)} · critical ≥ ${pctRule(utilT.critical)}`}
+                  >
+                    <ColumnChart
+                      mode="threshold"
+                      title="Budget utilization trend"
+                      summary={`Budget utilization each month against warning at ${utilT.warning}% and critical at ${utilT.critical}%.`}
+                      height={215}
+                      format={(v) => `${v.toFixed(0)}%`}
+                      columns={labels
+                        .map((label, i) => ({ label, value: monthlyUtilization[i] }))
+                        .filter((c): c is { label: string; value: number } => c.value !== null)
+                        .map((c) => ({ ...c, display: percent(c.value, 1) }))}
+                      thresholds={[
+                        {
+                          at: utilT.warning,
+                          label: pctRule(utilT.warning),
+                          color: "var(--color-monitor)",
+                        },
+                        {
+                          at: utilT.critical,
+                          label: pctRule(utilT.critical),
+                          color: "var(--color-action)",
+                        },
+                      ]}
+                    />
+                  </SheetCard>
+
+                  {/* Ink follows favourability, not sign — overspend red, underspend green —
+                      which is the same polarity the screen's two cards use. */}
+                  <SheetCard title="Top positive variances" note="Spending above expected">
+                    <MoverList
+                      items={movers.positive.map((r) => ({
+                        id: r.id,
+                        name: codeName(r.code, r.name, scope.labelMode),
+                        value: accounting(r.pace.amount, { compact: true }),
+                        percent: signedPercent(r.pace.percent),
+                        tone: "negative" as const,
+                      }))}
+                      empty="Nothing is spending ahead of budget."
+                    />
+                  </SheetCard>
+
+                  <SheetCard title="Top negative variances" note="Spending below expected">
+                    <MoverList
+                      items={movers.negative.map((r) => ({
+                        id: r.id,
+                        name: codeName(r.code, r.name, scope.labelMode),
+                        value: accounting(r.pace.amount, { compact: true }),
+                        percent: signedPercent(r.pace.percent),
+                        tone: "positive" as const,
+                      }))}
+                      empty="Nothing is spending behind budget."
+                    />
+                  </SheetCard>
+                </SheetBand>
+
+                <SheetBand cols="1.35fr 1fr" grow>
+                  <SheetCard
+                    title={`Expenditure alerts (${expenditureAlerts.length})`}
+                    note="Against the district's own thresholds"
+                  >
+                    <AlertList
+                      mode={scope.labelMode}
+                      alerts={expenditureAlerts.slice(0, 6).map((a) => ({
+                        id: a.id,
+                        severity: a.severity,
+                        title: a.title,
+                        message: a.message,
+                      }))}
+                      empty="No expenditure thresholds crossed."
+                      emptyNote="Utilization is inside the district's policy bands."
+                    />
+                    {expenditureAlerts.length > 6 && (
+                      <p className="text-[8.5px] text-[#060606]">
+                        {expenditureAlerts.length - 6} further alert
+                        {expenditureAlerts.length - 6 === 1 ? "" : "s"} on the Alerts dashboard.
+                      </p>
+                    )}
+                  </SheetCard>
+
+                  <SheetCard title="Key insight" note="How to read this page">
+                    <p className="text-[10px] leading-[1.45] text-[#060606]">
+                      Utilization is spending plus encumbrances against the amended budget, so a
+                      function can be inside its budget and still be flagged if it has committed
+                      the rest of it. The warning and critical lines above are the
+                      district&apos;s own, set on the Policies screen. To see how this year&apos;s
+                      spending flows through to fund balance and reserves, run the three-year
+                      forecast.
+                    </p>
+                  </SheetCard>
+                </SheetBand>
+              </>
+            ),
+          },
+        ]}
+      />
     );
   }
 
   // ===================== the redesigned screen (Figma 55:2921) =====================
-
-  /**
-   * The monthly utilisation series — spend plus encumbrances against that month's budget —
-   * for the trend card. A month with no budget draws no bar rather than a fake zero.
-   */
-  const monthlyUtilization: (number | null)[] = series.points.map((p) => {
-    if (!p.hasData) return null;
-    const b = toNumber(p.expenditureBudget) ?? 0;
-    if (!b) return null;
-    const a = toNumber(p.expenditureYtd) ?? 0;
-    const e = toNumber(p.encumbrances) ?? 0;
-    return ((a + e) / b) * 100;
-  });
 
   const expenditureDetailHref = `/data/expenditure-detail?fy=${scope.fiscalYear}&period=${scope.period}`;
 

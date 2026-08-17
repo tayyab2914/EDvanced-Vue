@@ -236,7 +236,7 @@ export default async function AlertsPage({
       </div>
 
       <FooterInfoBar>
-        <span className="block font-medium text-[#060606]/[0.88]">
+        <span className="block font-medium text-[#060606]">
           Alerts are evaluated for {scope.label} only.
         </span>
         <span className="mt-0.5 block">

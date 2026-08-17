@@ -64,7 +64,7 @@ export function FundBalanceByFundTable({
       </div>
 
       {rows.length === 0 ? (
-        <p className="flex items-center justify-center py-[36px] text-[12px] text-[#797979]">
+        <p className="flex items-center justify-center py-[36px] text-[12px] text-[#060606]">
           {empty}
         </p>
       ) : (
@@ -74,7 +74,7 @@ export function FundBalanceByFundTable({
             <div
               className={cn(
                 COLS,
-                "mt-[14px] pb-[10px] text-[14px] leading-[1.15] tracking-[0.14px] text-[#060606]",
+                "mt-[14px] pb-[10px] text-[14px] font-bold leading-[1.15] tracking-[0.14px] text-[#060606]",
               )}
             >
               <span>Fund</span>

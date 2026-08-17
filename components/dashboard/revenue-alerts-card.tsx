@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { CARD_TITLE } from "@/components/dashboard/type-scale";
 import { OverviewPanel, ArrowGlyph } from "@/components/dashboard/overview-panel";
 import { PillLink } from "@/components/dashboard/revenue-shared";
 import type { DisplaySeverity } from "@/components/dashboard/alert-list";
@@ -51,7 +52,7 @@ export function RevenueAlertsCard({
     <OverviewPanel className="flex flex-col px-[24px] py-[20px]">
       {/* ---- header ---- */}
       <div className="flex items-center gap-[10px] pl-[19px]">
-        <h2 className="text-[16px] leading-normal tracking-[0.16px] text-[#060606]">{title}</h2>
+        <h2 className={CARD_TITLE}>{title}</h2>
         {alerts.length > 0 && (
           <span className="inline-flex min-w-[21px] items-center justify-center rounded-[20px] bg-[rgba(238,32,28,0.18)] px-[7px] py-px text-[10px] leading-[17px] tracking-[0.08px] text-[#ee201c]">
             {alerts.length}
@@ -61,7 +62,7 @@ export function RevenueAlertsCard({
 
       {/* ---- the alerts ---- */}
       {alerts.length === 0 ? (
-        <p className="flex flex-1 items-center justify-center py-[36px] text-center text-[12px] text-[#797979]">
+        <p className="flex flex-1 items-center justify-center py-[36px] text-center text-[12px] text-[#060606]">
           {empty}
         </p>
       ) : (
@@ -74,7 +75,7 @@ export function RevenueAlertsCard({
                 className={cn("py-[14px]", i > 0 && "border-t border-[#e3e3e3]")}
               >
                 <div className="flex items-start gap-[10px]">
-                  <p className="min-w-0 flex-1 pl-[19px] text-[12px] leading-normal tracking-[0.12px] text-black">
+                  <p className="min-w-0 flex-1 pl-[19px] text-[12px] leading-normal tracking-[0.12px] text-[#060606]">
                     {a.message}
                   </p>
                   <span
@@ -85,7 +86,7 @@ export function RevenueAlertsCard({
                   </span>
                 </div>
                 <div className="mt-[6px] flex items-center justify-between gap-[10px] pl-[19px]">
-                  <span className="text-[10px] leading-normal tracking-[0.08px] text-black/[0.42]">
+                  <span className="text-[10px] leading-normal tracking-[0.08px] text-[#060606]">
                     {a.title}
                   </span>
                   <Link
@@ -98,13 +99,13 @@ export function RevenueAlertsCard({
                 </div>
                 {(a.funds?.length ?? 0) > 0 && (
                   <div className="mt-[8px] flex items-start gap-[8px]">
-                    <span className="pt-[4px] text-[10px] font-bold leading-normal tracking-[0.08px] text-black/[0.56]">
+                    <span className="pt-[4px] text-[10px] font-bold leading-normal tracking-[0.08px] text-[#060606]">
                       WHERE
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col items-start gap-[4px]">
                       {a.funds!.map((f) => {
                         const chip = (
-                          <span className="inline-flex max-w-full items-center gap-[6px] truncate rounded-[20px] bg-white px-[8px] py-[5px] text-[10px] leading-normal tracking-[0.08px] text-black">
+                          <span className="inline-flex max-w-full items-center gap-[6px] truncate rounded-[20px] bg-white px-[8px] py-[5px] text-[10px] leading-normal tracking-[0.08px] text-[#060606]">
                             <span className="font-bold">{f.label}</span>
                             <span className="truncate">{f.detail}</span>
                           </span>

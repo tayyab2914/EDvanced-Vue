@@ -64,7 +64,7 @@ export function CashCompositionCard({
       </div>
 
       {rows.length === 0 ? (
-        <p className="flex flex-1 items-center justify-center py-[36px] text-center text-[12px] leading-relaxed text-[#797979]">
+        <p className="flex flex-1 items-center justify-center py-[36px] text-center text-[12px] leading-relaxed text-[#060606]">
           {empty}
         </p>
       ) : (
@@ -75,16 +75,16 @@ export function CashCompositionCard({
               <li key={r.id}>
                 <div className="flex h-[30px] items-center justify-between gap-[12px]">
                   <span
-                    className="min-w-0 truncate text-[15px] leading-[2] tracking-[0.15px] text-black"
+                    className="min-w-0 truncate text-[14px] leading-[2] tracking-[0.15px] text-[#060606]"
                     title={r.label}
                   >
                     {r.label}
                   </span>
                   <span className="flex flex-none items-baseline gap-[14px]">
-                    <span className="whitespace-nowrap text-[10px] font-bold leading-[2] tracking-[0.1px] text-black">
+                    <span className="whitespace-nowrap text-[10px] font-bold leading-[2] tracking-[0.1px] text-[#060606]">
                       {r.display}
                     </span>
-                    <span className="whitespace-nowrap text-[10px] leading-[2] tracking-[0.1px] text-black">
+                    <span className="whitespace-nowrap text-[10px] leading-[2] tracking-[0.1px] text-[#060606]">
                       {r.share}
                     </span>
                   </span>

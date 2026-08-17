@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { BAND_TITLE } from "@/components/dashboard/type-scale";
 import { CountUp } from "@/components/count-up";
 import { Icon, type IconName } from "@/components/icons";
 import {
@@ -108,7 +109,7 @@ function MiniRing({ pct, tone }: { pct: number; tone: TileTone }) {
           style={{ ["--c" as string]: `${c}` }}
         />
       </svg>
-      <span className="absolute text-[9px] font-bold leading-none tracking-[-0.3px] text-[#060606]">
+      <span className="absolute text-[10px] font-bold leading-none tracking-[-0.3px] text-[#060606]">
         <CountUp value={`${Math.round(clamped)}%`} />
       </span>
     </span>
@@ -211,10 +212,10 @@ export function OverviewKpiTile({
               <Icon name={icon} size={24} />
             </span>
           )}
-          <span className="min-w-0 text-[14px] font-semibold leading-[16px] text-[#797979]">
+          <span className="min-w-0 text-[14px] font-semibold leading-[16px] text-[#060606]">
             {label}
             {caption && (
-              <span className="block font-normal text-[rgba(121,121,121,0.55)]">{caption}</span>
+              <span className="block font-normal text-[#060606]">{caption}</span>
             )}
           </span>
         </div>
@@ -222,8 +223,8 @@ export function OverviewKpiTile({
           className={cn(
             // Proportional figures, not tabular: at 28px, tabular-nums gives every digit
             // the width of a zero and "121" reads loose. `tabular-nums` belongs in columns.
-            "text-[28px] font-bold leading-[32px] tracking-[0.28px] [font-variant-numeric:proportional-nums]",
-            unavailable ? "text-[#797979]" : "text-[#060606]",
+            "text-[26px] font-bold leading-[32px] tracking-[0.28px] [font-variant-numeric:proportional-nums]",
+            unavailable ? "text-[#060606]" : "text-[#060606]",
           )}
           style={!unavailable && valueInk ? { color: valueInk } : undefined}
           title={
@@ -251,7 +252,7 @@ export function OverviewKpiTile({
          */
         <span
           className={cn(
-            "flex gap-[4px] text-[12px] font-semibold leading-[16px] tracking-[0.075px] text-[rgba(0,6,6,0.62)]",
+            "flex gap-[4px] text-[12px] font-semibold leading-[16px] tracking-[0.075px] text-[#060606]",
             /**
              * A TERNARY, not `items-start` plus a conditional `items-center`.
              *
@@ -276,7 +277,7 @@ export function OverviewKpiTile({
 
       <div className="flex flex-col items-start gap-[5px]">
         {chip && (
-          <span className="inline-flex items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-[11px] tracking-[0.1px] text-black">
+          <span className="inline-flex items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-[12px] tracking-[0.1px] text-[#060606]">
             {chip}
           </span>
         )}
@@ -286,7 +287,7 @@ export function OverviewKpiTile({
             /* The pill and its rule on one line — see `statusInline` above. */
             <span className="flex flex-wrap items-center gap-[7px]">
               <span
-                className="inline-flex items-center rounded-[20px] px-[8px] py-[1px] text-[10px] font-bold leading-[11px] tracking-[0.1px]"
+                className="inline-flex items-center rounded-[20px] px-[8px] py-[1px] text-[10px] font-bold leading-[12px] tracking-[0.1px]"
                 style={{ background: RUNG_PILL[status].bg, color: RUNG_PILL[status].fg }}
                 title={unavailableReason}
               >
@@ -298,7 +299,7 @@ export function OverviewKpiTile({
             </span>
           ) : (
             <span
-              className="inline-flex items-center rounded-[20px] px-[8px] py-[1px] text-[10px] font-bold leading-[11px] tracking-[0.1px]"
+              className="inline-flex items-center rounded-[20px] px-[8px] py-[1px] text-[10px] font-bold leading-[12px] tracking-[0.1px]"
               style={{ background: RUNG_PILL[status].bg, color: RUNG_PILL[status].fg }}
               title={unavailableReason}
             >
@@ -324,7 +325,7 @@ export function OverviewKpiTile({
             )}
             <span className="min-w-0">
               {delta.text}
-              {delta.note && <span className="text-[#797979]"> {delta.note}</span>}
+              {delta.note && <span className="text-[#060606]"> {delta.note}</span>}
             </span>
           </span>
         )}
@@ -418,10 +419,10 @@ function SplitPane({
        * there is enough of both to plot.
        */}
       <div className="flex flex-col items-start gap-[4px] whitespace-nowrap">
-        <span className="text-[15px] font-semibold leading-[20px] text-[#797979]">
+        <span className="text-[14px] font-semibold leading-[20px] text-[#060606]">
           {label}
         </span>
-        <span className="text-[32px] font-bold leading-[36px] text-[#1f1f21] [font-variant-numeric:proportional-nums]">
+        <span className="text-[32px] font-bold leading-[36px] text-[#060606] [font-variant-numeric:proportional-nums]">
           <CountUp value={value} />
         </span>
       </div>
@@ -541,17 +542,17 @@ export function OverviewSplitCard({
             <span className="text-[#fd4438]">
               <Icon name="warning" size={20} />
             </span>
-            <span className="text-[15px] font-bold leading-[24px] text-[#fd4438]">
+            <span className="text-[14px] font-bold leading-[24px] text-[#fd4438]">
               {alerts.criticalCount}
             </span>
-            <span className="text-[15px] font-semibold leading-[24px] text-[rgba(31,31,33,0.74)]">
+            <span className="text-[14px] font-semibold leading-[24px] text-[#060606]">
               CRITICAL
             </span>
           </span>
           {alerts.href && (
             <Link
               href={alerts.href}
-              className="inline-flex h-[20px] items-center gap-[3px] rounded-[22px] bg-[#ffeded] px-[7px] text-[10px] font-bold leading-[12px] tracking-[0.2px] text-black transition-opacity hover:opacity-80"
+              className="inline-flex h-[20px] items-center gap-[3px] rounded-[22px] bg-[#ffeded] px-[7px] text-[10px] font-bold leading-[12px] tracking-[0.2px] text-[#060606] transition-opacity hover:opacity-80"
             >
               <span className="text-[#fd4438]">
                 <DiagonalArrow size={14} />
@@ -585,7 +586,7 @@ export function OverviewSection({
   return (
     <section className="flex flex-col items-start gap-[20px]">
       <div className="flex w-full items-center justify-between gap-3">
-        <h2 className="text-[22px] font-bold leading-[25px] tracking-[0.22px] text-[#060606]">
+        <h2 className={BAND_TITLE}>
           {title}
         </h2>
         {action}

@@ -2,12 +2,12 @@ import type { StatusRung } from "@/lib/dashboard/status";
 import type { DeltaTone } from "@/lib/dashboard/format";
 
 /**
- * The dashboards that have a one-page landscape print summary, in navigation order.
+ * The dashboards that have a landscape print summary, in navigation order.
  *
  * One list, read by two things that must not drift: the print verifier, which asserts each
- * of these lands on a single sheet, and — should it ever be wanted — any index of the
- * printable views. A summary added to a route but not to this list is a summary nobody
- * checks the pagination of, which is exactly how the Executive one reached five pages.
+ * of these paginates exactly as its route authored it, and — should it ever be wanted — any
+ * index of the printable views. A summary added to a route but not to this list is a summary
+ * nobody checks the pagination of, which is exactly how the Executive one reached five pages.
  */
 export interface SummaryView {
   /** Filename-safe id, used for the verifier's PDF output. */
@@ -87,7 +87,35 @@ export function sheetAsOf(date: Date | null): string | undefined {
  * silently truncated would be a page of numbers that does not add up to its own total.
  */
 export const SHEET_TABLE_ROWS = 8;
-export const SHEET_TABLE_NOTE = `Top ${SHEET_TABLE_ROWS} · total is all rows`;
+
+/**
+ * What a table gets when it has a band of a page to itself.
+ *
+ * The eight above is what fits BESIDE other cards. A ledger that is the point of its page —
+ * the cash by-fund table, the fund balance directory — has the height for a district's whole
+ * fund list, and a directory that stops at eight funds is not a directory.
+ */
+export const SHEET_LEDGER_ROWS = 14;
+
+export function sheetTableNote(rows: number): string {
+  return `Top ${rows} · total is all rows`;
+}
+
+export const SHEET_TABLE_NOTE = sheetTableNote(SHEET_TABLE_ROWS);
+
+/**
+ * The ceiling the print verifier enforces on any one summary.
+ *
+ * Not a layout constraint — nothing breaks at three — but a summary is a summary. Two
+ * landscape pages is what a board packet was asked to be: page one the headline figures and
+ * the charts they come from, page two the detail, the movers and the alerts. A route that
+ * quietly grew to four would have stopped being a summary without anybody deciding to.
+ *
+ * Lives here rather than beside `PrintSheet` because the verifier is a plain node script and
+ * must not have to load a React component — and every constant those two share has to sit in
+ * one file or it is two constants.
+ */
+export const SHEET_MAX_PAGES = 2;
 
 export const SUMMARY_VIEWS: SummaryView[] = [
   { key: "executive", label: "Executive Dashboard", href: "/dashboard?view=summary" },

@@ -21,13 +21,13 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-[32px] font-medium leading-[36px] tracking-[0.16px] text-ink">
+        <h1 className="text-[32px] font-medium leading-[36px] tracking-[0.16px] text-[#060606]">
           {title}
         </h1>
         {description && (
-          <p className="mt-[1px] text-[12px] leading-[14px] text-muted-2">{description}</p>
+          <p className="mt-[1px] text-[12px] leading-[14px] text-[#060606]">{description}</p>
         )}
-        {note && <p className="mt-[6px] text-[12px] leading-[14px] text-muted-2">{note}</p>}
+        {note && <p className="mt-[6px] text-[12px] leading-[14px] text-[#060606]">{note}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>

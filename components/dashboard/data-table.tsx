@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { COLUMN_HEADER } from "@/components/dashboard/type-scale";
 import { FundTag } from "@/components/dashboard/shared";
 
 /**
@@ -76,7 +77,7 @@ export function DataTable({
   zebra?: boolean;
 }) {
   if (rows.length === 0) {
-    return <p className="py-8 text-center text-[12.5px] text-muted-2">{empty}</p>;
+    return <p className="py-8 text-center text-[12px] text-[#060606]">{empty}</p>;
   }
 
   const pad = dense ? "px-2.5 py-2" : spacious ? "px-3 py-3.5" : "px-3 py-2.5";
@@ -108,10 +109,10 @@ export function DataTable({
             title={cell.title}
             className={cn(
               pad,
-              "text-[12.5px]",
+              "text-[14px] leading-normal",
               c.align === "right" ? "text-right tabular-nums" : "text-left",
-              !isTotal && "text-ink-muted",
-              cell.strong && "font-semibold text-ink",
+              !isTotal && "text-[#060606]",
+              cell.strong && "font-semibold text-[#060606]",
               cell.tone && TONE[cell.tone],
             )}
           >
@@ -126,8 +127,8 @@ export function DataTable({
     <div className="-mx-1 overflow-x-auto">
       <table className="min-w-full">
         <thead>
-          {/* The redesign's header row (Figma 3:12545): sentence-case near-black labels
-              over one hairline at 10% black, instead of the old uppercase muted caps. */}
+          {/* The redesign's header row (Figma 3:12545), set in the dashboards' one column
+              header style — 14px bold black over a single hairline at 10% black. */}
           <tr className="border-b border-black/10">
             {columns.map((c) => (
               <th
@@ -136,7 +137,7 @@ export function DataTable({
                 style={c.width ? { width: c.width } : undefined}
                 className={cn(
                   pad,
-                  "text-[11.5px] font-medium tracking-[0.11px] text-[#060606]",
+                  COLUMN_HEADER,
                   c.align === "right" ? "text-right" : "text-left",
                 )}
               >
@@ -189,7 +190,7 @@ export function MoverList({
   empty?: string;
 }) {
   if (items.length === 0) {
-    return <p className="py-5 text-center text-[12.5px] text-muted-2">{empty}</p>;
+    return <p className="py-5 text-center text-[12px] text-[#060606]">{empty}</p>;
   }
   return (
     <ul data-mover-list className="flex flex-col">
@@ -205,7 +206,7 @@ export function MoverList({
           <span className="min-w-0 flex-1">
             <span
               data-mover-name
-              className="block truncate text-[12.5px] text-ink-muted"
+              className="block truncate text-[12px] text-[#060606]"
               title={i.name}
             >
               {i.name}
@@ -213,7 +214,7 @@ export function MoverList({
             {(i.fund || i.note) && (
               <span className="mt-1 flex min-w-0 items-center gap-1.5">
                 {i.fund && <FundTag {...i.fund} />}
-                {i.note && <span className="truncate text-[11px] text-muted-2">{i.note}</span>}
+                {i.note && <span className="truncate text-[11px] text-[#060606]">{i.note}</span>}
               </span>
             )}
           </span>
@@ -225,7 +226,7 @@ export function MoverList({
                 {i.value}
               </span>
               {i.percent && (
-                <span className={cn("block text-[10.5px] tabular-nums", TONE[i.tone])}>
+                <span className={cn("block text-[11px] tabular-nums", TONE[i.tone])}>
                   {i.percent}
                 </span>
               )}

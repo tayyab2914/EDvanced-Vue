@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { CARD_TITLE } from "@/components/dashboard/type-scale";
 import type { AlertRow, DisplaySeverity } from "@/components/dashboard/alert-list";
 
 /**
@@ -28,7 +29,7 @@ const SEVERITY: Record<
 > = {
   CRITICAL: { chip: "bg-[rgba(238,32,28,0.18)] text-[#ee201c]", ink: "#FD4438", label: "Action Required" },
   WARNING: { chip: "bg-[rgba(230,95,43,0.18)] text-[#e65f2b]", ink: "#E65F2B", label: "Review" },
-  INFORMATIONAL: { chip: "bg-black/[0.08] text-black/[0.56]", ink: "#797979", label: "Informational" },
+  INFORMATIONAL: { chip: "bg-black/[0.08] text-[#060606]", ink: "#797979", label: "Informational" },
 };
 
 /** The design's alert-triangle instance — 24px, a 12% fill under a 2px round stroke. */
@@ -98,7 +99,7 @@ function CriticalTally({ count }: { count: number }) {
       <p className="absolute inset-x-0 top-[23px] text-center text-[20px] font-bold leading-[23px] tracking-[0.2px] text-[#fd4438]">
         {count}!
       </p>
-      <p className="absolute inset-x-0 top-[49px] text-center text-[8px] font-bold leading-[9px] tracking-[0.08px] text-[#fd4438]">
+      <p className="absolute inset-x-0 top-[49px] text-center text-[10px] font-bold leading-[12px] tracking-[0.08px] text-[#fd4438]">
         CRITICAL
       </p>
     </div>
@@ -133,10 +134,10 @@ export function OverviewAlertsPanel({
     >
       {/* ---- header ---- */}
       <header className="flex items-center gap-[10px] pl-[43px] pr-[10px] pt-[22px]">
-        <h2 className="text-[16px] font-normal leading-[18px] tracking-[0.16px] text-[#060606]">
+        <h2 className={CARD_TITLE}>
           Alerts Summary
         </h2>
-        <span className="rounded-[20px] bg-[rgba(238,32,28,0.18)] px-[8px] py-[5px] text-[8px] leading-[9px] tracking-[0.08px] text-[#ee201c]">
+        <span className="rounded-[20px] bg-[rgba(238,32,28,0.18)] px-[8px] py-[5px] text-[10px] leading-[12px] tracking-[0.08px] text-[#ee201c]">
           {actionable}
         </span>
       </header>
@@ -153,7 +154,7 @@ export function OverviewAlertsPanel({
       <div className="relative min-h-0 flex-1">
         <div className="absolute inset-0 overflow-y-auto">
       {shown.length === 0 ? (
-        <p className="px-[20px] pb-[10px] pt-[24px] text-center text-[12px] leading-relaxed text-black/[0.42]">
+        <p className="px-[20px] pb-[10px] pt-[24px] text-center text-[12px] leading-relaxed text-[#060606]">
           No thresholds have been crossed this period.
         </p>
       ) : (
@@ -168,12 +169,12 @@ export function OverviewAlertsPanel({
                 </span>
 
                 <div className="flex items-start justify-between gap-[8px] pl-[43px] pr-[10px] pt-[14px]">
-                  <p className="min-w-0 pt-[6px] text-[12px] leading-[normal] tracking-[0.12px] text-black">
+                  <p className="min-w-0 pt-[6px] text-[12px] leading-[normal] tracking-[0.12px] text-[#060606]">
                     {a.message}
                   </p>
                   <span
                     className={cn(
-                      "flex-none whitespace-nowrap rounded-[20px] px-[8px] py-[5px] text-[8px] leading-[9px] tracking-[0.08px]",
+                      "flex-none whitespace-nowrap rounded-[20px] px-[8px] py-[5px] text-[10px] leading-[12px] tracking-[0.08px]",
                       sev.chip,
                     )}
                   >
@@ -182,7 +183,7 @@ export function OverviewAlertsPanel({
                 </div>
 
                 <div className="mt-[6px] flex items-center justify-between gap-[8px] pl-[43px] pr-[22px]">
-                  <p className="min-w-0 text-[8px] leading-[normal] tracking-[0.08px] text-black/[0.42]">
+                  <p className="min-w-0 text-[10px] leading-[normal] tracking-[0.08px] text-[#060606]">
                     {a.title}
                   </p>
                   <Link
@@ -196,7 +197,7 @@ export function OverviewAlertsPanel({
 
                 {funds.length > 0 && (
                   <div className="mt-[8px] flex items-start gap-[9px] pl-[4px] pr-[8px]">
-                    <span className="pt-[5px] text-[8px] font-bold uppercase leading-[9px] tracking-[0.08px] text-black/[0.56]">
+                    <span className="pt-[5px] text-[10px] font-bold uppercase leading-[12px] tracking-[0.08px] text-[#060606]">
                       Where
                     </span>
                     <span className="flex min-w-0 flex-col items-start gap-[3px]">
@@ -210,7 +211,7 @@ export function OverviewAlertsPanel({
                           </>
                         );
                         const shape =
-                          "max-w-full truncate whitespace-pre rounded-[20px] bg-white px-[8px] py-[5px] text-[8px] leading-[9px] tracking-[0.08px] text-black";
+                          "max-w-full truncate whitespace-pre rounded-[20px] bg-white px-[8px] py-[5px] text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]";
                         return f.href ? (
                           <Link
                             key={f.id}
@@ -246,7 +247,7 @@ export function OverviewAlertsPanel({
             <p className="absolute inset-x-0 top-[8px] text-center text-[20px] font-bold leading-[23px] tracking-[0.2px] text-[#e65f2b]">
               {warning}
             </p>
-            <p className="absolute inset-x-0 top-[34px] text-center text-[8px] font-bold leading-[9px] tracking-[0.08px] text-[#e65f2b]">
+            <p className="absolute inset-x-0 top-[34px] text-center text-[10px] font-bold leading-[12px] tracking-[0.08px] text-[#e65f2b]">
               Warnings
             </p>
           </div>
@@ -254,7 +255,7 @@ export function OverviewAlertsPanel({
             <p className="text-[20px] font-bold leading-[23px] tracking-[0.2px] text-[#fd4438]">
               {informational}
             </p>
-            <p className="text-[6px] font-bold leading-[7px] tracking-[0.06px] text-[#fd4438]">
+            <p className="text-[10px] font-bold leading-[12px] tracking-[0.06px] text-[#fd4438]">
               Information
             </p>
           </div>
@@ -267,7 +268,7 @@ export function OverviewAlertsPanel({
           <span className="flex size-[16px] items-center justify-center">
             <ArrowGlyph color="#FD4438" className="-rotate-45" />
           </span>
-          <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-black">
+          <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-[#060606]">
             View All {total} Alerts
           </span>
         </Link>

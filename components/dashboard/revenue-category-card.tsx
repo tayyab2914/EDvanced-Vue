@@ -73,7 +73,7 @@ export function RevenueCategoryCard({
       <RevenueCategorySwitcher options={viewOptions} value={view}>
         {/* ---- share rows ---- */}
         {rows.length === 0 ? (
-          <p className="flex flex-1 items-center justify-center py-[36px] text-[12px] text-[#797979]">
+          <p className="flex flex-1 items-center justify-center py-[36px] text-[12px] text-[#060606]">
             {empty}
           </p>
         ) : (
@@ -82,16 +82,16 @@ export function RevenueCategoryCard({
               <li key={r.id}>
                 <div className="flex items-baseline justify-between gap-[10px]">
                   <span
-                    className="min-w-0 truncate text-[15px] leading-[2] tracking-[0.15px] text-black"
+                    className="min-w-0 truncate text-[14px] leading-[2] tracking-[0.15px] text-[#060606]"
                     title={r.label}
                   >
                     {r.label}
                   </span>
                   <span className="flex flex-none items-baseline gap-[16px]">
-                    <span className="text-[10px] font-bold leading-[2] tracking-[0.1px] text-black">
+                    <span className="text-[10px] font-bold leading-[2] tracking-[0.1px] text-[#060606]">
                       {r.display}
                     </span>
-                    <span className="text-[10px] leading-[2] tracking-[0.1px] text-black">
+                    <span className="text-[10px] leading-[2] tracking-[0.1px] text-[#060606]">
                       {r.share}
                     </span>
                   </span>

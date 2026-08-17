@@ -105,13 +105,13 @@ export function SavedViews({
           role="menu"
           className={cn(PILL_MENU, "absolute right-0 z-40 mt-[6px] w-[300px] overflow-hidden")}
         >
-          <p className="px-3 pb-1 pt-2 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+          <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
             Saved views · shared with your district
           </p>
 
           <div className="max-h-[240px] overflow-y-auto pb-1">
             {views.length === 0 ? (
-              <p className="px-3 py-2 text-[12px] text-muted-2">
+              <p className="px-3 py-2 text-[12px] text-[#060606]">
                 No saved views yet. Apply some filters and save them here — everyone in your
                 district will see them.
               </p>
@@ -123,8 +123,8 @@ export function SavedViews({
                     role="menuitem"
                     onClick={() => apply(v.filters)}
                     className={cn(
-                      "min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-[12.5px] transition-colors hover:bg-panel",
-                      isCurrent(v.filters) ? "font-semibold text-brand" : "text-ink-muted",
+                      "min-w-0 flex-1 truncate rounded-md px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-panel",
+                      isCurrent(v.filters) ? "font-semibold text-brand" : "text-[#060606]",
                     )}
                   >
                     {v.name}
@@ -143,7 +143,7 @@ export function SavedViews({
                       <button
                         type="button"
                         onClick={() => setConfirming(null)}
-                        className="rounded-md border border-line px-2 py-1 text-[11px] text-ink-soft"
+                        className="rounded-md border border-line px-2 py-1 text-[11px] text-[#060606]"
                       >
                         No
                       </button>
@@ -153,7 +153,7 @@ export function SavedViews({
                       type="button"
                       onClick={() => setConfirming(v.id)}
                       aria-label={`Delete the "${v.name}" view`}
-                      className="flex-none rounded-md p-1.5 text-muted-2 opacity-0 transition-opacity hover:text-[#c0392b] focus:opacity-100 group-hover:opacity-100"
+                      className="flex-none rounded-md p-1.5 text-[#060606] opacity-0 transition-opacity hover:text-[#c0392b] focus:opacity-100 group-hover:opacity-100"
                     >
                       <Icon name="trash" size={13} />
                     </button>
@@ -180,20 +180,20 @@ export function SavedViews({
                   autoFocus
                   maxLength={60}
                   placeholder="Name this view…"
-                  className="h-8 w-full rounded-md border border-line bg-panel px-2 text-[12.5px] text-ink-soft outline-none placeholder:text-muted-2 focus:border-brand/50"
+                  className="h-8 w-full rounded-md border border-line bg-panel px-2 text-[12px] text-[#060606] outline-none placeholder:text-[#060606] focus:border-brand/50"
                 />
                 <div className="flex gap-1.5">
                   <button
                     type="submit"
                     disabled={saving}
-                    className="rounded-md bg-brand px-2.5 py-1 text-[11.5px] font-semibold text-white disabled:opacity-50"
+                    className="rounded-md bg-brand px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
                   >
                     {saving ? "Saving…" : "Save"}
                   </button>
                   <button
                     type="button"
                     onClick={() => setNaming(false)}
-                    className="rounded-md border border-line px-2.5 py-1 text-[11.5px] text-ink-soft"
+                    className="rounded-md border border-line px-2.5 py-1 text-[11px] text-[#060606]"
                   >
                     Cancel
                   </button>
@@ -205,19 +205,19 @@ export function SavedViews({
                 onClick={() => setNaming(true)}
                 disabled={!hasFilters}
                 title={hasFilters ? undefined : "Apply a filter first."}
-                className="w-full rounded-md border border-line bg-white px-2 py-1.5 text-[12px] font-medium text-ink-soft transition-colors hover:border-[#c8d3e4] disabled:cursor-not-allowed disabled:opacity-45"
+                className="w-full rounded-md border border-line bg-white px-2 py-1.5 text-[12px] font-medium text-[#060606] transition-colors hover:border-[#c8d3e4] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Save current filters as a view
               </button>
             )}
 
             {(saveState.error || deleteState.error) && (
-              <p className="mt-1.5 text-[11.5px] text-[#c0392b]">
+              <p className="mt-1.5 text-[11px] text-[#c0392b]">
                 {saveState.error ?? deleteState.error}
               </p>
             )}
             {(saveState.success || deleteState.success) && (
-              <p className="mt-1.5 text-[11.5px] text-[#1e8e5a]">
+              <p className="mt-1.5 text-[11px] text-[#1e8e5a]">
                 {saveState.success ?? deleteState.success}
               </p>
             )}

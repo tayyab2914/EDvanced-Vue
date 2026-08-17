@@ -112,15 +112,15 @@ export function BudgetBars({
         {/* The `data-bars-*` hooks are how the one-page sheet re-densifies this chart
             without a second copy of it existing — see the sheet section of globals.css. */}
         <ul data-bars-legend className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-          <li className="flex items-center gap-2 text-[11.5px] text-muted">
+          <li className="flex items-center gap-2 text-[11px] text-[#060606]">
             <Swatch color="var(--color-viz-actual)" />
             {actualLabel}
           </li>
-          <li className="flex items-center gap-2 text-[11.5px] text-muted">
+          <li className="flex items-center gap-2 text-[11px] text-[#060606]">
             <Swatch color="var(--color-viz-budget)" />
             {budgetLabel}
           </li>
-          <li className="flex items-center gap-2 text-[11.5px] text-muted">
+          <li className="flex items-center gap-2 text-[11px] text-[#060606]">
             <Swatch color="var(--color-viz-reference)" dashed />
             {referenceLabel}
           </li>
@@ -130,7 +130,7 @@ export function BudgetBars({
         <div data-bars-axis className="mb-1 flex items-end gap-3">
           <span
             data-bars-label
-            className="w-[104px] flex-none text-[9.5px] font-semibold uppercase tracking-[0.05em] text-muted-2"
+            className="w-[104px] flex-none text-[10px] font-semibold uppercase tracking-[0.05em] text-[#060606]"
           >
             {unit}
           </span>
@@ -140,7 +140,7 @@ export function BudgetBars({
             {ticks.values.map((v, i) => (
               <span
                 key={v}
-                className="absolute bottom-0 whitespace-nowrap text-[10px] tabular-nums text-viz-label"
+                className="absolute bottom-0 whitespace-nowrap text-[10px] tabular-nums text-[#060606]"
                 style={
                   i === 0
                     ? { left: 0 }
@@ -186,7 +186,7 @@ export function BudgetBars({
               >
                 <span
                   data-bars-label
-                  className="w-[104px] flex-none text-[11.5px] font-medium leading-tight text-ink-muted"
+                  className="w-[104px] flex-none text-[11px] font-medium leading-tight text-[#060606]"
                   title={r.label}
                 >
                   {r.label}
@@ -197,7 +197,7 @@ export function BudgetBars({
                       so two nearly equal figures never collide */}
                   <span data-bars-value className="mb-[3px] block h-[13px]">
                     <span
-                      className="absolute text-[10.5px] font-semibold tabular-nums text-strong"
+                      className="absolute text-[11px] font-semibold tabular-nums text-strong"
                       style={{ left: `min(${drawnActual}%, calc(100% - 3.5rem))` }}
                     >
                       {r.actualDisplay}
@@ -245,7 +245,7 @@ export function BudgetBars({
 
                   <span data-bars-value className="mt-[3px] block h-[13px]">
                     <span
-                      className="absolute text-[10.5px] tabular-nums text-brand"
+                      className="absolute text-[11px] tabular-nums text-brand"
                       style={{ left: `min(${drawnBudget}%, calc(100% - 3.5rem))` }}
                     >
                       {r.budgetToDateDisplay}
@@ -255,7 +255,7 @@ export function BudgetBars({
 
                 <span
                   data-bars-ref
-                  className="w-[86px] flex-none text-right text-[11.5px] font-medium tabular-nums text-muted"
+                  className="w-[86px] flex-none text-right text-[11px] font-medium tabular-nums text-[#060606]"
                 >
                   {r.budgetFullYearDisplay}
                 </span>
@@ -352,15 +352,15 @@ export function ShareBars({
             className="grid grid-cols-[minmax(0,1fr)_auto_46px] items-center gap-x-3 gap-y-1.5 @md:grid-cols-[minmax(80px,122px)_minmax(56px,1fr)_74px_52px]"
           >
             <span
-              className="min-w-0 truncate text-[11.5px] text-ink-muted @md:col-start-1 @md:row-start-1"
+              className="min-w-0 truncate text-[11px] text-[#060606] @md:col-start-1 @md:row-start-1"
               title={r.label}
             >
               {r.label}
             </span>
-            <span className="text-right text-[11.5px] font-semibold tabular-nums text-ink @md:col-start-3 @md:row-start-1">
+            <span className="text-right text-[11px] font-semibold tabular-nums text-[#060606] @md:col-start-3 @md:row-start-1">
               {r.display}
             </span>
-            <span className="text-right text-[11px] tabular-nums text-muted-2 @md:col-start-4 @md:row-start-1">
+            <span className="text-right text-[11px] tabular-nums text-[#060606] @md:col-start-4 @md:row-start-1">
               {r.share}
             </span>
             <span className="relative col-span-3 h-[11px] min-w-0 rounded-full bg-line-soft @md:col-span-1 @md:col-start-2 @md:row-start-1">
@@ -426,7 +426,7 @@ export function MetricStrip({
   const TONE = {
     positive: "text-[#1a932e]",
     negative: "text-[#fd4438]",
-    neutral: "text-[#1f1f21]",
+    neutral: "text-[#060606]",
   };
   // Container breakpoints, not viewport ones: the strip goes wide only when the card it
   // sits in is wide enough to spell every label out.
@@ -448,7 +448,7 @@ export function MetricStrip({
       >
         {items.map((i) => (
           <div key={i.label} className="min-w-0 px-3 py-2.5">
-            <dt className="text-[11px] font-medium leading-tight text-[#1f1f21]">{i.label}</dt>
+            <dt className="text-[11px] font-medium leading-tight text-[#060606]">{i.label}</dt>
             <dd
               className={cn(
                 "mt-1 text-[16px] font-medium leading-tight tabular-nums",
@@ -458,7 +458,7 @@ export function MetricStrip({
               {i.value}
             </dd>
             {i.note && (
-              <dd className="mt-0.5 text-[10.5px] leading-snug text-[#1f1f21]/[0.74]">
+              <dd className="mt-0.5 text-[11px] leading-snug text-[#060606]">
                 {i.note}
               </dd>
             )}

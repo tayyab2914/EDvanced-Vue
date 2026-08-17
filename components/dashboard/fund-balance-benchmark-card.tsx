@@ -145,7 +145,7 @@ export function FundBalanceBenchmarkCard({
           </div>
 
           {/* the boundaries, printed under their own positions */}
-          <div className="relative mt-[2px] h-[20px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
+          <div className="relative mt-[2px] h-[20px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]">
             <span className="absolute left-0">{format(min)}</span>
             {bands
               .map((b) => b.from)
@@ -167,7 +167,7 @@ export function FundBalanceBenchmarkCard({
               className="min-w-0 px-0.5 text-center"
               style={{ width: `${widthOf(b)}%`, marginRight: i < bands.length - 1 ? 2 : 0 }}
             >
-              <span className="block truncate text-[10px] leading-normal tracking-[0.1px] text-black">
+              <span className="block truncate text-[10px] leading-normal tracking-[0.1px] text-[#060606]">
                 {BAND_NAME[b.rung] ?? b.rung}
               </span>
             </div>
@@ -181,7 +181,7 @@ export function FundBalanceBenchmarkCard({
               className="min-w-0 px-0.5 text-center"
               style={{ width: `${widthOf(b)}%`, marginRight: i < bands.length - 1 ? 2 : 0 }}
             >
-              <span className="block truncate text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
+              <span className="block truncate text-[10px] leading-[2] tracking-[0.1px] text-[#060606]">
                 {b.label}
               </span>
             </div>
@@ -189,7 +189,7 @@ export function FundBalanceBenchmarkCard({
         </div>
       </div>
 
-      <p className="mt-auto pt-[28px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
+      <p className="mt-auto pt-[28px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]">
         {note}
       </p>
     </OverviewPanel>

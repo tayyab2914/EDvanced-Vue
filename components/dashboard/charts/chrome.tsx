@@ -246,19 +246,19 @@ export function Legend({
       }
     >
       {items.map((it) => (
-        <li key={it.label} className="flex min-w-0 items-center gap-2 text-[11.5px]">
+        <li key={it.label} className="flex min-w-0 items-center gap-2 text-[11px]">
           <Swatch color={it.color} dashed={it.dashed} />
           {/* A legend key is a dimension too — `1000 — General Fund` on the cash and
               fund-balance composition donuts — and it truncates in a narrow card. The
               `title` is the client's rule (c): the ellipsis must always have somewhere to
               lead. */}
-          <span className="min-w-0 flex-1 truncate text-muted" title={it.label}>
+          <span className="min-w-0 flex-1 truncate text-[#060606]" title={it.label}>
             {it.label}
           </span>
           {it.value && (
-            <span className="flex-none font-semibold tabular-nums text-ink">{it.value}</span>
+            <span className="flex-none font-semibold tabular-nums text-[#060606]">{it.value}</span>
           )}
-          {it.meta && <span className="flex-none tabular-nums text-muted-2">{it.meta}</span>}
+          {it.meta && <span className="flex-none tabular-nums text-[#060606]">{it.meta}</span>}
         </li>
       ))}
     </ul>
@@ -309,7 +309,7 @@ export function ChartEmpty({
 }) {
   return (
     <div
-      className="flex items-center justify-center rounded-lg border border-dashed border-line text-center text-[12.5px] text-muted-2"
+      className="flex items-center justify-center rounded-lg border border-dashed border-line text-center text-[12px] text-[#060606]"
       style={{ height }}
     >
       <span className="max-w-[26ch] px-4">{children}</span>

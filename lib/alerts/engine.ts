@@ -25,7 +25,7 @@ import {
   requiredReservePercent,
   type PolicyValues,
 } from "@/lib/policies/registry";
-import { money as fmtMoney } from "@/lib/dashboard/format";
+import { compactMoney } from "@/lib/dashboard/format";
 import {
   ALERTS,
   reserveStatus,
@@ -232,9 +232,20 @@ function observe(f: AlertFacts): Observation[] {
   return out;
 }
 
-// Comma-grouped by hand, like every other figure on these screens — see the note in
-// lib/dashboard/format.ts about ICU and the middle dot.
-const money = (v: Prisma.Decimal) => fmtMoney(v, 2);
+/**
+ * ABBREVIATED — $4.12M, not $4,120,000.00.
+ *
+ * The same alias name and the same helper the catalogue uses (lib/alerts/catalog.ts), because
+ * these sentences sit on the Alerts page beside the ones the catalogue writes: an observation
+ * reading "$4,120,000.00 is committed" directly above an alert reading "Encumbrances of
+ * $4.12M exceed…" is one figure formatted two ways on one card, which reads as two figures.
+ *
+ * This used to be `money(v, 2)`, so every For Awareness line carried nine digits and a
+ * pointless ".00" — the exact thing compactMoney's header argues against for the rest of the
+ * product. The drill-downs are where an exact figure earns its width; a card whose whole
+ * purpose is a glance is not.
+ */
+const money = (v: Prisma.Decimal) => compactMoney(v);
 
 /**
  * Everything the catalogue can ask about, for one period.

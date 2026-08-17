@@ -73,11 +73,11 @@ export function ViewBy({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`${label}: ${current.label}`}
-        className="flex h-7 max-w-[200px] items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-[11.5px] font-medium text-ink-soft transition-colors hover:border-[#c8d3e4]"
+        className="flex h-7 max-w-[200px] items-center gap-1.5 rounded-lg border border-line bg-white px-2.5 text-[11px] font-medium text-[#060606] transition-colors hover:border-[#c8d3e4]"
       >
-        <span className="flex-none text-muted-2">{label}</span>
-        <span className="truncate font-semibold text-ink">{current.label}</span>
-        <span aria-hidden className="flex-none text-[8px] text-muted-2">
+        <span className="flex-none text-[#060606]">{label}</span>
+        <span className="truncate font-semibold text-[#060606]">{current.label}</span>
+        <span aria-hidden className="flex-none text-[10px] text-[#060606]">
           ▼
         </span>
       </button>
@@ -96,8 +96,8 @@ export function ViewBy({
                 aria-selected={o.value === current.value}
                 onClick={() => choose(o.value)}
                 className={cn(
-                  "block w-full px-3 py-1.5 text-left text-[12.5px] transition-colors hover:bg-panel",
-                  o.value === current.value ? "font-semibold text-brand" : "text-ink-muted",
+                  "block w-full px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-panel",
+                  o.value === current.value ? "font-semibold text-brand" : "text-[#060606]",
                 )}
               >
                 {o.label}

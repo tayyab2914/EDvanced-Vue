@@ -109,21 +109,21 @@ export function OverrideForm({
               <tr>
                 <th
                   scope="col"
-                  className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2"
+                  className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.05em] text-[#060606]"
                 >
                   Component
                 </th>
                 <th
                   scope="col"
                   style={{ width: "26%" }}
-                  className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2"
+                  className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.05em] text-[#060606]"
                 >
                   Calculated
                 </th>
                 <th
                   scope="col"
                   style={{ width: "30%" }}
-                  className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2"
+                  className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.05em] text-[#060606]"
                 >
                   Corrected amount
                 </th>
@@ -136,16 +136,16 @@ export function OverrideForm({
                 const edited = entry.trim() !== "" && entry.trim() !== row.corrected.trim();
                 return (
                   <tr key={row.field} className="border-t border-line-soft align-top">
-                    <td className="px-3 py-2.5 text-[12.5px] text-ink">
+                    <td className="px-3 py-2.5 text-[12px] text-[#060606]">
                       <span className="font-medium">{row.label}</span>
                       {row.corrected !== "" && (
-                        <span className="ml-1.5 text-[11px] text-muted-2">
+                        <span className="ml-1.5 text-[11px] text-[#060606]">
                           {edited ? "correction edited" : "corrected"}
                         </span>
                       )}
                     </td>
                     {/* System driven, and not editable. The figure the correction is against. */}
-                    <td className="px-3 py-2.5 text-right text-[12.5px] tabular-nums text-ink-muted">
+                    <td className="px-3 py-2.5 text-right text-[12px] tabular-nums text-[#060606]">
                       {row.calculatedDisplay}
                     </td>
                     <td className="px-3 py-2">
@@ -164,12 +164,12 @@ export function OverrideForm({
                         placeholder="Use calculated"
                         aria-invalid={errors ? true : undefined}
                         className={cn(
-                          "h-9 w-full rounded-lg border bg-white px-3 text-right text-[13px] tabular-nums text-ink outline-none placeholder:text-muted-2 placeholder:text-[12px] focus:border-brand",
+                          "h-9 w-full rounded-lg border bg-white px-3 text-right text-[13px] tabular-nums text-[#060606] outline-none placeholder:text-[#060606] placeholder:text-[12px] focus:border-brand",
                           errors ? "border-action" : "border-line",
                         )}
                       />
                       {errors?.map((e) => (
-                        <p key={e} className="mt-1 text-right text-[11.5px] text-action">
+                        <p key={e} className="mt-1 text-right text-[11px] text-action">
                           {e}
                         </p>
                       ))}
@@ -185,22 +185,22 @@ export function OverrideForm({
                 the entries above applied. Nobody types in this row, which is why there is no
                 input in it: a hand-typed total could be saved disagreeing with its own parts.
               */}
-              <tr className="border-t-2 border-line bg-panel font-semibold text-ink">
-                <td className="px-3 py-2.5 text-[12.5px]">
+              <tr className="border-t-2 border-line bg-panel font-semibold text-[#060606]">
+                <td className="px-3 py-2.5 text-[12px]">
                   Total fund balance
-                  <span className="ml-1.5 text-[11px] font-normal text-muted-2">
+                  <span className="ml-1.5 text-[11px] font-normal text-[#060606]">
                     auto calculated
                   </span>
                 </td>
-                <td className="px-3 py-2.5 text-right text-[12.5px] tabular-nums">
+                <td className="px-3 py-2.5 text-right text-[12px] tabular-nums">
                   {total.calculatedDisplay}
                 </td>
-                <td className="px-3 py-2.5 text-right text-[12.5px] tabular-nums">
-                  <span className={cn(!anyCorrection && "font-normal text-muted-2")}>
+                <td className="px-3 py-2.5 text-right text-[12px] tabular-nums">
+                  <span className={cn(!anyCorrection && "font-normal text-[#060606]")}>
                     {money(derived.value)}
                   </span>
                   {anyCorrection && derived.change !== 0 && (
-                    <span className="mt-0.5 block text-[11px] font-normal text-muted-2">
+                    <span className="mt-0.5 block text-[11px] font-normal text-[#060606]">
                       {accounting(derived.change)} vs calculated
                     </span>
                   )}
@@ -210,7 +210,7 @@ export function OverrideForm({
           </table>
         </div>
 
-        <p className="text-[11.5px] leading-relaxed text-muted-2">
+        <p className="text-[11px] leading-relaxed text-[#060606]">
           {derived.unreadable > 0
             ? "One of the amounts above is not a number yet, so the total does not include it."
             : anyCorrection
@@ -219,7 +219,7 @@ export function OverrideForm({
         </p>
 
         <div>
-          <label htmlFor="reason" className="block text-[12.5px] font-medium text-ink-soft">
+          <label htmlFor="reason" className="block text-[12px] font-medium text-[#060606]">
             Why is this being corrected? <span className="text-action">*</span>
           </label>
           <textarea
@@ -228,20 +228,20 @@ export function OverrideForm({
             rows={3}
             defaultValue={reason}
             placeholder="e.g. Audit adjustment per the FY2025 management letter, item 4."
-            className="mt-1.5 w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] leading-relaxed text-ink outline-none focus:border-brand"
+            className="mt-1.5 w-full rounded-lg border border-line bg-white px-3 py-2 text-[13px] leading-relaxed text-[#060606] outline-none focus:border-brand"
           />
-          <p className="mt-1 text-[11px] text-muted-2">
+          <p className="mt-1 text-[11px] text-[#060606]">
             Stored with every figure you change here and shown to anyone who sees them.
             Required. Components you leave untouched keep the reason they were entered with.
           </p>
           {state.fieldErrors?.reason?.map((e) => (
-            <p key={e} className="mt-1 text-[11.5px] text-action">
+            <p key={e} className="mt-1 text-[11px] text-action">
               {e}
             </p>
           ))}
         </div>
 
-        {state.error && <p className="text-[12.5px] text-action">{state.error}</p>}
+        {state.error && <p className="text-[12px] text-action">{state.error}</p>}
 
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={pending}>
@@ -258,7 +258,7 @@ export function OverrideForm({
           <button
             type="submit"
             disabled={clearing}
-            className="text-[12.5px] font-medium text-action hover:underline disabled:opacity-60"
+            className="text-[12px] font-medium text-action hover:underline disabled:opacity-60"
           >
             {clearing
               ? "Removing…"

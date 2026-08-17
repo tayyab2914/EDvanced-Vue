@@ -75,12 +75,12 @@ export function PillSelect({
           "flex flex-none items-center whitespace-nowrap rounded-full bg-white font-semibold text-[#060606]",
           size === "md"
             ? "h-[34px] gap-[12px] px-[14px] text-[14px] leading-normal tracking-[0.14px]"
-            : "h-[20px] gap-[6px] px-[10px] text-[9px] leading-none tracking-[0.09px]",
+            : "h-[20px] gap-[6px] px-[10px] text-[10px] leading-none tracking-[0.09px]",
           PILL_INTERACTIVE,
         )}
       >
         <span>
-          <span className="font-normal text-[#797979]">{label}: </span>
+          <span className="font-normal text-[#060606]">{label}: </span>
           {current.label}
         </span>
         <PillChevron open={open} className={size === "sm" ? "size-[10px]" : undefined} />

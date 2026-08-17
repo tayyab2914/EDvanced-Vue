@@ -32,6 +32,7 @@ import { StatusBadge } from "@/components/dashboard/status-badge";
 import { EmptyState, SubstitutionNotice } from "@/components/dashboard/shared";
 import { DashboardFilters } from "@/components/dashboard/dashboard-filters";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
+import { ColumnChart } from "@/components/dashboard/charts/column-chart";
 import { ShareBars } from "@/components/dashboard/charts/budget-bars";
 import {
   OverviewKpiTile,
@@ -314,7 +315,26 @@ export default async function RevenueDashboard({
     },
   ];
 
-  // ===================== the one-page landscape summary =====================
+  /**
+   * The monthly variance series — actual collections against the budget expected by that
+   * month, as a signed percentage. Feeds the screen's status-strip sparkline and variance
+   * trend columns AND the printed summary's variance chart, so none of the three can
+   * disagree. Computed before the sheet branch because the sheet needs it too.
+   */
+  const monthlyVariance: (number | null)[] = series.points.map((p) => {
+    if (!p.hasData) return null;
+    const b = toNumber(p.revenueBudget) ?? 0;
+    const a = toNumber(p.revenueYtd) ?? 0;
+    const expected = (b * p.period) / 12;
+    return expected ? ((a - expected) / expected) * 100 : null;
+  });
+
+  // ===================== the two-page landscape summary =====================
+  //
+  // Page one is the position: the six figures, collections against budget, and the by-source
+  // ledger. Page two is the diagnosis — where the variance came from month by month, which
+  // sources moved it, and what has crossed a threshold. The one-page version folded the two
+  // movers cards into a single four-row list and printed no variance trend at all.
   if (summary) {
     return (
       <PrintSheet
@@ -323,7 +343,10 @@ export default async function RevenueDashboard({
         scope={sheetScope(scope)}
         asOf={sheetAsOf(scope.dataAsOf)}
         backHref={options.query ? `/revenues?${options.query}` : "/revenues"}
-      >
+        pages={[
+          {
+            content: (
+              <>
         <SheetBand cols="1fr 1fr 1fr 1fr 1fr 1fr">
           {kpiData.map((k) => (
             <SheetKpi
@@ -344,7 +367,7 @@ export default async function RevenueDashboard({
               summary={`Actual collections year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
               categories={labels}
               format={(v) => compactMoney(v, 0)}
-              height={230}
+              height={210}
               series={[
                 {
                   key: "actual",
@@ -414,7 +437,7 @@ export default async function RevenueDashboard({
           </SheetCard>
         </SheetBand>
 
-        <SheetBand cols="1.6fr 1fr">
+        <SheetBand cols="1fr" grow>
           <SheetCard title="Revenue by major source" note={SHEET_TABLE_NOTE}>
             <DataTable
               dense
@@ -473,53 +496,122 @@ export default async function RevenueDashboard({
               }}
             />
           </SheetCard>
-
-          <div className="flex min-w-0 flex-col gap-[7px]">
-            <SheetCard title="Largest variances" note="Against budget to date">
-              <MoverList
-                items={[...movers.negative, ...movers.positive].slice(0, 4).map((r) => ({
-                  id: r.id,
-                  name: codeName(r.code, r.name, scope.labelMode),
-                  value: accounting(r.pace.amount, { compact: true }),
-                  percent: signedPercent(r.pace.percent),
-                  tone: r.pace.amount.isNegative() ? ("negative" as const) : ("positive" as const),
-                }))}
-                empty="Nothing is materially off budget."
-              />
-            </SheetCard>
-
-            <SheetCard title={`Revenue alerts (${revenueAlerts.length})`}>
-              <AlertList
-                mode={scope.labelMode}
-                alerts={revenueAlerts.slice(0, 2).map((a) => ({
-                  id: a.id,
-                  severity: a.severity,
-                  title: a.title,
-                  message: a.message,
-                }))}
-                empty="No revenue thresholds crossed."
-              />
-            </SheetCard>
-          </div>
         </SheetBand>
-      </PrintSheet>
+              </>
+            ),
+          },
+          {
+            label: "Variance detail & alerts",
+            content: (
+              <>
+                <SheetBand cols="1.5fr 1fr 1fr">
+                  {/* The variance trend the one-page sheet had no room for — the same monthly
+                      series the screen's status-strip sparkline draws, against the district's
+                      own ± warning band rather than a hardcoded one. */}
+                  <SheetCard
+                    title="Revenue variance trend"
+                    note={`Against budget to date · ± ${revT.warning.toFixed(2)}%`}
+                  >
+                    <ColumnChart
+                      title="Revenue variance trend"
+                      summary="How far collections ran ahead of or behind the pro-rated budget in each month of the year."
+                      height={215}
+                      format={(v) => `${v.toFixed(1)}%`}
+                      columns={labels
+                        .map((label, i) => ({ label, value: monthlyVariance[i] }))
+                        .filter((c): c is { label: string; value: number } => c.value !== null)
+                        .map((c) => ({
+                          ...c,
+                          display: signedPercent(c.value, 1),
+                        }))}
+                      thresholds={[
+                        {
+                          at: -revT.warning,
+                          label: `−${revT.warning.toFixed(2)}%`,
+                          color: "var(--color-monitor)",
+                        },
+                        {
+                          at: revT.warning,
+                          label: `+${revT.warning.toFixed(2)}%`,
+                          color: "var(--color-monitor)",
+                        },
+                      ]}
+                    />
+                  </SheetCard>
+
+                  <SheetCard title="Top positive variances" note="Above expected">
+                    <MoverList
+                      items={movers.positive.map((r) => ({
+                        id: r.id,
+                        name: codeName(r.code, r.name, scope.labelMode),
+                        value: accounting(r.pace.amount, { compact: true }),
+                        percent: signedPercent(r.pace.percent),
+                        tone: "positive" as const,
+                      }))}
+                      empty="Nothing is running ahead of budget."
+                    />
+                  </SheetCard>
+
+                  <SheetCard title="Top negative variances" note="Below expected">
+                    <MoverList
+                      items={movers.negative.map((r) => ({
+                        id: r.id,
+                        name: codeName(r.code, r.name, scope.labelMode),
+                        value: accounting(r.pace.amount, { compact: true }),
+                        percent: signedPercent(r.pace.percent),
+                        tone: "negative" as const,
+                      }))}
+                      empty="Nothing is running behind budget."
+                    />
+                  </SheetCard>
+                </SheetBand>
+
+                <SheetBand cols="1.35fr 1fr" grow>
+                  {/* Every revenue alert, not the first two: the count in the title was the
+                      only thing the one-page sheet could print, which told a board there was
+                      something to read and then withheld it. */}
+                  <SheetCard
+                    title={`Revenue alerts (${revenueAlerts.length})`}
+                    note="Against the district's own thresholds"
+                  >
+                    <AlertList
+                      mode={scope.labelMode}
+                      alerts={revenueAlerts.slice(0, 6).map((a) => ({
+                        id: a.id,
+                        severity: a.severity,
+                        title: a.title,
+                        message: a.message,
+                      }))}
+                      empty="No revenue thresholds crossed."
+                      emptyNote="Collections are inside the district's variance band."
+                    />
+                    {revenueAlerts.length > 6 && (
+                      <p className="text-[8.5px] text-[#060606]">
+                        {revenueAlerts.length - 6} further alert
+                        {revenueAlerts.length - 6 === 1 ? "" : "s"} on the Alerts dashboard.
+                      </p>
+                    )}
+                  </SheetCard>
+
+                  <SheetCard title="Key insight" note="How to read this page">
+                    <p className="text-[10px] leading-[1.45] text-[#060606]">
+                      Revenue figures are drawn from the detail file committed for this period.
+                      Remaining to collect is current budget less actual revenue — it assumes no
+                      growth and is not a forecast. The variance band above is the district&apos;s
+                      own ± {revT.warning.toFixed(2)}% threshold, set on the Policies screen; the
+                      alerts beside it fire against it.
+                    </p>
+                  </SheetCard>
+                </SheetBand>
+              </>
+            ),
+          },
+        ]}
+      />
     );
   }
 
   // ===================== the redesigned screen (Figma 46:2918) =====================
-
-  /**
-   * The monthly variance series — actual collections against the budget expected by that
-   * month, as a signed percentage. Feeds BOTH the status strip's sparkline and the variance
-   * trend columns, so the two can never disagree.
-   */
-  const monthlyVariance: (number | null)[] = series.points.map((p) => {
-    if (!p.hasData) return null;
-    const b = toNumber(p.revenueBudget) ?? 0;
-    const a = toNumber(p.revenueYtd) ?? 0;
-    const expected = (b * p.period) / 12;
-    return expected ? ((a - expected) / expected) * 100 : null;
-  });
 
   const revenueDetailHref = `/data/revenue-detail?fy=${scope.fiscalYear}&period=${scope.period}`;
   const totalStatus = revenuePace(toNumber(bySource.total.pace.percent), revT);

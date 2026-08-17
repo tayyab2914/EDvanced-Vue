@@ -133,11 +133,11 @@ export function CashTrendCard({
         {/* the legend earns its place only when there are two lines to tell apart */}
         {hasForecast && (
           <ul className="flex flex-none flex-col gap-[4px] pt-[6px]">
-            <li className="flex items-center gap-[5px] text-[8px] leading-[2] tracking-[0.08px] text-[#060606]/[0.56]">
+            <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
               <span aria-hidden className="size-[9px] flex-none rounded-[2px]" style={{ background: "rgba(3,140,140,0.6)" }} />
               Ending cash balance
             </li>
-            <li className="flex items-center gap-[5px] text-[8px] leading-[2] tracking-[0.08px] text-[#060606]/[0.56]">
+            <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
               <span
                 aria-hidden
                 className="size-[9px] flex-none rounded-[2px]"

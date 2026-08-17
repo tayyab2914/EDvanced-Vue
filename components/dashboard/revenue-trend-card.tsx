@@ -146,15 +146,15 @@ export function RevenueTrendCard({
         <OverviewPanelHeader title={title} subtitle={subtitle} />
         {/* ---- legend — the design's stacked top-right key ---- */}
         <ul className="flex flex-none flex-col gap-[4px] pt-[6px]">
-          <li className="flex items-center gap-[5px] text-[8px] leading-[2] tracking-[0.08px] text-[#060606]/[0.56]">
+          <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
             <LegendSwatch color="rgba(3,140,140,0.6)" />
             Actual (YTD)
           </li>
-          <li className="flex items-center gap-[5px] text-[8px] leading-[2] tracking-[0.08px] text-[#060606]/[0.56]">
+          <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
             <LegendSwatch color="rgba(2,40,89,0.6)" />
             Budget (YTD)
           </li>
-          <li className="flex items-center gap-[5px] text-[8px] leading-[2] tracking-[0.08px] text-[#060606]/[0.56]">
+          <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
             <LegendSwatch hatched />
             Budget Full year
           </li>

@@ -31,6 +31,7 @@ import { EmptyState, KeyInsightBar } from "@/components/dashboard/shared";
 import { LineChart } from "@/components/dashboard/charts/line-chart";
 import { ShareBars } from "@/components/dashboard/charts/budget-bars";
 import { WaterfallChart, waterfallFoots } from "@/components/dashboard/charts/waterfall-chart";
+import { BenchmarkBand } from "@/components/dashboard/charts/benchmark-band";
 import {
   OverviewKpiTile,
   OverviewSection,
@@ -84,8 +85,8 @@ import {
   sheetTone,
   sheetScope,
   sheetAsOf,
-  SHEET_TABLE_ROWS,
-  SHEET_TABLE_NOTE,
+  SHEET_LEDGER_ROWS,
+  sheetTableNote,
 } from "@/lib/dashboard/summary";
 
 /**
@@ -588,9 +589,15 @@ export default async function FundBalancePage({
     },
   ];
 
-  // ===================== the one-page landscape summary =====================
+  // ===================== the two-page landscape summary =====================
   // Outside `FundBalanceShell`: the shell's four tabs are navigation, and navigation on
   // paper is ink spent on something nobody can click.
+  //
+  // Page one is the position: the five figures, the trend against policy, and the waterfall
+  // that explains how the year got here. Page two is the reserve test — every fund's balance,
+  // where the balance is classified, where the district sits in its own policy bands, and the
+  // statutory components. The one-page version printed neither the benchmark nor the
+  // components, which between them are the whole of the reserve argument.
   if (summary) {
     return (
       <PrintSheet
@@ -599,7 +606,10 @@ export default async function FundBalancePage({
         scope={sheetScope(scope)}
         asOf={sheetAsOf(scope.dataAsOf)}
         backHref={options.query ? `/fund-balance?${options.query}` : "/fund-balance"}
-      >
+        pages={[
+          {
+            content: (
+              <>
         <SheetBand cols="1fr 1fr 1fr 1fr 1fr">
           {kpiData.map((k) => (
             <SheetKpi
@@ -613,7 +623,7 @@ export default async function FundBalancePage({
           ))}
         </SheetBand>
 
-        <SheetBand cols="1.15fr 1fr">
+        <SheetBand cols="1.15fr 1fr" grow>
           <SheetCard
             title="Fund balance trend"
             badge={<StatusBadge status={reserveRung} size="sm" dot={false} />}
@@ -688,18 +698,35 @@ export default async function FundBalancePage({
           </SheetCard>
         </SheetBand>
 
-        <SheetBand cols="1.5fr 1fr">
-          <SheetCard title="Fund balance by fund" note={SHEET_TABLE_NOTE}>
+      </>
+            ),
+          },
+          {
+            label: "Funds, policy & reserves",
+            content: (
+              <>
+        <SheetBand cols="1fr" grow>
+          <SheetCard
+            title="Fund balance by fund"
+            note={
+              withBalance.length > SHEET_LEDGER_ROWS
+                ? sheetTableNote(SHEET_LEDGER_ROWS)
+                : "Beginning + revenues − expenditures"
+            }
+          >
             <DataTable
               dense
               columns={[
                 { key: "fund", label: "Fund" },
+                { key: "beginning", label: "Beginning", align: "right" },
+                { key: "revenues", label: "Revenues", align: "right" },
+                { key: "expenditures", label: "Expenditures", align: "right" },
                 { key: "balance", label: "Ending FB (Actual)", align: "right" },
                 { key: "budgeted", label: "Ending FB (Budgeted)", align: "right" },
                 { key: "class", label: "Primary classification" },
                 { key: "status", label: "Status", align: "right" },
               ]}
-              rows={withBalance.slice(0, SHEET_TABLE_ROWS).map((f) => {
+              rows={withBalance.slice(0, SHEET_LEDGER_ROWS).map((f) => {
                 const isGeneral = core.generalFund?.id === f.fundId;
                 const balance = toNumber(f.fundBalance);
                 const rung = isGeneral
@@ -714,6 +741,9 @@ export default async function FundBalancePage({
                   flag: balance !== null && balance < 0 ? ("negative" as const) : undefined,
                   cells: {
                     fund: { value: codeName(f.code, f.name, scope.labelMode), strong: true },
+                    beginning: compactMoney(f.beginning),
+                    revenues: compactMoney(f.revenueYtd),
+                    expenditures: compactMoney(f.expenditureYtd),
                     balance: { value: compactMoney(f.fundBalance), strong: true },
                     budgeted: { value: compactMoney(f.budgetedFundBalance), strong: true },
                     class: isGeneral ? "Unassigned" : (primaryClassification(f) ?? "—"),
@@ -730,6 +760,9 @@ export default async function FundBalancePage({
                 total: true,
                 cells: {
                   fund: "Total all funds",
+                  beginning: compactMoney(allFundsBeginning),
+                  revenues: compactMoney(allFundsRevenue),
+                  expenditures: compactMoney(allFundsExpenditure),
                   balance: compactMoney(allFundsTotal),
                   budgeted: compactMoney(allFundsBudgetedTotal),
                   class: "—",
@@ -739,7 +772,9 @@ export default async function FundBalancePage({
               empty="No fund has a committed opening balance for this year."
             />
           </SheetCard>
+        </SheetBand>
 
+        <SheetBand cols="1fr 1fr 1.2fr">
           <SheetCard
             title="Fund balance composition"
             note={`By classification · ${basisLabel}`}
@@ -758,7 +793,7 @@ export default async function FundBalancePage({
                 }))}
               />
             ) : (
-              <p className="py-3 text-center text-[9.5px] text-muted-2">
+              <p className="py-3 text-center text-[10px] text-[#060606]">
                 No opening fund balance committed for this year.
               </p>
             )}
@@ -772,8 +807,64 @@ export default async function FundBalancePage({
               </KeyInsightBar>
             )}
           </SheetCard>
+
+          {/* THE POLICY BENCHMARK the one-page sheet could not fit. The reserve percentage is
+              printed in three places on page one; this is the only card that says which band
+              of the district's OWN policy it lands in, which is the judgement the rest of the
+              page is reporting. */}
+          <SheetCard title="Policy benchmark" note={`Target ${reserveT.target.toFixed(2)}%`}>
+            <BenchmarkBand
+              value={reservePct}
+              bands={statusBands(reserveT)}
+              target={reserveT.target}
+              label={reserveTileLabel(reserve)}
+            />
+            <p className="text-[8.5px] leading-[1.4] text-[#060606]">
+              Policy target: maintain unassigned fund balance at{" "}
+              {reserveT.target.toFixed(2)}% {reserveOf}. The dotted rule marks the target; the
+              statutory minimum is {statutoryMinimum.toFixed(2)}%.
+            </p>
+          </SheetCard>
+
+          {/* The statutory reserve test, General Fund only whatever the page is filtered to —
+              the same lines the screen's Reserve components card carries. */}
+          <SheetCard
+            title="Reserve components"
+            note={`${gf ? gf.name : "General fund"} · ${isOutturn ? "Actual" : "Projected"}`}
+          >
+            <DataTable
+              dense
+              columns={[
+                { key: "component", label: "Component" },
+                { key: "amount", label: "Amount", align: "right" },
+                { key: "share", label: `% ${reserveOf}`, align: "right" },
+              ]}
+              rows={breakdownLines.map((l) => ({
+                id: l.id,
+                cells: {
+                  component: { value: l.label, strong: l.strong },
+                  amount: { value: l.amount, strong: l.strong, tone: l.tone ?? "neutral" },
+                  share: l.share,
+                },
+              }))}
+              total={{
+                id: "unassigned",
+                total: true,
+                cells: {
+                  component: "Total unassigned fund balance",
+                  amount: compactMoney(reserve?.unassigned ?? null),
+                  share: breakdownShare(reserve?.unassigned ?? null),
+                },
+              }}
+              empty="No General Fund components committed for this year."
+            />
+          </SheetCard>
         </SheetBand>
-      </PrintSheet>
+              </>
+            ),
+          },
+        ]}
+      />
     );
   }
 
@@ -818,18 +909,21 @@ export default async function FundBalancePage({
       fund: <DimLabel code={f.code} name={f.name} mode={scope.labelMode} />,
       // Fixed for the year, and identical on either basis — the one column the toggle
       // does not move, which is itself the point the district was making.
-      beginning: money(f.beginning),
-      revenues: money(budgetBasis ? f.revenueBudget : f.revenueYtd),
-      expenditures: money(budgetBasis ? f.expenditureBudget : f.expenditureYtd),
-      ending: money(ending),
+      // WHOLE DOLLARS ACROSS THIS LEDGER — `money`'s default prints cents on whichever rows
+      // happen to have them, which sets a seven-figure column to two different widths and
+      // trains the eye to skip the tail. Nothing on this card is decided in cents.
+      beginning: money(f.beginning, 0),
+      revenues: money(budgetBasis ? f.revenueBudget : f.revenueYtd, 0),
+      expenditures: money(budgetBasis ? f.expenditureBudget : f.expenditureYtd, 0),
+      ending: money(ending, 0),
       endingNegative: balance !== null && balance < 0,
       // The unassigned figure follows the basis too; the label says which figure it is.
       // The reserve PERCENTAGE stays on its own tile, on its own basis, above.
       classification: isGeneral ? (
         <span>
           Unassigned
-          <span className="block text-[10px] text-[#797979]">
-            {money(rowUnassigned)} {rowUnassignedBasis}
+          <span className="block text-[10px] text-[#060606]">
+            {money(rowUnassigned, 0)} {rowUnassignedBasis}
           </span>
         </span>
       ) : (
@@ -1088,10 +1182,10 @@ export default async function FundBalancePage({
         }
         rows={tableRows}
         total={{
-          beginning: money(allFundsBeginning),
-          revenues: money(budgetBasis ? allFundsRevenueBudget : allFundsRevenue),
-          expenditures: money(budgetBasis ? allFundsExpenditureBudget : allFundsExpenditure),
-          ending: money(budgetBasis ? allFundsBudgetedTotal : allFundsTotal),
+          beginning: money(allFundsBeginning, 0),
+          revenues: money(budgetBasis ? allFundsRevenueBudget : allFundsRevenue, 0),
+          expenditures: money(budgetBasis ? allFundsExpenditureBudget : allFundsExpenditure, 0),
+          ending: money(budgetBasis ? allFundsBudgetedTotal : allFundsTotal, 0),
         }}
         empty="No fund has a committed opening balance for this year."
         footer={
@@ -1101,7 +1195,7 @@ export default async function FundBalancePage({
             the target screen redirects anyone without it.
           */
           userCan(user, "override_fund_balance") ? (
-            <p className="mt-[12px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
+            <p className="mt-[12px] text-[10px] leading-[2] tracking-[0.1px] text-[#060606]">
               {scope.fundId ? (
                 <>
                   {scope.fund ? scope.fund.name : "This fund"}&apos;s balance can be corrected
@@ -1254,7 +1348,7 @@ export default async function FundBalancePage({
               {breakdownShare(reserve?.unassigned ?? null)}
             </span>
           </div>
-          <p className="mt-auto pt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]/[0.56]">
+          <p className="mt-auto pt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]">
             {reserveMethodology(reserve)}
             {reserve && !reserve.actual
               ? " The projection moves when the board amends the budget, not with month-to-month collections."
@@ -1283,7 +1377,7 @@ export default async function FundBalancePage({
                   i === positionCells.length - 1 && positionCells.length % 2 === 1 && "sm:col-span-2",
                 )}
               >
-                <span className="text-[12px] leading-[16px] text-[#797979]">{c.label}</span>
+                <span className="text-[12px] leading-[16px] text-[#060606]">{c.label}</span>
                 <span
                   className="text-[20px] font-semibold leading-[26px] [font-variant-numeric:proportional-nums]"
                   style={{ color: CELL_INK[c.tone ?? "neutral"] }}
@@ -1291,7 +1385,7 @@ export default async function FundBalancePage({
                   {c.value}
                 </span>
                 {c.note && (
-                  <span className="text-[10px] leading-[13px] text-[rgba(121,121,121,0.75)]">
+                  <span className="text-[10px] leading-[13px] text-[#060606]">
                     {c.note}
                   </span>
                 )}
@@ -1299,7 +1393,7 @@ export default async function FundBalancePage({
             ))}
           </div>
           {!isGeneralScope && (
-            <p className="mt-auto pt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]/[0.56]">
+            <p className="mt-auto pt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]">
               {scope.fundLevelOnly && !isOutturn
                 ? "The budgeted terms are not shown under a cost centre filter: the budget figures carry the whole filter while the beginning balance is fund-level, so the subtraction would mix two grains. "
                 : ""}
@@ -1315,10 +1409,10 @@ export default async function FundBalancePage({
       {/* ---------- the key insight bar — Figma 55:4229 ---------- */}
       <OverviewPanel className="flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[10px] p-[18px]">
         <div className="min-w-0 flex-1 basis-[280px]">
-          <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-black/85">
+          <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-[#060606]">
             Key insight
           </p>
-          <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-black/50">
+          <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-[#060606]">
             Want to see the future? Build a three-year projection from your own growth
             assumptions and see how reserves hold up.
           </p>

@@ -71,7 +71,7 @@ export function RevenueMoversCard({
               <div className="flex w-full items-center gap-[10px]">
                 <div className="flex min-w-0 flex-1 flex-col items-start gap-[4px]">
                   <span
-                    className="line-clamp-2 text-[13px] leading-[1.3] tracking-[0.13px] text-black"
+                    className="line-clamp-2 text-[13px] leading-[1.3] tracking-[0.13px] text-[#060606]"
                     title={item.name}
                   >
                     {item.name}
@@ -83,12 +83,12 @@ export function RevenueMoversCard({
                   style={{ color: TONE_INK[item.tone] }}
                 >
                   <span className="text-[13px] font-bold tracking-[0.13px]">{item.value}</span>
-                  <span className="text-[9px] leading-[1.2]">{item.percent}</span>
+                  <span className="text-[10px] leading-[1.2]">{item.percent}</span>
                 </span>
                 <PacePill status={item.status} size="md" className="flex-none" />
               </div>
             ) : i === 0 ? (
-              <span className="w-full text-center text-[12px] text-[#797979]">{empty}</span>
+              <span className="w-full text-center text-[12px] text-[#060606]">{empty}</span>
             ) : null}
           </li>
         ))}

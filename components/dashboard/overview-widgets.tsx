@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { CARD_TITLE } from "@/components/dashboard/type-scale";
 import { CountUp } from "@/components/count-up";
 import type { Insight } from "@/lib/alerts/insights";
 
@@ -39,7 +40,7 @@ import type { Insight } from "@/lib/alerts/insights";
 function WidgetHeader({ title }: { title: string }) {
   return (
     <div className="flex h-[34px] w-full items-center">
-      <h3 className="text-[16px] font-semibold leading-normal tracking-[0.16px] text-[#060606]">
+      <h3 className={CARD_TITLE}>
         {title}
       </h3>
     </div>
@@ -276,30 +277,30 @@ export function RevenueCollectedWidget({
           <div className="absolute left-1/2 top-[20px] h-[115px] w-[190px] -translate-x-1/2">
             <CollectedGauge fraction={collectedPct === null ? 0 : collectedPct / 100} />
             <div className="absolute left-1/2 top-[62px] flex -translate-x-1/2 flex-col items-center gap-[6px] whitespace-nowrap text-center">
-              <p className={cn("text-[24px] font-bold leading-[1.2] text-black/85", NUMS)}>
+              <p className={cn("text-[26px] font-bold leading-[1.2] text-[#060606]", NUMS)}>
                 <CountUp value={collectedDisplay} />
               </p>
               {ofDisplay && (
-                <p className="text-[12px] font-semibold leading-[1.5] text-black/[0.45]">
+                <p className="text-[12px] font-semibold leading-[1.5] text-[#060606]">
                   {ofDisplay}
                 </p>
               )}
             </div>
-            <p className="absolute left-0 top-[97px] text-[12px] leading-[1.5] text-black/[0.45]">
+            <p className="absolute left-0 top-[97px] text-[12px] leading-[1.5] text-[#060606]">
               0
             </p>
-            <p className="absolute right-0 top-[94px] text-[12px] leading-[1.5] text-black/[0.45]">
+            <p className="absolute right-0 top-[94px] text-[12px] leading-[1.5] text-[#060606]">
               100%
             </p>
           </div>
 
           {pctLeft && (
-            <p className="absolute left-0 top-[198px] text-[11px] leading-normal tracking-[0.11px] text-black/[0.59]">
+            <p className="absolute left-0 top-[198px] text-[11px] leading-normal tracking-[0.11px] text-[#060606]">
               {pctLeft}
             </p>
           )}
           {pctRight && (
-            <p className="absolute right-0 top-[195px] text-[11px] leading-normal tracking-[0.11px] text-black/[0.59]">
+            <p className="absolute right-0 top-[195px] text-[11px] leading-normal tracking-[0.11px] text-[#060606]">
               {pctRight}
             </p>
           )}
@@ -313,13 +314,13 @@ export function RevenueCollectedWidget({
               <p className={cn("text-[22px] font-medium leading-normal tracking-[0.22px] text-[#31baae]", NUMS)}>
                 <CountUp value={collectedDisplay} />
               </p>
-              <p className="text-[14px] leading-normal text-[#797979]">Collected</p>
+              <p className="text-[14px] leading-normal text-[#060606]">Collected</p>
             </div>
             <div className="flex flex-col items-end gap-[6px]">
-              <p className={cn("text-[22px] font-medium leading-normal tracking-[0.22px] text-[#4b4b4b]", NUMS)}>
+              <p className={cn("text-[22px] font-medium leading-normal tracking-[0.22px] text-[#060606]", NUMS)}>
                 <CountUp value={remainingDisplay} />
               </p>
-              <p className="text-[14px] leading-normal text-[#797979]">Remaining</p>
+              <p className="text-[14px] leading-normal text-[#060606]">Remaining</p>
             </div>
           </div>
         </div>
@@ -474,28 +475,28 @@ export function BudgetStatusWidget({
 
           <div className="absolute left-0 top-[208px] flex w-full items-start justify-between whitespace-nowrap">
             <div className="flex flex-col items-start gap-[6px]">
-              <p className={cn("text-[28px] font-medium leading-normal tracking-[0.28px] text-[#060606]", NUMS)}>
+              <p className={cn("text-[26px] font-medium leading-normal tracking-[0.28px] text-[#060606]", NUMS)}>
                 <CountUp value={totalDisplay} />
               </p>
-              <p className="text-[14px] leading-normal text-[#797979]">Total</p>
+              <p className="text-[14px] leading-normal text-[#060606]">Total</p>
             </div>
             <div className="flex flex-col items-start gap-[6px]">
               <p className={cn("text-[18px] font-medium leading-normal tracking-[0.18px] text-[#1a932e]", NUMS)}>
                 <CountUp value={expendedDisplay} />
               </p>
-              <p className="text-[10px] leading-normal text-[#797979]">Expended</p>
+              <p className="text-[10px] leading-normal text-[#060606]">Expended</p>
             </div>
             <div className="flex flex-col items-start gap-[6px]">
               <p className={cn("text-[18px] font-medium leading-normal tracking-[0.18px] text-[#6f4ec8]", NUMS)}>
                 <CountUp value={encumberedDisplay} />
               </p>
-              <p className="text-[10px] leading-normal text-[#797979]">Encumbered</p>
+              <p className="text-[10px] leading-normal text-[#060606]">Encumbered</p>
             </div>
             <div className="flex flex-col items-start gap-[6px]">
               <p className={cn("text-[18px] font-medium leading-normal tracking-[0.18px] text-[#00b4d8]", NUMS)}>
                 <CountUp value={remainingDisplay} />
               </p>
-              <p className="text-[10px] leading-normal text-[#797979]">Remaining</p>
+              <p className="text-[10px] leading-normal text-[#060606]">Remaining</p>
             </div>
           </div>
         </div>
@@ -590,7 +591,7 @@ export function KeyInsightsWidget({
     <div data-reveal className="relative min-h-[349px] overflow-clip rounded-[14px] bg-white/[0.62]">
       {/* The floating header — the design pins the title at (40, 23). Its "today" pill is
           gone with the other cards' capsules. */}
-      <h3 className="absolute left-[40px] top-[23px] text-[16px] font-semibold leading-normal tracking-[0.16px] text-[#060606]">
+      <h3 className={cn("absolute left-[40px] top-[23px]", CARD_TITLE)}>
         Key Insights
       </h3>
 
@@ -616,11 +617,11 @@ export function KeyInsightsWidget({
                 <span className="absolute left-[12px] top-[22px]">
                   <InsightGlyph direction={i.direction} />
                 </span>
-                <p className="pt-[17px] text-[12px] font-medium leading-normal tracking-[0.12px] text-black">
+                <p className="pt-[17px] text-[12px] font-medium leading-normal tracking-[0.12px] text-[#060606]">
                   {i.text}
                 </p>
                 {i.detail && (
-                  <p className="mt-[6px] pb-[10px] text-[8px] leading-normal tracking-[0.08px] text-black/[0.42]">
+                  <p className="mt-[6px] pb-[10px] text-[10px] leading-normal tracking-[0.08px] text-[#060606]">
                     {i.detail}
                   </p>
                 )}
@@ -629,7 +630,7 @@ export function KeyInsightsWidget({
           </ul>
         </div>
       ) : (
-        <p className="px-[18px] pb-[24px] pt-[68px] text-center text-[12px] leading-relaxed text-black/[0.42]">
+        <p className="px-[18px] pb-[24px] pt-[68px] text-center text-[12px] leading-relaxed text-[#060606]">
           {emptyText}
         </p>
       )}

@@ -87,14 +87,14 @@ export default async function OverridePage({
             href={scopeOptions(scope).link(
               `/fund-balance?fy=${scope.fiscalYear}&period=${scope.period}`,
             )}
-            className="text-[12.5px] font-medium text-brand hover:underline"
+            className="text-[12px] font-medium text-brand hover:underline"
           >
             Back to fund balance
           </Link>
         }
       />
 
-      <div className="rounded-xl border border-monitor-bg bg-monitor-bg px-4 py-3 text-[12.5px] leading-relaxed text-monitor">
+      <div className="rounded-xl border border-monitor-bg bg-monitor-bg px-4 py-3 text-[12px] leading-relaxed text-monitor">
         <strong className="font-semibold">This corrects figures the platform calculated.</strong>{" "}
         Each is labelled as an override wherever it appears afterwards, it is versioned with the
         period it corrects, and it is cleared automatically if you later replace this
@@ -118,13 +118,13 @@ export default async function OverridePage({
           reason={existing.find((o) => o.field !== "TOTAL")?.reason ?? ""}
         />
         {!breakdown.found && (
-          <p className="mt-4 text-[11.5px] leading-relaxed text-monitor">
+          <p className="mt-4 text-[11px] leading-relaxed text-monitor">
             No opening fund balance has been imported for this year, so the components read
             zero and the calculated total is only the year&apos;s net change.
           </p>
         )}
         {breakdown.found && !breakdown.gap.isZero() && (
-          <p className="mt-4 text-[11.5px] leading-relaxed text-monitor">
+          <p className="mt-4 text-[11px] leading-relaxed text-monitor">
             The imported total is {money(breakdown.gap)} away from the sum of the components
             above — the Total column on the opening balance file does not foot to the four
             designated columns beside it. Your corrections move the total by exactly what you
@@ -139,27 +139,27 @@ export default async function OverridePage({
             {existing.map((o) => (
               <li key={o.id} className="py-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-[12.5px] font-medium text-ink">
+                  <span className="text-[12px] font-medium text-[#060606]">
                     {LABELS[o.field] ?? o.field}
                     {o.field === "TOTAL" && (
-                      <span className="ml-1.5 text-[11px] font-normal text-muted-2">
+                      <span className="ml-1.5 text-[11px] font-normal text-[#060606]">
                         derived
                       </span>
                     )}
                   </span>
-                  <span className="text-[13px] font-semibold tabular-nums text-ink">
+                  <span className="text-[13px] font-semibold tabular-nums text-[#060606]">
                     {money(o.value)}
                   </span>
                 </div>
-                <p className="mt-1 text-[12px] leading-relaxed text-muted">{o.reason}</p>
-                <p className="mt-1 text-[11px] text-muted-2">
+                <p className="mt-1 text-[12px] leading-relaxed text-[#060606]">{o.reason}</p>
+                <p className="mt-1 text-[11px] text-[#060606]">
                   Entered {formatDateTime(o.createdAt)}
                 </p>
               </li>
             ))}
           </ul>
           {totalOverride && (
-            <p className="mt-3 text-[11.5px] text-muted-2">
+            <p className="mt-3 text-[11px] text-[#060606]">
               The total is not entered by hand — it is the calculated total with your
               component corrections applied, and it is rewritten every time you save.
             </p>

@@ -122,11 +122,12 @@
   --color-viz-reference: #7d8ba3;
   --color-viz-grid: #f3f4f6;
   --color-viz-axis: #d1d5db;
-  /* Axis and category text steps up to the secondary-label rung with the rest of the ink
-     ladder — a chart whose labels are lighter than the table beside it reads as decoration
-     rather than data. */
-  --color-viz-label: #6b7280;
-  --color-viz-ink: #374151;
+  /* Axis and category text is BLACK, the same ink as every other word on a dashboard.
+     It used to step down to the secondary-label rung; the client's rule is that no text on
+     a dashboard is grey, and a chart's labels are text. The recessive elements of a chart
+     are its grid and its axis rule above — lines, not words. */
+  --color-viz-label: #060606;
+  --color-viz-ink: #060606;
 }
 
 @theme inline {
@@ -334,7 +335,7 @@ body {
   padding: 5px 10px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--color-ink-soft);
+  color: #060606;
 }
 
 .sheet-page {
@@ -376,7 +377,7 @@ body {
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--color-muted-2);
+  color: #060606;
 }
 .sheet-title {
   margin-top: 1px;
@@ -385,6 +386,12 @@ body {
   letter-spacing: -0.3px;
   line-height: 1.1;
 }
+/* What page two is — "— Detail & alerts". Lighter than the title it follows, because the
+   sheet is still the same document and the reader is looking for the title first. */
+.sheet-title-part {
+  font-weight: 400;
+  opacity: 0.7;
+}
 .sheet-meta {
   display: flex;
   flex: none;
@@ -392,10 +399,10 @@ body {
   align-items: flex-end;
   gap: 1px;
   font-size: 10.5px;
-  color: var(--color-muted);
+  color: #060606;
 }
 .sheet-asof {
-  color: var(--color-muted-2);
+  color: #060606;
 }
 .sheet-foot {
   display: flex;
@@ -404,7 +411,13 @@ body {
   border-top: 1px solid var(--color-line-soft);
   padding-top: 4px;
   font-size: 9px;
-  color: var(--color-muted-2);
+  color: #060606;
+}
+/* "Page 1 of 2" — the one line on the sheet that must never wrap, since a page torn out of
+   a packet is identified by it. */
+.sheet-foot > span:last-child {
+  flex: none;
+  white-space: nowrap;
 }
 
 /* ---------- bands and cards ---------- */
@@ -450,7 +463,7 @@ body {
   gap: 5px;
   min-width: 0;
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.1px;
   color: #060606;
 }
@@ -458,7 +471,7 @@ body {
   flex: none;
   font-size: 8.5px;
   font-weight: 700;
-  color: rgba(6, 6, 6, 0.56);
+  color: #060606;
 }
 .sheet-card-body {
   display: flex;
@@ -505,7 +518,7 @@ body {
   font-size: 8.5px;
   font-weight: 600;
   line-height: 1.25;
-  color: #797979;
+  color: #060606;
 }
 .sheet-kpi-value {
   font-size: 19px;
@@ -518,7 +531,7 @@ body {
 .sheet-kpi-sub {
   font-size: 8.5px;
   line-height: 1.3;
-  color: rgba(0, 6, 6, 0.62);
+  color: #060606;
 }
 /* The judgement pill — the tiles' 18% tints with their full-strength ink. */
 .sheet-kpi-note {
@@ -588,7 +601,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--color-muted-2);
+  color: #060606;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -745,6 +758,14 @@ body {
     border-radius: 0;
     box-shadow: none;
     break-inside: avoid;
+  }
+
+  /* One authored page, one sheet of paper. Without this the engine is free to decide two
+     short pages share a sheet — which is the print engine choosing the pagination again,
+     the exact thing the fixed canvas exists to take away from it. The last page breaks
+     after nothing, or every summary ends on a blank sheet. */
+  .sheet-page + .sheet-page {
+    break-before: page;
   }
   .sheet-fit {
     padding: 0;

@@ -131,7 +131,7 @@ export function ExpenditureBreakdownSection({
             <div
               className={cn(
                 COLS,
-                "mt-[10px] pb-[10px] text-[14px] leading-normal tracking-[0.14px] text-[#060606]",
+                "mt-[10px] pb-[10px] text-[14px] font-bold leading-[1.15] tracking-[0.14px] text-[#060606]",
               )}
             >
               <span>{column}</span>
@@ -145,7 +145,7 @@ export function ExpenditureBreakdownSection({
             <div aria-hidden className="h-px w-full bg-[#e7e7e7]" />
 
             {rows.length === 0 ? (
-              <p className="flex items-center justify-center py-[36px] text-[12px] text-[#797979]">
+              <p className="flex items-center justify-center py-[36px] text-[12px] text-[#060606]">
                 {empty}
               </p>
             ) : (
@@ -223,7 +223,7 @@ export function ExpenditureBreakdownSection({
               aria-selected={o.value === active}
               onClick={() => choose(o.value)}
               className={cn(
-                "flex h-[31px] items-center whitespace-nowrap rounded-[38px] px-[18px] text-[10px] font-bold leading-[2] tracking-[0.1px] text-black transition-colors",
+                "flex h-[31px] items-center whitespace-nowrap rounded-[38px] px-[18px] text-[10px] font-bold leading-[2] tracking-[0.1px] text-[#060606] transition-colors",
                 o.value === active
                   ? "bg-white shadow-[0_1px_2px_rgba(0,6,6,0.06)]"
                   : "hover:bg-white/60",
@@ -255,24 +255,24 @@ export function ExpenditureBreakdownSection({
                   <li key={r.id}>
                     <div className="relative flex h-[30px] items-center justify-between gap-[16px]">
                       <span
-                        className="min-w-0 truncate text-[15px] leading-[2] tracking-[0.15px] text-black"
+                        className="min-w-0 truncate text-[14px] leading-[2] tracking-[0.15px] text-[#060606]"
                         title={r.label}
                       >
                         {r.label}
                       </span>
                       <span className="flex flex-none items-center gap-[16px]">
                         {!tipRiding && (
-                          <span className="whitespace-nowrap text-[10px] font-bold leading-[2] tracking-[0.1px] text-black">
+                          <span className="whitespace-nowrap text-[10px] font-bold leading-[2] tracking-[0.1px] text-[#060606]">
                             {r.display}
                           </span>
                         )}
-                        <span className="whitespace-nowrap text-[10px] leading-[2] tracking-[0.1px] text-black">
+                        <span className="whitespace-nowrap text-[10px] leading-[2] tracking-[0.1px] text-[#060606]">
                           {r.share}
                         </span>
                       </span>
                       {tipRiding && (
                         <span
-                          className="absolute top-1/2 -translate-x-full -translate-y-1/2 whitespace-nowrap pr-[4px] text-[10px] font-bold leading-[2] tracking-[0.1px] text-black"
+                          className="absolute top-1/2 -translate-x-full -translate-y-1/2 whitespace-nowrap pr-[4px] text-[10px] font-bold leading-[2] tracking-[0.1px] text-[#060606]"
                           style={{ left: `clamp(240px, ${pct}%, calc(100% - 58px))` }}
                         >
                           {r.display}

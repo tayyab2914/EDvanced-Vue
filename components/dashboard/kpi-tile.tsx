@@ -190,20 +190,20 @@ export function KpiTile({
           </span>
         )}
         <div className="flex flex-col items-start gap-[2px]">
-          <span className="flex items-start gap-1 text-[13px] font-semibold leading-[1.3] text-[#797979]">
+          <span className="flex items-start gap-1 text-[13px] font-semibold leading-[1.3] text-[#060606]">
             <span className="min-w-0">{label}</span>
             {info && (
               <span
                 title={info}
                 aria-label={info}
-                className="mt-[1px] flex size-[13px] flex-none cursor-help items-center justify-center rounded-full bg-black/[0.07] text-[8.5px] font-bold text-[#797979]"
+                className="mt-[1px] flex size-[15px] flex-none cursor-help items-center justify-center rounded-full bg-black/[0.07] text-[10px] font-bold text-[#060606]"
               >
                 i
               </span>
             )}
           </span>
           {caption && (
-            <span className="block truncate text-[10px] font-medium leading-[1.3] text-[#797979]/80">
+            <span className="block truncate text-[10px] font-medium leading-[1.3] text-[#060606]">
               {caption}
             </span>
           )}
@@ -217,7 +217,7 @@ export function KpiTile({
               // a rung gets its own step down. One class or the other, never both — two
               // arbitrary font-size utilities on one element resolve by stylesheet order.
               valueStatus ? "text-[20px] tracking-[0.2px]" : "text-[26px] tracking-[0.26px]",
-              unavailable ? "text-[#797979]" : !valueStatus && "text-[#060606]",
+              unavailable ? "text-[#060606]" : !valueStatus && "text-[#060606]",
             )}
             style={
               !unavailable && valueStatus ? { color: RUNG_PILL[valueStatus].fg } : undefined
@@ -234,7 +234,7 @@ export function KpiTile({
       </div>
 
       {sub && (
-        <span className="text-[12px] font-semibold leading-[1.3] text-[rgba(0,6,6,0.62)]">
+        <span className="text-[12px] font-semibold leading-[1.3] text-[#060606]">
           {sub}
         </span>
       )}
@@ -259,7 +259,7 @@ export function KpiTile({
             )}
             <span className="min-w-0 [font-variant-numeric:tabular-nums]">
               {delta.text}
-              {delta.note && <span className="font-semibold text-[#797979]"> {delta.note}</span>}
+              {delta.note && <span className="font-semibold text-[#060606]"> {delta.note}</span>}
             </span>
           </span>
         )}
@@ -346,7 +346,7 @@ export function MiniStat({
   const TEXT: Record<DeltaTone, string> = {
     positive: "text-[#1a932e]",
     negative: "text-[#fd4438]",
-    neutral: "text-[#1f1f21]",
+    neutral: "text-[#060606]",
   };
   return (
     <div className="flex min-w-0 flex-col gap-[6px] rounded-[16px] border border-[#e7e7e7] bg-white px-[14px] py-[12px]">
@@ -358,17 +358,17 @@ export function MiniStat({
           <Icon name={icon} size={14} />
         </span>
       )}
-      <span className="text-[11.5px] font-medium leading-[1.3] text-[#1f1f21]">{label}</span>
+      <span className="text-[11px] font-medium leading-[1.3] text-[#060606]">{label}</span>
       <span
         className={cn(
           "text-[20px] font-medium leading-[1.15] [font-variant-numeric:proportional-nums]",
-          valueTone ? TEXT[valueTone] : "text-[#1f1f21]",
+          valueTone ? TEXT[valueTone] : "text-[#060606]",
         )}
       >
         {value}
       </span>
       {note && (
-        <span className="text-[10.5px] leading-snug text-[#1f1f21]/[0.74]">{note}</span>
+        <span className="text-[11px] leading-snug text-[#060606]">{note}</span>
       )}
     </div>
   );

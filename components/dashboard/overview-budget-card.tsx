@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { fittedTicks } from "@/lib/dashboard/scale";
 import { cn } from "@/lib/cn";
+import { CARD_TITLE, CARD_SUBTITLE } from "@/components/dashboard/type-scale";
 import { ChartEmpty } from "@/components/dashboard/charts/chrome";
 import type { BudgetBarRow } from "@/components/dashboard/charts/budget-bars";
 import type { PaceLabel } from "@/lib/dashboard/pace";
@@ -59,7 +60,7 @@ export const PILL: Record<PaceLabel, string> = {
   Behind: "bg-[rgba(230,95,43,0.18)] text-[#e65f2b]",
   Ahead: "bg-[rgba(26,147,46,0.18)] text-[#1a932e]",
   "On Target": "bg-[rgba(26,147,46,0.18)] text-[#1a932e]",
-  "N/A": "bg-black/[0.08] text-black/[0.45]",
+  "N/A": "bg-black/[0.08] text-[#060606]",
 };
 
 /** Black 20% stripes, 2px on a 4px pitch, rising ~20° — the exported hatch, as CSS. */
@@ -194,7 +195,7 @@ export function OverviewBudgetCard({
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-[14px]">
-            <h2 className="whitespace-nowrap text-[16px] font-normal leading-[2] tracking-[0.16px] text-[#060606]">
+            <h2 className={cn("whitespace-nowrap", CARD_TITLE)}>
               {title}
             </h2>
             <Link
@@ -204,12 +205,12 @@ export function OverviewBudgetCard({
               <span className="flex size-[16px] items-center justify-center">
                 <ArrowGlyph color="#1A932E" className="-rotate-45" />
               </span>
-              <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-black">
+              <span className="whitespace-nowrap text-[10px] leading-[12px] tracking-[0.2px] text-[#060606]">
                 {ctaLabel}
               </span>
             </Link>
           </div>
-          <p className="text-[10px] leading-[2] tracking-[0.1px] text-[#060606]/[0.56]">
+          <p className={CARD_SUBTITLE}>
             {subtitle}
           </p>
         </div>
@@ -217,19 +218,19 @@ export function OverviewBudgetCard({
         <ul aria-hidden className="flex flex-none flex-col gap-[4px]">
           <li className="flex items-center gap-[5px]">
             <span className={cn("size-[9px] rounded-[2px]", a.swatch)} />
-            <span className="text-[8px] leading-[9px] tracking-[0.08px] text-[#060606]/[0.56]">
+            <span className="text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]">
               Actual (YTD)
             </span>
           </li>
           <li className="flex items-center gap-[5px]">
             <span className="size-[9px] rounded-[2px] bg-[rgba(6,109,255,0.6)]" />
-            <span className="text-[8px] leading-[9px] tracking-[0.08px] text-[#060606]/[0.56]">
+            <span className="text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]">
               Budget (YTD)
             </span>
           </li>
           <li className="flex items-center gap-[5px]">
             <span className="size-[9px] rounded-[2px]" style={HATCH_SWATCH} />
-            <span className="text-[8px] leading-[9px] tracking-[0.08px] text-[#060606]/[0.56]">
+            <span className="text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]">
               Budget Full year
             </span>
           </li>
@@ -247,7 +248,7 @@ export function OverviewBudgetCard({
           <div aria-hidden>
             {/* ---- axis header ---- */}
             <div className={cn(COLS, "h-[26px] border-b border-black/[0.11]")}>
-              <span className="self-center text-[14px] leading-none tracking-[0.14px] text-[#060606]/[0.56]">
+              <span className="self-center text-[14px] leading-none tracking-[0.14px] text-[#060606]">
                 {unit}
               </span>
               {/* Ticks sit at their VALUE, not at their index: the axis ends on the data,
@@ -257,7 +258,7 @@ export function OverviewBudgetCard({
                 {ticks.values.map((v, i) => (
                   <span
                     key={v}
-                    className="absolute bottom-[3px] whitespace-nowrap text-[10px] leading-[11px] tracking-[0.1px] text-[#060606]/[0.56]"
+                    className="absolute bottom-[3px] whitespace-nowrap text-[10px] leading-[12px] tracking-[0.1px] text-[#060606]"
                     style={
                       i === 0
                         ? { left: 0 }
@@ -370,7 +371,7 @@ export function OverviewBudgetCard({
                       {actualFits && (
                         <span
                           className={cn(
-                            "anim-fade-late absolute left-[5px] top-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] leading-[11px]",
+                            "anim-fade-late absolute left-[5px] top-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] leading-[12px]",
                             a.inkOn,
                           )}
                         >
@@ -379,7 +380,7 @@ export function OverviewBudgetCard({
                       )}
                       {budgetFits && (
                         <span
-                          className="anim-fade-late absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] leading-[11px] text-[#066dff]"
+                          className="anim-fade-late absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[10px] leading-[12px] text-[#066dff]"
                           style={{ left: `calc(${drawnActual}% + 7px)` }}
                         >
                           {r.budgetToDateDisplay}

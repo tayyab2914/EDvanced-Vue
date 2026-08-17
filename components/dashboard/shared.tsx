@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
+import { CARD_TITLE } from "@/components/dashboard/type-scale";
 import { Icon, type IconName } from "@/components/icons";
 import { MANAGE } from "@/lib/dashboard/cta";
 
@@ -44,14 +45,14 @@ export function LinkTabs({
             href={t.href}
             aria-current={isActive ? "page" : undefined}
             className={cn(
-              "flex h-[31px] flex-none items-center gap-[6px] whitespace-nowrap rounded-[38px] px-[13px] text-[10px] font-bold leading-[2] tracking-[0.1px] text-black transition-colors",
+              "flex h-[31px] flex-none items-center gap-[6px] whitespace-nowrap rounded-[38px] px-[13px] text-[10px] font-bold leading-[2] tracking-[0.1px] text-[#060606] transition-colors",
               isActive ? "bg-white shadow-[0_1px_2px_rgba(0,6,6,0.06)]" : "hover:bg-white/60",
             )}
           >
             {t.icon && <Icon name={t.icon} size={11} />}
             {t.label}
             {t.count !== undefined && t.count > 0 && (
-              <span className="flex size-[15px] flex-none items-center justify-center rounded-full bg-[rgba(238,32,28,0.18)] text-[9px] font-bold leading-none tabular-nums text-[#ee201c]">
+              <span className="flex size-[15px] flex-none items-center justify-center rounded-full bg-[rgba(238,32,28,0.18)] text-[10px] font-bold leading-none tabular-nums text-[#ee201c]">
                 {t.count}
               </span>
             )}
@@ -83,11 +84,11 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center rounded-[14px] border border-dashed border-black/15 bg-white/[0.62] px-6 py-14 text-center">
-      <span className="mb-3.5 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#797979]">
+      <span className="mb-3.5 flex h-11 w-11 items-center justify-center rounded-full bg-white text-[#060606]">
         <Icon name={icon} size={20} />
       </span>
-      <h2 className="text-[15px] font-semibold text-[#060606]">{title}</h2>
-      <p className="mt-1.5 max-w-[46ch] text-[13px] leading-relaxed text-[#060606]/[0.62]">
+      <h2 className={CARD_TITLE}>{title}</h2>
+      <p className="mt-1.5 max-w-[46ch] text-[13px] leading-relaxed text-[#060606]">
         {children}
       </p>
       {action && href && (
@@ -111,7 +112,7 @@ export function EmptyState({
  */
 export function SubstitutionNotice({ asked, showing }: { asked: string; showing: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-[10px] bg-[rgba(239,138,31,0.18)] px-3.5 py-2.5 text-[12.5px] text-[#b76a12]">
+    <div className="flex items-start gap-2 rounded-[10px] bg-[rgba(239,138,31,0.18)] px-3.5 py-2.5 text-[12px] text-[#b76a12]">
       <span aria-hidden className="font-bold">
         !
       </span>
@@ -151,7 +152,7 @@ export function FundLevelOnly({ what = "This figure is" }: { what?: string }) {
   return (
     <span
       title={`${what} tracked per fund. Cost centre filters do not apply to it.`}
-      className="inline-flex items-center gap-1 rounded-full border border-line bg-panel px-2 py-0.5 text-[10.5px] font-medium text-muted-2"
+      className="inline-flex items-center gap-1 rounded-full border border-line bg-panel px-2 py-0.5 text-[11px] font-medium text-[#060606]"
     >
       <Icon name="building" size={10} />
       Fund level
@@ -167,8 +168,8 @@ export function FundLevelOnly({ what = "This figure is" }: { what?: string }) {
  */
 export function FundLevelNotice({ subject }: { subject: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-[10px] bg-white/[0.62] px-3.5 py-2.5 text-[12.5px] text-[#060606]/[0.74]">
-      <span aria-hidden className="mt-px flex-none text-[#797979]">
+    <div className="flex items-start gap-2 rounded-[10px] bg-white/[0.62] px-3.5 py-2.5 text-[12px] text-[#060606]">
+      <span aria-hidden className="mt-px flex-none text-[#060606]">
         <Icon name="building" size={14} />
       </span>
       <span>
@@ -207,11 +208,11 @@ export function PolicyEchoCard({
               i < rows.length - 1 && "border-b border-line-soft",
             )}
           >
-            <dt className="min-w-0 flex-1 text-[12.5px] text-muted">
+            <dt className="min-w-0 flex-1 text-[12px] text-[#060606]">
               {r.label}
-              {r.note && <span className="block text-[11px] text-muted-2">{r.note}</span>}
+              {r.note && <span className="block text-[11px] text-[#060606]">{r.note}</span>}
             </dt>
-            <dd className="flex-none text-[12.5px] font-semibold tabular-nums text-ink">{r.value}</dd>
+            <dd className="flex-none text-[12px] font-semibold tabular-nums text-[#060606]">{r.value}</dd>
           </div>
         ))}
       </dl>
@@ -258,7 +259,7 @@ export function FundTag({
     <>
       <span className="truncate font-medium">{label}</span>
       {detail && (
-        <span className="flex-none border-l border-line-soft pl-1.5 tabular-nums opacity-80">
+        <span className="flex-none border-l border-line-soft pl-1.5 tabular-nums">
           {detail}
         </span>
       )}
@@ -266,7 +267,7 @@ export function FundTag({
   );
 
   const shape =
-    "inline-flex max-w-full items-center gap-1.5 rounded-[5px] border border-line-soft bg-panel px-1.5 py-[2px] text-[10.5px] text-muted";
+    "inline-flex max-w-full items-center gap-1.5 rounded-[5px] border border-line-soft bg-panel px-1.5 py-[2px] text-[11px] text-[#060606]";
 
   return href ? (
     <Link href={href} className={cn(shape, "transition-colors hover:border-brand hover:text-brand")}>
@@ -360,10 +361,10 @@ export function KeyInsightBar({
         <Icon name={icon} size={13} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[9.5px] font-semibold uppercase tracking-[0.06em] opacity-80">
+        <span className="block text-[10px] font-semibold uppercase tracking-[0.06em]">
           Key insight
         </span>
-        <span data-insight-bar-text className="mt-0.5 block text-[12.5px] leading-relaxed">
+        <span data-insight-bar-text className="mt-0.5 block text-[12px] leading-relaxed">
           {children}
         </span>
       </span>

@@ -54,7 +54,7 @@ export function BenchmarkBand({
     Acceptable: "text-acceptable",
     Monitor: "text-monitor",
     "Action Required": "text-action",
-    "N/A": "text-na",
+    "N/A": "text-[#060606]",
   };
 
   const widthOf = (b: StatusBand) => {
@@ -118,7 +118,7 @@ export function BenchmarkBand({
 
       {/* The boundaries, printed. A band chart whose thresholds are only implied is asking
           the reader to estimate the very number the policy exists to make exact. */}
-      <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-muted-2">
+      <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-[#060606]">
         <span>{format(min)}</span>
         {bands
           .map((b) => b.from)
@@ -137,15 +137,15 @@ export function BenchmarkBand({
             className="min-w-0 px-0.5 text-center"
             style={{ width: `${widthOf(b)}%`, marginRight: i < bands.length - 1 ? 2 : 0 }}
           >
-            <span className={cn("block truncate text-[10.5px] font-semibold", RUNG_TEXT[b.rung])}>
+            <span className={cn("block truncate text-[11px] font-semibold", RUNG_TEXT[b.rung])}>
               {b.rung === "Action Required" ? "Action" : b.rung}
             </span>
-            <span className="block truncate text-[10px] tabular-nums text-muted-2">{b.label}</span>
+            <span className="block truncate text-[10px] tabular-nums text-[#060606]">{b.label}</span>
           </div>
         ))}
       </div>
 
-      {label && <p className="mt-3 text-[11.5px] leading-relaxed text-muted">{label}</p>}
+      {label && <p className="mt-3 text-[11px] leading-relaxed text-[#060606]">{label}</p>}
     </div>
   );
 }

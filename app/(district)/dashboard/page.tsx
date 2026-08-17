@@ -49,7 +49,8 @@ import {
 import { OverviewPeriodSelect } from "@/components/dashboard/overview-period-select";
 import { FooterInfoBar } from "@/components/dashboard/section-card";
 import { DataTable } from "@/components/dashboard/data-table";
-import { InsightList } from "@/components/dashboard/alert-list";
+import { AlertList, InsightList } from "@/components/dashboard/alert-list";
+import { Gauge } from "@/components/dashboard/charts/gauge";
 import { OverviewBudgetCard } from "@/components/dashboard/overview-budget-card";
 import { OverviewAlertsPanel } from "@/components/dashboard/overview-alerts";
 import { StatusBadge } from "@/components/dashboard/status-badge";
@@ -949,13 +950,20 @@ export default async function ExecutiveDashboard({
     />
   );
 
-  // ===================== the one-page landscape summary =====================
+  // ===================== the two-page landscape summary =====================
   //
   // NOT the dashboard with tighter padding. The bands below are chosen for a 990px canvas
   // and nothing else: the two budget charts get a half-width column each because their
   // fixed label / reference / status columns leave a three-up layout roughly 8px of actual
   // bar to draw in — which is how the previous summary managed to print a chart with no
-  // chart in it. Everything the screen version showed is still here.
+  // chart in it.
+  //
+  // The split is by ALTITUDE, which is the same order the screen reads in. Page one is what
+  // a board is told first: the six figures, the two composition widgets, and revenue and
+  // spending against budget. Page two is what it asks next — the trend behind the reserve,
+  // the health table, the cash position, and the alerts. The Alerts panel in particular was
+  // simply absent from the one-page version, so a printed packet said "3 alerts" in a tile
+  // and never said what they were.
   if (summary) {
     return (
       <PrintSheet
@@ -964,211 +972,319 @@ export default async function ExecutiveDashboard({
         scope={sheetScope(scope)}
         asOf={sheetAsOf(scope.dataAsOf)}
         backHref={options.query ? `/dashboard?${options.query}` : "/dashboard"}
-      >
-        <SheetBand cols="1fr 1fr 1fr 1fr 1fr 1fr">
-          {kpiData.map((k) => (
-            <SheetKpi
-              key={k.key}
-              label={k.label}
-              value={k.value}
-              sub={k.sub}
-              note={k.note}
-              tone={k.tone}
-              icon={k.icon}
-              accent={k.tileTone}
-            />
-          ))}
-        </SheetBand>
+        pages={[
+          {
+            content: (
+              <>
+                <SheetBand cols="1fr 1fr 1fr 1fr 1fr 1fr">
+                  {kpiData.map((k) => (
+                    <SheetKpi
+                      key={k.key}
+                      label={k.label}
+                      value={k.value}
+                      sub={k.sub}
+                      note={k.note}
+                      tone={k.tone}
+                      icon={k.icon}
+                      accent={k.tileTone}
+                    />
+                  ))}
+                </SheetBand>
 
-        {/* The widget band the redesign added under the tiles: the Revenue Collected gauge
-            and the Budget Status donut, at sheet scale, with Key Insights beside them —
-            the same three cards, in the same order, as the screen's widget row. */}
-        <SheetBand cols="1fr 1.15fr 1fr">
-          <SheetCard
-            title="Revenue Collected"
-            note={revenueBudgetTotal > 0 ? "Of full-year revenue budget" : undefined}
-          >
-            <SheetRevenueCollected
-              collectedDisplay={compactMoney(collected)}
-              ofDisplay={
-                revenueBudgetTotal > 0 ? `of ${compactMoney(revenueBudgetTotal)}` : undefined
-              }
-              remainingDisplay={compactMoney(uncollected)}
-              collectedPct={collectedPct}
-            />
-          </SheetCard>
+                {/* The widget band the redesign added under the tiles: the Revenue Collected
+                    gauge and the Budget Status donut, at sheet scale, with Key Insights
+                    beside them — the same three cards, in the same order, as the screen's
+                    widget row. */}
+                <SheetBand cols="1fr 1.15fr 1fr">
+                  <SheetCard
+                    title="Revenue Collected"
+                    note={revenueBudgetTotal > 0 ? "Of full-year revenue budget" : undefined}
+                  >
+                    <SheetRevenueCollected
+                      collectedDisplay={compactMoney(collected)}
+                      ofDisplay={
+                        revenueBudgetTotal > 0
+                          ? `of ${compactMoney(revenueBudgetTotal)}`
+                          : undefined
+                      }
+                      remainingDisplay={compactMoney(uncollected)}
+                      collectedPct={collectedPct}
+                    />
+                  </SheetCard>
 
-          <SheetCard
-            title="Budget Status"
-            note={
-              overcommitted
-                ? `Overcommitted by ${compactMoney(Math.abs(availableBudget))}`
-                : "Expended + encumbered vs full-year budget"
-            }
-          >
-            <SheetBudgetStatus
-              totalDisplay={budgetTotal > 0 ? compactMoney(budgetTotal) : NOT_AVAILABLE}
-              expendedDisplay={compactMoney(expended)}
-              encumberedDisplay={compactMoney(encumbered)}
-              remainingDisplay={accounting(availableBudget, { compact: true })}
-              expended={expended}
-              encumbered={encumbered}
-              remaining={Math.max(0, availableBudget)}
-            />
-          </SheetCard>
+                  <SheetCard
+                    title="Budget Status"
+                    note={
+                      overcommitted
+                        ? `Overcommitted by ${compactMoney(Math.abs(availableBudget))}`
+                        : "Expended + encumbered vs full-year budget"
+                    }
+                  >
+                    <SheetBudgetStatus
+                      totalDisplay={budgetTotal > 0 ? compactMoney(budgetTotal) : NOT_AVAILABLE}
+                      expendedDisplay={compactMoney(expended)}
+                      encumberedDisplay={compactMoney(encumbered)}
+                      remainingDisplay={accounting(availableBudget, { compact: true })}
+                      expended={expended}
+                      encumbered={encumbered}
+                      remaining={Math.max(0, availableBudget)}
+                    />
+                  </SheetCard>
 
-          <SheetCard title="Key Insights">
-            {insights.length > 0 ? (
-              // Three, not all of them. The sheet is a fixed page and an unbounded list is
-              // the one thing on it that can grow without limit; the rest are on /alerts.
-              <InsightList insights={insights.slice(0, 3)} layout="column" />
-            ) : (
-              <p className="py-3 text-center text-[9.5px] text-muted-2">
-                Nothing stands out this period.
-              </p>
-            )}
-          </SheetCard>
-        </SheetBand>
+                  <SheetCard title="Key Insights">
+                    {insights.length > 0 ? (
+                      // Four now, where the one-page sheet could carry three. Still bounded:
+                      // an insight list is the one thing here that grows without limit, and
+                      // the rest are on /alerts — which page two now prints.
+                      <InsightList insights={insights.slice(0, 4)} layout="column" />
+                    ) : (
+                      <p className="py-3 text-center text-[10px] text-[#060606]">
+                        Nothing stands out this period.
+                      </p>
+                    )}
+                  </SheetCard>
+                </SheetBand>
 
-        <SheetBand cols="1fr 1fr">
-          <SheetCard title="Revenues vs Budget (YTD)" note="Five largest sources">
-            <SheetBudgetBars
-              accent="green"
-              title="Revenues against budget"
-              summary="Actual year-to-date revenue against the budget expected by now and the full-year budget, for the five largest sources."
-              rows={revenueRows}
-              format={(v) => compactMoney(v, 0)}
-            />
-          </SheetCard>
+                <SheetBand cols="1fr 1fr" grow>
+                  <SheetCard title="Revenues vs Budget (YTD)" note="Five largest sources">
+                    <SheetBudgetBars
+                      accent="green"
+                      title="Revenues against budget"
+                      summary="Actual year-to-date revenue against the budget expected by now and the full-year budget, for the five largest sources."
+                      rows={revenueRows}
+                      format={(v) => compactMoney(v, 0)}
+                    />
+                  </SheetCard>
 
-          <SheetCard title="Expenditures vs Budget (YTD)" note="By object">
-            <SheetBudgetBars
-              accent="purple"
-              title="Expenditures against budget"
-              summary="Actual year-to-date spending against the budget expected by now and the full-year budget, by object type."
-              rows={expenditureRows}
-              format={(v) => compactMoney(v, 0)}
-            />
-          </SheetCard>
-        </SheetBand>
+                  <SheetCard title="Expenditures vs Budget (YTD)" note="By object">
+                    <SheetBudgetBars
+                      accent="purple"
+                      title="Expenditures against budget"
+                      summary="Actual year-to-date spending against the budget expected by now and the full-year budget, by object type."
+                      rows={expenditureRows}
+                      format={(v) => compactMoney(v, 0)}
+                    />
+                  </SheetCard>
+                </SheetBand>
+              </>
+            ),
+          },
+          {
+            label: "Position & alerts",
+            content: (
+              <>
+                <SheetBand cols="1.25fr 1fr">
+                  <SheetCard
+                    title="Fund Balance Trend"
+                    badge={
+                      isGeneralFund ? (
+                        <StatusBadge status={reserveRung} size="sm" dot={false} />
+                      ) : undefined
+                    }
+                    note={scope.fund ? scope.fund.name : "All funds"}
+                  >
+                    <LineChart
+                      title="Fund balance trend"
+                      summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
+                      categories={labels}
+                      format={(v) => compactMoney(v, 0)}
+                      // 120px on the one-page sheet, where this chart shared a band with two
+                      // other cards. A second page buys it the height it was drawn for.
+                      height={185}
+                      series={[
+                        {
+                          key: "total",
+                          label: isGeneralFund ? "Ending fund balance" : "Total fund balance",
+                          color: "var(--color-viz-budget)",
+                          points: fundBalanceTrend,
+                          labelLast: true,
+                        },
+                        ...(isGeneralFund
+                          ? [
+                              {
+                                key: "unassigned",
+                                label: "Unassigned fund balance",
+                                color: "var(--color-viz-actual)",
+                                points: unassignedTrend,
+                                labelLast: true,
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
+                    <SheetStats
+                      items={
+                        isGeneralFund
+                          ? [
+                              { label: "Ending", value: compactMoney(endingFundBalance) },
+                              {
+                                label: "Unassigned",
+                                value: compactMoney(point?.unassignedFundBalance),
+                              },
+                              { label: "Target", value: `${reserveT.target.toFixed(2)}%` },
+                              { label: "Minimum", value: `${statutoryMinimum.toFixed(2)}%` },
+                            ]
+                          : [
+                              { label: "Ending", value: compactMoney(endingFundBalance) },
+                              { label: "Opening", value: compactMoney(openingFundBalance) },
+                              {
+                                label: "Change",
+                                value: accounting(fbChange, { compact: true }),
+                                tone: fbChange?.isNegative()
+                                  ? ("negative" as const)
+                                  : ("positive" as const),
+                              },
+                            ]
+                      }
+                    />
+                  </SheetCard>
 
-        <SheetBand cols="1.2fr 1.15fr 0.85fr" grow>
-          <SheetCard
-            title="Fund Balance Trend"
-            badge={
-              isGeneralFund ? <StatusBadge status={reserveRung} size="sm" dot={false} /> : undefined
-            }
-            note={scope.fund ? scope.fund.name : "All funds"}
-          >
-            <LineChart
-              title="Fund balance trend"
-              summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
-              categories={labels}
-              format={(v) => compactMoney(v, 0)}
-              height={120}
-              series={[
-                {
-                  key: "total",
-                  label: isGeneralFund ? "Ending fund balance" : "Total fund balance",
-                  color: "var(--color-viz-budget)",
-                  points: fundBalanceTrend,
-                  labelLast: true,
-                },
-                ...(isGeneralFund
-                  ? [
-                      {
-                        key: "unassigned",
-                        label: "Unassigned fund balance",
-                        color: "var(--color-viz-actual)",
-                        points: unassignedTrend,
-                        labelLast: true,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-            <SheetStats
-              items={
-                isGeneralFund
-                  ? [
-                      { label: "Ending", value: compactMoney(endingFundBalance) },
-                      { label: "Unassigned", value: compactMoney(point?.unassignedFundBalance) },
-                      { label: "Target", value: `${reserveT.target.toFixed(2)}%` },
-                      { label: "Minimum", value: `${statutoryMinimum.toFixed(2)}%` },
-                    ]
-                  : [
-                      { label: "Ending", value: compactMoney(endingFundBalance) },
-                      { label: "Opening", value: compactMoney(openingFundBalance) },
-                      {
-                        label: "Change",
-                        value: accounting(fbChange, { compact: true }),
-                        tone: fbChange?.isNegative() ? ("negative" as const) : ("positive" as const),
-                      },
-                    ]
-              }
-            />
-          </SheetCard>
+                  <SheetCard title="Financial Health Summary" note="Against policy targets">
+                    <DataTable
+                      dense
+                      columns={[
+                        { key: "indicator", label: "Indicator" },
+                        { key: "current", label: "Current", align: "right" },
+                        { key: "target", label: "Target", align: "right" },
+                        { key: "status", label: "Status", align: "right" },
+                      ]}
+                      rows={health.map((h) => ({
+                        id: h.id,
+                        cells: {
+                          indicator: { value: h.indicator, strong: true },
+                          current: h.current,
+                          target: h.target,
+                          status: (
+                            <span className="flex justify-end">
+                              <StatusBadge status={h.rung} size="sm" dot={false} />
+                            </span>
+                          ),
+                        },
+                      }))}
+                    />
+                  </SheetCard>
+                </SheetBand>
 
-          <SheetCard title="Financial Health Summary" note="Against policy targets">
-            <DataTable
-              dense
-              columns={[
-                { key: "indicator", label: "Indicator" },
-                { key: "current", label: "Current", align: "right" },
-                { key: "target", label: "Target", align: "right" },
-                { key: "status", label: "Status", align: "right" },
-              ]}
-              rows={health.map((h) => ({
-                id: h.id,
-                cells: {
-                  indicator: { value: h.indicator, strong: true },
-                  current: h.current,
-                  target: h.target,
-                  status: (
-                    <span className="flex justify-end">
-                      <StatusBadge status={h.rung} size="sm" dot={false} />
-                    </span>
-                  ),
-                },
-              }))}
-            />
-          </SheetCard>
+                <SheetBand cols="1.25fr 1fr" grow>
+                  {/* The cash card the screen carries, gauge and all — the one-page sheet had
+                      room for its figures but not for the dial that judges them. */}
+                  <SheetCard
+                    title="Cash Position"
+                    badge={<StatusBadge status={cashRung} size="sm" dot={false} />}
+                    note={`As of ${scope.label}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-none flex-col items-center">
+                        <Gauge
+                          value={daysCash}
+                          bands={statusBands(cashT)}
+                          rung={cashRung}
+                          unit=""
+                          size={125}
+                          title="Days cash on hand"
+                          summary={
+                            daysCash === null
+                              ? "Days cash on hand cannot be computed for this period."
+                              : `${fmtDays(daysCash)} days of cash on hand, against a policy minimum of ${cashT.warning}.`
+                          }
+                        />
+                        <span className="text-[8px] text-[#060606]">
+                          Days of cash · policy ≥ {cashT.warning}
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <SheetStats
+                          stacked
+                          items={[
+                            { label: "Ending cash", value: compactMoney(point?.endingCash) },
+                            {
+                              label: "Days of cash",
+                              value:
+                                daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)} days`,
+                            },
+                            { label: "Avg monthly spend", value: compactMoney(avgMonthlySpend) },
+                            {
+                              label: "Cash % of expenditures",
+                              value: percent(cashPctOfSpend, 1),
+                            },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                    {/* The five-figure cash walk, as the screen's strip under the gauge. */}
+                    <SheetStats
+                      items={[
+                        { label: "Beginning", value: compactMoney(flow.beginningCash) },
+                        {
+                          label: "Receipts (YTD)",
+                          value: compactMoney(flow.receipts),
+                          tone: "positive",
+                        },
+                        {
+                          label: "Disbursements (YTD)",
+                          value: accounting(flow.disbursements?.negated(), { compact: true }),
+                          tone: "negative",
+                        },
+                        {
+                          label: "Net cash flow",
+                          value: accounting(flow.net, { compact: true }),
+                          tone: flow.net?.isNegative() ? "negative" : "positive",
+                        },
+                        { label: "Ending cash", value: compactMoney(point?.endingCash) },
+                      ]}
+                    />
+                  </SheetCard>
 
-          <SheetCard
-            title="Cash Position"
-            badge={<StatusBadge status={cashRung} size="sm" dot={false} />}
-            note={`As of ${scope.label}`}
-          >
-            <SheetStats
-              stacked
-              items={[
-                { label: "Ending cash", value: compactMoney(point?.endingCash) },
-                {
-                  label: "Days of cash",
-                  value: daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)} days`,
-                },
-                { label: "Beginning cash", value: compactMoney(flow.beginningCash) },
-                {
-                  label: "Receipts (YTD)",
-                  value: compactMoney(flow.receipts),
-                  tone: "positive",
-                },
-                {
-                  label: "Disbursements (YTD)",
-                  value: accounting(flow.disbursements?.negated(), { compact: true }),
-                  tone: "negative",
-                },
-                {
-                  label: "Net cash flow",
-                  value: accounting(flow.net, { compact: true }),
-                  tone: flow.net?.isNegative() ? "negative" : "positive",
-                },
-                { label: "Avg monthly spend", value: compactMoney(avgMonthlySpend) },
-              ]}
-            />
-          </SheetCard>
-        </SheetBand>
-      </PrintSheet>
+                  {/* THE CARD THE ONE-PAGE SHEET DROPPED. The Alerts KPI tile prints a count
+                      on page one; without this the packet never said what was counted. */}
+                  <SheetCard
+                    title={`Alerts (${alerts?.alerts.length ?? 0})`}
+                    note={
+                      alerts && alerts.criticalCount > 0
+                        ? `${alerts.criticalCount} critical`
+                        : "Against the district's own thresholds"
+                    }
+                  >
+                    <SheetStats
+                      items={[
+                        {
+                          label: "Critical",
+                          value: String(alerts?.criticalCount ?? 0),
+                          tone: (alerts?.criticalCount ?? 0) > 0 ? "negative" : "neutral",
+                        },
+                        { label: "Warning", value: String(alerts?.warningCount ?? 0) },
+                        {
+                          label: "Informational",
+                          value: String(alerts?.informationalCount ?? 0),
+                        },
+                      ]}
+                    />
+                    <AlertList
+                      mode={scope.labelMode}
+                      // Six is what the band holds at a legible size; the count above states
+                      // the whole, and the card says where the rest are.
+                      alerts={alertRows.slice(0, 6).map((a) => ({
+                        id: a.id,
+                        severity: a.severity,
+                        title: a.title,
+                        message: a.message,
+                      }))}
+                      empty="No thresholds crossed this period."
+                      emptyNote="Every indicator is inside the district's policy bands."
+                    />
+                    {alertRows.length > 6 && (
+                      <p className="text-[8.5px] text-[#060606]">
+                        {alertRows.length - 6} further alert
+                        {alertRows.length - 6 === 1 ? "" : "s"} on the Alerts dashboard.
+                      </p>
+                    )}
+                  </SheetCard>
+                </SheetBand>
+              </>
+            ),
+          },
+        ]}
+      />
     );
   }
 

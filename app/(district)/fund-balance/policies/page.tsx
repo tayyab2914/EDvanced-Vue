@@ -101,7 +101,7 @@ export default async function FundBalancePoliciesTab({
         info="The bands are your own thresholds — the same ones every badge and alert on these dashboards reads."
       >
         <div className="mb-4 flex items-center gap-3">
-          <span className="text-[24px] font-semibold tabular-nums text-ink">
+          <span className="text-[26px] font-semibold tabular-nums text-[#060606]">
             {percent(reserve?.percent)}
           </span>
           <StatusBadge status={ladder(reservePct, reserveT)} />

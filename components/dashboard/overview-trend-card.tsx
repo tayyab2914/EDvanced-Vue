@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
+import { cn } from "@/lib/cn";
 import { niceTicks, linear } from "@/lib/dashboard/scale";
+import { CARD_SUBHEAD } from "@/components/dashboard/type-scale";
 import { ChartFigure, ChartEmpty } from "@/components/dashboard/charts/chrome";
 import {
   OverviewPanel,
@@ -127,20 +129,22 @@ function TrendChart({
 
   return (
     <div className={showTitle ? "flex flex-col items-center gap-[28px]" : "flex flex-col items-center gap-[10px]"}>
-      {/* The design's chart title — 18px Gray/700, centred over the plot. The half-width
+      {/* The design's chart title, centred over the plot. Set at the dashboards' in-card
+          sub-heading step rather than the mockup's 18px: a chart's name sits BELOW the name
+          of the card it is in, and 18px outranked the 16px card title above it. The half-width
           revision (64:6543) drops the heading; the legend survives wherever a second
           series needs a key. */}
       {(showTitle || drawn.length > 1) && (
         <div className="flex flex-col items-center gap-[8px]">
           {showTitle && (
-            <p className="whitespace-nowrap text-[18px] leading-[1.5] text-[#344054]">{title}</p>
+            <p className={cn("whitespace-nowrap", CARD_SUBHEAD)}>{title}</p>
           )}
           {/* Identity must never rest on colour-matching alone: a second series gets a key.
               The single-series card matches the mockup, whose title carries the identity. */}
           {drawn.length > 1 && (
             <ul className="flex items-center gap-[16px]">
               {drawn.map((s) => (
-                <li key={s.key} className="flex items-center gap-[6px] text-[12px] text-[#667085]">
+                <li key={s.key} className="flex items-center gap-[6px] text-[12px] text-[#060606]">
                   <span
                     aria-hidden
                     className="size-[9px] rounded-full border-[1.5px] bg-white"

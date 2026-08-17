@@ -70,17 +70,17 @@ export function SheetRevenueCollected({
           </defs>
         </svg>
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-px whitespace-nowrap text-center">
-          <p className={cn("text-[13.5px] font-bold leading-[1.15] text-black/85", NUMS)}>
+          <p className={cn("text-[13.5px] font-bold leading-[1.15] text-[#060606]", NUMS)}>
             {collectedDisplay}
           </p>
           {ofDisplay && (
-            <p className="text-[8px] font-semibold leading-[1.3] text-black/[0.45]">
+            <p className="text-[8px] font-semibold leading-[1.3] text-[#060606]">
               {ofDisplay}
             </p>
           )}
         </div>
-        <p className="absolute -left-[10px] bottom-0 text-[8px] leading-none text-black/[0.45]">0</p>
-        <p className="absolute -right-[18px] bottom-0 text-[8px] leading-none text-black/[0.45]">
+        <p className="absolute -left-[10px] bottom-0 text-[8px] leading-none text-[#060606]">0</p>
+        <p className="absolute -right-[18px] bottom-0 text-[8px] leading-none text-[#060606]">
           100%
         </p>
       </div>
@@ -90,18 +90,18 @@ export function SheetRevenueCollected({
           <p className={cn("text-[12.5px] font-semibold leading-[1.2] text-[#31baae]", NUMS)}>
             {collectedDisplay}
           </p>
-          <p className="text-[8px] leading-[1.3] text-[#797979]">Collected</p>
+          <p className="text-[8px] leading-[1.3] text-[#060606]">Collected</p>
         </div>
         {collectedPct !== null && (
-          <p className={cn("pb-[10px] text-[9px] font-semibold text-black/[0.59]", NUMS)}>
+          <p className={cn("pb-[10px] text-[9px] font-semibold text-[#060606]", NUMS)}>
             {collectedPct.toFixed(1)}% collected
           </p>
         )}
         <div className="flex flex-col items-end gap-px">
-          <p className={cn("text-[12.5px] font-semibold leading-[1.2] text-[#4b4b4b]", NUMS)}>
+          <p className={cn("text-[12.5px] font-semibold leading-[1.2] text-[#060606]", NUMS)}>
             {remainingDisplay}
           </p>
-          <p className="text-[8px] leading-[1.3] text-[#797979]">Remaining</p>
+          <p className="text-[8px] leading-[1.3] text-[#060606]">Remaining</p>
         </div>
       </div>
     </div>
@@ -152,7 +152,7 @@ export function SheetBudgetBars({
   const a = ACCENT[accent];
 
   if (rows.length === 0) {
-    return <p className="py-6 text-center text-[9.5px] text-muted-2">Nothing to compare.</p>;
+    return <p className="py-6 text-center text-[9.5px] text-[#060606]">Nothing to compare.</p>;
   }
 
   const ticks = fittedTicks(
@@ -172,15 +172,15 @@ export function SheetBudgetBars({
         <ul className="mb-[4px] flex items-center gap-[10px]">
           <li className="flex items-center gap-[4px]">
             <span className={cn("size-[7px] rounded-[2px]", a.swatch)} />
-            <span className="text-[7.5px] leading-[9px] text-[#060606]/[0.56]">Actual (YTD)</span>
+            <span className="text-[7.5px] leading-[9px] text-[#060606]">Actual (YTD)</span>
           </li>
           <li className="flex items-center gap-[4px]">
             <span className="size-[7px] rounded-[2px] bg-[rgba(6,109,255,0.6)]" />
-            <span className="text-[7.5px] leading-[9px] text-[#060606]/[0.56]">Budget (YTD)</span>
+            <span className="text-[7.5px] leading-[9px] text-[#060606]">Budget (YTD)</span>
           </li>
           <li className="flex items-center gap-[4px]">
             <span className="size-[7px] rounded-[2px]" style={HATCH_SWATCH} />
-            <span className="text-[7.5px] leading-[9px] text-[#060606]/[0.56]">
+            <span className="text-[7.5px] leading-[9px] text-[#060606]">
               Budget Full year
             </span>
           </li>
@@ -188,12 +188,12 @@ export function SheetBudgetBars({
 
         {/* ---- axis header ---- */}
         <div className={cn(COLS, "h-[15px] items-end border-b border-black/[0.11] pb-[2px]")}>
-          <span className="text-[7.5px] leading-[9px] text-[#060606]/[0.56]">{unit}</span>
+          <span className="text-[7.5px] leading-[9px] text-[#060606]">{unit}</span>
           <span className="relative self-stretch">
             {ticks.values.map((v, i) => (
               <span
                 key={v}
-                className="absolute bottom-[2px] whitespace-nowrap text-[7.5px] leading-[9px] text-[#060606]/[0.56]"
+                className="absolute bottom-[2px] whitespace-nowrap text-[7.5px] leading-[9px] text-[#060606]"
                 style={
                   i === 0
                     ? { left: 0 }
@@ -419,14 +419,14 @@ export function SheetBudgetStatus({
 
       <dl className="flex min-w-0 flex-col gap-[7px]">
         <div className="flex flex-col gap-px">
-          <dt className="text-[8px] leading-[1.3] text-[#797979]">Total budget</dt>
+          <dt className="text-[8px] leading-[1.3] text-[#060606]">Total budget</dt>
           <dd className={cn("text-[12.5px] font-semibold leading-[1.2] text-[#060606]", NUMS)}>
             {totalDisplay}
           </dd>
         </div>
         {legend.map((l) => (
           <div key={l.label} className="flex flex-col gap-px">
-            <dt className="flex items-center gap-[4px] text-[8px] leading-[1.3] text-[#797979]">
+            <dt className="flex items-center gap-[4px] text-[8px] leading-[1.3] text-[#060606]">
               <span
                 aria-hidden
                 className="size-[6px] flex-none rounded-full"

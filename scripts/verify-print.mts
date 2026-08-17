@@ -1,5 +1,5 @@
-// DEV ONLY. Prints every dashboard's one-page summary through real Chrome and asserts that
-// each one lands on a single sheet.
+// DEV ONLY. Prints every dashboard's landscape summary through real Chrome and asserts that
+// the PDF has exactly the pages the route authored — no more, and no fewer.
 //
 // The client's complaint was "it's currently printing 5 pages", and that is not a thing a
 // human can check by reading CSS — page breaks are decided by the print engine at paper
@@ -7,6 +7,12 @@
 // Chrome over the DevTools protocol, asks it for the same PDF the browser's own Save as PDF
 // produces (`preferCSSPageSize`, so the route's `@page` rule is the one that applies), and
 // counts the pages in the result.
+//
+// The expected count is READ FROM THE PAGE, not from a table here: a summary is an array of
+// `SheetPage`s (components/dashboard/print-sheet.tsx) and each one renders a `[data-sheet]`
+// canvas, so the DOM already states the answer and cannot drift from the route the way a
+// second list would. What this file still asserts on its own is the ceiling — a summary that
+// grew past SHEET_MAX_PAGES has stopped being a summary.
 //
 // Requires a dev server on $BASE (default http://localhost:3000) and Chrome installed.
 //
@@ -19,7 +25,7 @@ import { join } from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/generated/prisma/client";
 import { SignJWT } from "jose";
-import { SUMMARY_VIEWS } from "../lib/dashboard/summary";
+import { SUMMARY_VIEWS, SHEET_MAX_PAGES } from "../lib/dashboard/summary";
 
 const BASE = process.env.BASE ?? "http://localhost:3000";
 const EMAIL = process.env.PRINT_USER ?? "demo.admin@k12finance.local";
@@ -305,28 +311,26 @@ async function main() {
       const pages = pdfPageCount(pdf);
       writeFileSync(join(OUT, `${view.key}.pdf`), pdf);
 
-      // A PNG of the sheet as well. One page is necessary and not sufficient — a sheet that
-      // fits because the fitter scaled it to illegibility, or one whose chart collapsed to a
-      // sliver in a narrow column, still passes a page count. The image is what a human
-      // checks, and the sheet is WYSIWYG, so this IS the printed page.
+      // A PNG of every page as well. The right page count is necessary and not sufficient —
+      // a page that fits because the fitter scaled it to illegibility, or one whose chart
+      // collapsed to a sliver in a narrow column, still passes a count. The image is what a
+      // human checks, and the sheet is WYSIWYG, so these ARE the printed pages.
       const boxJson = await cdp.evaluate(
-        `(() => {
-          const el = document.querySelector('.sheet-page');
-          if (!el) return null;
+        `JSON.stringify([...document.querySelectorAll('.sheet-page')].map((el) => {
           const r = el.getBoundingClientRect();
-          const fit = document.querySelector('[data-sheet-fit]');
-          return JSON.stringify({
+          const fit = el.querySelector('[data-sheet-fit]');
+          return {
             x: r.x + scrollX, y: r.y + scrollY, w: r.width, h: r.height,
             zoom: fit ? getComputedStyle(fit).zoom : '1',
-          });
-        })()`,
+          };
+        }))`,
         sessionId,
       );
-      const rect: SheetBox | null = typeof boxJson === "string" ? JSON.parse(boxJson) : null;
+      const rects: SheetBox[] = typeof boxJson === "string" ? JSON.parse(boxJson) : [];
 
-      let zoomNote = "";
-      if (rect) {
-        zoomNote = rect.zoom === "1" || rect.zoom === "normal" ? "" : ` · fit ${rect.zoom}`;
+      const zooms: string[] = [];
+      for (const [i, rect] of rects.entries()) {
+        if (rect.zoom !== "1" && rect.zoom !== "normal") zooms.push(`p${i + 1} ${rect.zoom}`);
         const shot = (await cdp.send(
           "Page.captureScreenshot",
           {
@@ -336,21 +340,32 @@ async function main() {
           },
           sessionId,
         )) as { data: string };
-        writeFileSync(join(OUT, `${view.key}.png`), Buffer.from(shot.data, "base64"));
+        const name = rects.length > 1 ? `${view.key}-p${i + 1}.png` : `${view.key}.png`;
+        writeFileSync(join(OUT, name), Buffer.from(shot.data, "base64"));
       }
+      const zoomNote = zooms.length ? ` · fit ${zooms.join(", ")}` : "";
 
       // A route that quietly falls back to the full dashboard would otherwise be reported
-      // as a print failure with no clue why, so say which of the two it is.
-      const isSheet = Boolean(
-        await cdp.evaluate("!!document.querySelector('[data-sheet]')", sessionId),
+      // as a print failure with no clue why, so say which of the two it is. The count is
+      // also the expected page count — one authored `SheetPage`, one sheet of paper.
+      const authored = Number(
+        (await cdp.evaluate("document.querySelectorAll('[data-sheet]').length", sessionId)) ?? 0,
       );
 
-      const ok = pages === 1 && isSheet && !/sign in|not found/i.test(text);
-      report(
-        view.label,
-        ok,
-        `${pages} page${pages === 1 ? "" : "s"}${isSheet ? "" : " · NO SHEET"}${zoomNote} · ${view.href}`,
-      );
+      const ok =
+        authored > 0 &&
+        authored <= SHEET_MAX_PAGES &&
+        pages === authored &&
+        !/sign in|not found/i.test(text);
+      const detail =
+        authored === 0
+          ? "NO SHEET"
+          : pages !== authored
+            ? `${pages} printed vs ${authored} authored`
+            : authored > SHEET_MAX_PAGES
+              ? `${authored} pages · over the ${SHEET_MAX_PAGES}-page ceiling`
+              : `${pages} page${pages === 1 ? "" : "s"}`;
+      report(view.label, ok, `${detail}${zoomNote} · ${view.href}`);
     }
 
     cdp.close();
@@ -360,8 +375,8 @@ async function main() {
 
   console.log(
     failures === 0
-      ? `\nAll ${SUMMARY_VIEWS.length} summaries print to one page. PDFs in ${OUT}\n`
-      : `\n${failures} summar${failures === 1 ? "y" : "ies"} did not fit one page. PDFs in ${OUT}\n`,
+      ? `\nAll ${SUMMARY_VIEWS.length} summaries paginate as authored. PDFs in ${OUT}\n`
+      : `\n${failures} summar${failures === 1 ? "y" : "ies"} did not paginate as authored. PDFs in ${OUT}\n`,
   );
   process.exit(failures === 0 ? 0 : 1);
 }

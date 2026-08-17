@@ -190,7 +190,7 @@ export default async function ForecastPage({
     cells: {
       row: {
         value: (
-          <span className={cn(opts.indent && "pl-3", opts.emphasis && "font-semibold text-ink")}>
+          <span className={cn(opts.indent && "pl-3", opts.emphasis && "font-semibold text-[#060606]")}>
             {label}
           </span>
         ),
@@ -211,7 +211,7 @@ export default async function ForecastPage({
               value: opts.showPercent ? (
                 <>
                   <span className="block">{display}</span>
-                  <span className="mt-0.5 block text-[10.5px] font-normal tabular-nums text-muted-2">
+                  <span className="mt-0.5 block text-[11px] font-normal tabular-nums text-[#060606]">
                     {percent(shareOfRevenue(value, y))}
                   </span>
                 </>
@@ -460,7 +460,7 @@ export default async function ForecastPage({
           />
         </div>
 
-        <p className="mt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]/[0.56]">
+        <p className="mt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]">
           Percentages are each figure&apos;s share of that year&apos;s projected revenues.
           Growth is applied from the current year&apos;s projected pace, not from the adopted
           budget. Expenditure growth compounds on the recurring operating base only, so
@@ -535,7 +535,7 @@ export default async function ForecastPage({
                 key={r.component}
                 className="flex items-baseline justify-between gap-3 py-[5px] text-[12px]"
               >
-                <dt className="text-[#797979]">{FUND_BALANCE_COMPONENT_LABELS[r.component]}</dt>
+                <dt className="text-[#060606]">{FUND_BALANCE_COMPONENT_LABELS[r.component]}</dt>
                 <dd className="text-right font-semibold text-[#060606]">
                   {methodLabel(methodOf.get(r.component))}
                 </dd>
@@ -547,10 +547,10 @@ export default async function ForecastPage({
 
       {/* ---------- the planning note — Figma 55:4459 ---------- */}
       <OverviewPanel className="p-[18px]">
-        <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-black/85">
+        <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-[#060606]">
           Note
         </p>
-        <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-black/50">
+        <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-[#060606]">
           These projections extrapolate the current year&apos;s pace and apply your own growth
           assumptions and component rules. They are a planning aid, not a budget. Statutory
           minimum {statutoryMinimum.toFixed(2)}% · forecast warning {fcT.warning.toFixed(2)}% ·

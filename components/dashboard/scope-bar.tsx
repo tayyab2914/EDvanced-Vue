@@ -76,7 +76,7 @@ export function ExportMenu({
   }, [open]);
 
   const item =
-    "block w-full px-3 py-2 text-left text-[12.5px] text-ink-muted transition-colors hover:bg-panel";
+    "block w-full px-3 py-2 text-left text-[12px] text-[#060606] transition-colors hover:bg-panel";
 
   return (
     <div ref={ref} className="relative print:hidden">
@@ -98,19 +98,19 @@ export function ExportMenu({
         >
           {summaryHref && (
             <>
-              <p className="px-3 pb-1 pt-1.5 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+              <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
                 One-page summary
               </p>
               <a role="menuitem" href={summaryHref} className={item}>
                 One-page landscape PDF
-                <span className="mt-0.5 block text-[11px] text-muted-2">
+                <span className="mt-0.5 block text-[11px] text-[#060606]">
                   For board meetings and leadership.
                 </span>
               </a>
             </>
           )}
 
-          <p className="border-t border-line-soft px-3 pb-1 pt-2 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+          <p className="border-t border-line-soft px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
             Detailed export
           </p>
           {detailHref && (
@@ -137,7 +137,7 @@ export function ExportMenu({
             className={item}
           >
             Print this dashboard (PDF)
-            <span className="mt-0.5 block text-[11px] text-muted-2">
+            <span className="mt-0.5 block text-[11px] text-[#060606]">
               Multi-page, everything on screen.
             </span>
           </button>
