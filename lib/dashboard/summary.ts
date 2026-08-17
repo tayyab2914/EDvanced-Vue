@@ -81,27 +81,23 @@ export function sheetAsOf(date: Date | null): string | undefined {
 /**
  * How many rows of a ranked table a sheet prints.
  *
- * The sheet is a fixed page and a district's source list is not: eight rows is what fits
- * beside everything else at a legible size, and the rows are already ranked so the eight
- * that print are the eight that matter. The card SAYS it is a top-eight — a table that
- * silently truncated would be a page of numbers that does not add up to its own total.
+ * Eight when a sheet was one page and every table shared its band with two other cards.
+ * Fourteen now: each of these tables has a band of its own, and a ledger that stops at eight
+ * funds is not a ledger. The rows are already ranked, so the fourteen that print are the
+ * fourteen that matter, and the total row is still every row.
  */
-export const SHEET_TABLE_ROWS = 8;
+export const SHEET_TABLE_ROWS = 14;
 
 /**
- * What a table gets when it has a band of a page to itself.
+ * The note a truncated table wears — and ONLY a truncated one.
  *
- * The eight above is what fits BESIDE other cards. A ledger that is the point of its page —
- * the cash by-fund table, the fund balance directory — has the height for a district's whole
- * fund list, and a directory that stops at eight funds is not a directory.
+ * A card that says "Top 14" above thirteen rows is claiming a truncation that did not happen,
+ * which is the same kind of lie as truncating without saying so. Call sites pass the note
+ * when `rows > SHEET_TABLE_ROWS` and say what the table is otherwise.
  */
-export const SHEET_LEDGER_ROWS = 14;
-
 export function sheetTableNote(rows: number): string {
   return `Top ${rows} · total is all rows`;
 }
-
-export const SHEET_TABLE_NOTE = sheetTableNote(SHEET_TABLE_ROWS);
 
 /**
  * The ceiling the print verifier enforces on any one summary.

@@ -160,24 +160,28 @@ export function PrintSheet({
  * A horizontal band of the sheet.
  *
  * `cols` is a raw grid-template, not a breakpoint name, because the canvas has one width and
- * a breakpoint inside it would be a lie. `grow` hands a band the leftover vertical space so
- * the sheet fills the page rather than leaving a white gutter at the bottom.
+ * a breakpoint inside it would be a lie.
+ *
+ * Bands take their natural height and the page's leftover falls BELOW the last one, above the
+ * colophon. There used to be a `grow` flag that handed that leftover to a chosen band, and it
+ * had to go: every card on a sheet is a chart at a fixed height or a table of however many
+ * rows the district has, so a stretched band did not draw anything bigger — it drew the same
+ * card with 200px of white inside it, which reads as a rendering fault where the same 200px
+ * at the foot of the page reads as a margin.
  */
 export function SheetBand({
   cols,
-  grow,
   className,
   children,
 }: {
   /** e.g. "1fr 1fr 1fr" or "2fr 1fr". Every track wants `minmax(0,…)` semantics. */
   cols: string;
-  grow?: boolean;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <div
-      className={cn("sheet-band", grow && "sheet-band-grow", className)}
+      className={cn("sheet-band", className)}
       style={{
         gridTemplateColumns: cols
           .split(/\s+/)

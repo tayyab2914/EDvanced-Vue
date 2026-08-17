@@ -67,7 +67,7 @@ import {
   sheetScope,
   sheetAsOf,
   SHEET_TABLE_ROWS,
-  SHEET_TABLE_NOTE,
+  sheetTableNote,
 } from "@/lib/dashboard/summary";
 
 /**
@@ -437,8 +437,15 @@ export default async function RevenueDashboard({
           </SheetCard>
         </SheetBand>
 
-        <SheetBand cols="1fr" grow>
-          <SheetCard title="Revenue by major source" note={SHEET_TABLE_NOTE}>
+        <SheetBand cols="1fr">
+          <SheetCard
+            title="Revenue by major source"
+            note={
+              bySource.rows.length > SHEET_TABLE_ROWS
+                ? sheetTableNote(SHEET_TABLE_ROWS)
+                : `Through ${scope.label}`
+            }
+          >
             <DataTable
               dense
               columns={[
@@ -566,7 +573,7 @@ export default async function RevenueDashboard({
                   </SheetCard>
                 </SheetBand>
 
-                <SheetBand cols="1.35fr 1fr" grow>
+                <SheetBand cols="1.35fr 1fr">
                   {/* Every revenue alert, not the first two: the count in the title was the
                       only thing the one-page sheet could print, which told a board there was
                       something to read and then withheld it. */}

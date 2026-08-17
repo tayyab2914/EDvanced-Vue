@@ -1045,7 +1045,7 @@ export default async function ExecutiveDashboard({
                   </SheetCard>
                 </SheetBand>
 
-                <SheetBand cols="1fr 1fr" grow>
+                <SheetBand cols="1fr 1fr">
                   <SheetCard title="Revenues vs Budget (YTD)" note="Five largest sources">
                     <SheetBudgetBars
                       accent="green"
@@ -1165,7 +1165,7 @@ export default async function ExecutiveDashboard({
                   </SheetCard>
                 </SheetBand>
 
-                <SheetBand cols="1.25fr 1fr" grow>
+                <SheetBand cols="1.25fr 1fr">
                   {/* The cash card the screen carries, gauge and all — the one-page sheet had
                       room for its figures but not for the dial that judges them. */}
                   <SheetCard

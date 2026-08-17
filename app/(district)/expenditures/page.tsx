@@ -80,7 +80,7 @@ import {
   sheetScope,
   sheetAsOf,
   SHEET_TABLE_ROWS,
-  SHEET_TABLE_NOTE,
+  sheetTableNote,
 } from "@/lib/dashboard/summary";
 import { codeName } from "@/lib/text";
 import { labelMode } from "@/lib/dashboard/label-mode";
@@ -500,8 +500,15 @@ export default async function ExpenditureDashboard({
           </SheetCard>
         </SheetBand>
 
-        <SheetBand cols="1fr" grow>
-          <SheetCard title="Expenditures by function (YTD)" note={SHEET_TABLE_NOTE}>
+        <SheetBand cols="1fr">
+          <SheetCard
+            title="Expenditures by function (YTD)"
+            note={
+              byFunction.rows.length > SHEET_TABLE_ROWS
+                ? sheetTableNote(SHEET_TABLE_ROWS)
+                : `Through ${scope.label}`
+            }
+          >
             <DataTable
               dense
               columns={[
@@ -638,7 +645,7 @@ export default async function ExpenditureDashboard({
                   </SheetCard>
                 </SheetBand>
 
-                <SheetBand cols="1.35fr 1fr" grow>
+                <SheetBand cols="1.35fr 1fr">
                   <SheetCard
                     title={`Expenditure alerts (${expenditureAlerts.length})`}
                     note="Against the district's own thresholds"

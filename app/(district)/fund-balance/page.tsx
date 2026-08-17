@@ -85,7 +85,7 @@ import {
   sheetTone,
   sheetScope,
   sheetAsOf,
-  SHEET_LEDGER_ROWS,
+  SHEET_TABLE_ROWS,
   sheetTableNote,
 } from "@/lib/dashboard/summary";
 
@@ -623,7 +623,7 @@ export default async function FundBalancePage({
           ))}
         </SheetBand>
 
-        <SheetBand cols="1.15fr 1fr" grow>
+        <SheetBand cols="1.15fr 1fr">
           <SheetCard
             title="Fund balance trend"
             badge={<StatusBadge status={reserveRung} size="sm" dot={false} />}
@@ -705,12 +705,12 @@ export default async function FundBalancePage({
             label: "Funds, policy & reserves",
             content: (
               <>
-        <SheetBand cols="1fr" grow>
+        <SheetBand cols="1fr">
           <SheetCard
             title="Fund balance by fund"
             note={
-              withBalance.length > SHEET_LEDGER_ROWS
-                ? sheetTableNote(SHEET_LEDGER_ROWS)
+              withBalance.length > SHEET_TABLE_ROWS
+                ? sheetTableNote(SHEET_TABLE_ROWS)
                 : "Beginning + revenues − expenditures"
             }
           >
@@ -726,7 +726,7 @@ export default async function FundBalancePage({
                 { key: "class", label: "Primary classification" },
                 { key: "status", label: "Status", align: "right" },
               ]}
-              rows={withBalance.slice(0, SHEET_LEDGER_ROWS).map((f) => {
+              rows={withBalance.slice(0, SHEET_TABLE_ROWS).map((f) => {
                 const isGeneral = core.generalFund?.id === f.fundId;
                 const balance = toNumber(f.fundBalance);
                 const rung = isGeneral
@@ -813,12 +813,19 @@ export default async function FundBalancePage({
               of the district's OWN policy it lands in, which is the judgement the rest of the
               page is reporting. */}
           <SheetCard title="Policy benchmark" note={`Target ${reserveT.target.toFixed(2)}%`}>
-            <BenchmarkBand
-              value={reservePct}
-              bands={statusBands(reserveT)}
-              target={reserveT.target}
-              label={reserveTileLabel(reserve)}
-            />
+            {/* The value capsule hangs 26px above the strip, so the strip needs that much
+                headroom or the capsule sits on the card's title. */}
+            <div className="pt-[26px]">
+              <BenchmarkBand
+                value={reservePct}
+                bands={statusBands(reserveT)}
+                // Without this the capsule prints the raw float — "5.184824683707728%" — and
+                // runs off the card. `percent` is the same two-decimal rule the tiles use.
+                format={(v) => percent(v)}
+                target={reserveT.target}
+                label={reserveTileLabel(reserve)}
+              />
+            </div>
             <p className="text-[8.5px] leading-[1.4] text-[#060606]">
               Policy target: maintain unassigned fund balance at{" "}
               {reserveT.target.toFixed(2)}% {reserveOf}. The dotted rule marks the target; the

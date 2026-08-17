@@ -421,8 +421,9 @@ body {
 }
 
 /* ---------- bands and cards ---------- */
-/* The bands stack with the same rhythm the cards keep inside them, and a `grow` band takes
-   the leftover page rather than leaving a white gutter above the colophon. */
+/* The bands stack with the same rhythm the cards keep inside them, from the top of the page
+   down. `flex: 1` on the body is what puts the leftover of a short page between the last band
+   and the colophon, rather than inside the last card — see the note on `SheetBand`. */
 .sheet-body {
   display: flex;
   min-height: 0;
@@ -433,10 +434,9 @@ body {
 .sheet-band {
   display: grid;
   gap: 7px;
+  /* Cards in one band still match each other's height: two tables side by side with their
+     header rows at different heights read as a mistake. */
   align-items: stretch;
-}
-.sheet-band-grow {
-  flex: 1;
 }
 
 /* The redesign's card: 62% white on the canvas, 14px radius, NO border — the ground colour

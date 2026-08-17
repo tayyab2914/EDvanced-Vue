@@ -79,7 +79,7 @@ import {
   sheetTone,
   sheetScope,
   sheetAsOf,
-  SHEET_LEDGER_ROWS,
+  SHEET_TABLE_ROWS,
   sheetTableNote,
 } from "@/lib/dashboard/summary";
 
@@ -392,7 +392,7 @@ export default async function CashDashboard({
           ))}
         </SheetBand>
 
-        <SheetBand cols="1.4fr 1fr" grow>
+        <SheetBand cols="1.4fr 1fr">
           <SheetCard
             title="Cash balance trend"
             note={scope.fund ? scope.fund.name : "All funds"}
@@ -510,12 +510,12 @@ export default async function CashDashboard({
                 {/* The screen's ledger, whole: the one-page sheet printed three of its six
                     columns and eight of its rows, which is a directory with the directory
                     taken out. */}
-                <SheetBand cols="1fr" grow>
+                <SheetBand cols="1fr">
                   <SheetCard
                     title="Cash balance by fund"
                     note={
-                      fundLedger.length > SHEET_LEDGER_ROWS
-                        ? sheetTableNote(SHEET_LEDGER_ROWS)
+                      fundLedger.length > SHEET_TABLE_ROWS
+                        ? sheetTableNote(SHEET_TABLE_ROWS)
                         : "Beginning + receipts − disbursements"
                     }
                   >
@@ -531,7 +531,7 @@ export default async function CashDashboard({
                         { key: "days", label: "Days cash", align: "right" },
                         { key: "status", label: "Status", align: "right" },
                       ]}
-                      rows={fundLedger.slice(0, SHEET_LEDGER_ROWS).map((f) => ({
+                      rows={fundLedger.slice(0, SHEET_TABLE_ROWS).map((f) => ({
                         id: f.row.fundId,
                         flag: f.negative ? ("negative" as const) : undefined,
                         cells: {
