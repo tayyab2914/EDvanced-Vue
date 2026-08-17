@@ -95,29 +95,29 @@ function FundWhereRow({
   detail?: string;
   href?: string;
 }) {
-  const cell = "bg-[#f4f5f7] py-[7px] text-[11.5px] leading-[15px]";
+  /*
+    The ground is on the ROW, not on each cell. Two backgrounds meeting in the middle look
+    like one bar only while both cells are the same height — and they are not: a detail long
+    enough to wrap ("105.3% committed · $3.29M above the district's rate") makes its cell two
+    lines tall while the fund name beside it stays one, and the row renders as two detached
+    boxes with a step between them. One background cannot come apart.
+  */
+  const cell = "py-[7px] text-[11.5px] leading-[15px]";
   const body = (
     <>
-      <span className={cn(cell, "truncate rounded-l-[6px] pl-2.5 pr-5 text-ink-muted")}>
-        {label}
-      </span>
-      <span
-        className={cn(cell, "rounded-r-[6px] pl-5 pr-2.5 text-right tabular-nums text-muted-2")}
-      >
-        {detail}
-      </span>
+      <span className={cn(cell, "truncate pl-2.5 pr-5 text-ink-muted")}>{label}</span>
+      <span className={cn(cell, "pl-5 pr-2.5 text-right tabular-nums text-muted-2")}>{detail}</span>
     </>
   );
 
+  const shape = "col-span-2 grid grid-cols-subgrid items-center rounded-[6px] bg-[#f4f5f7]";
+
   return href ? (
-    <Link
-      href={href}
-      className="col-span-2 grid grid-cols-subgrid items-center rounded-[6px] transition-opacity hover:opacity-75"
-    >
+    <Link href={href} className={cn(shape, "transition-opacity hover:opacity-75")}>
       {body}
     </Link>
   ) : (
-    <span className="col-span-2 grid grid-cols-subgrid items-center">{body}</span>
+    <span className={shape}>{body}</span>
   );
 }
 
