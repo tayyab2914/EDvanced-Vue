@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { fittedTicks } from "@/lib/dashboard/scale";
 import { cn } from "@/lib/cn";
-import { CARD_TITLE, CARD_SUBTITLE } from "@/components/dashboard/type-scale";
+import {
+  CARD_TITLE,
+  CARD_SUBTITLE,
+  COLUMN_HEADER,
+  ROW_LABEL,
+} from "@/components/dashboard/type-scale";
 import { ChartEmpty } from "@/components/dashboard/charts/chrome";
 import type { BudgetBarRow } from "@/components/dashboard/charts/budget-bars";
 import type { PaceLabel } from "@/lib/dashboard/pace";
@@ -246,19 +251,27 @@ export function OverviewBudgetCard({
           <span className="sr-only">{summary}</span>
 
           <div aria-hidden>
-            {/* ---- axis header ---- */}
+            {/* ---- axis header ----
+                Set in the dashboards' one column-header style, like every other table on
+                these screens: it was 14px REGULAR over 14px regular row labels, so the
+                header and the rows beneath it carried the same weight and nothing marked
+                where the table began. See COLUMN_HEADER in type-scale.ts. */}
             <div className={cn(COLS, "h-[26px] border-b border-black/[0.11]")}>
-              <span className="self-center text-[14px] leading-none tracking-[0.14px] text-[#060606]">
+              <span className={cn("self-center", COLUMN_HEADER)}>
                 {unit}
               </span>
               {/* Ticks sit at their VALUE, not at their index: the axis ends on the data,
                   so the last gap is a remainder and evenly spacing them would put every
-                  label a little to the right of the position it names. */}
+                  label a little to the right of the position it names.
+
+                  Bold, with the rest of the header row. They are part of the same line and
+                  they are read the same way — the scale a bar is measured against — so
+                  leaving them the one regular thing in a bold row broke the row in half. */}
               <span className="relative mr-[66px] self-stretch">
                 {ticks.values.map((v, i) => (
                   <span
                     key={v}
-                    className="absolute bottom-[3px] whitespace-nowrap text-[10px] leading-[12px] tracking-[0.1px] text-[#060606]"
+                    className="absolute bottom-[3px] whitespace-nowrap text-[10px] font-bold leading-[12px] tracking-[0.1px] text-[#060606]"
                     style={
                       i === 0
                         ? { left: 0 }
@@ -271,10 +284,10 @@ export function OverviewBudgetCard({
                   </span>
                 ))}
               </span>
-              <span className="self-start text-[14px] leading-[16px] tracking-[0.14px] text-[#060606]">
+              <span className={cn("self-start", COLUMN_HEADER)}>
                 Budget Full year
               </span>
-              <span className="self-start text-right text-[14px] leading-[16px] tracking-[0.14px] text-[#060606]">
+              <span className={cn("self-start text-right", COLUMN_HEADER)}>
                 Status
               </span>
             </div>
@@ -329,10 +342,7 @@ export function OverviewBudgetCard({
 
                 return (
                   <li key={r.id} className={cn(COLS, "h-[44px] items-center")}>
-                    <span
-                      className="pr-[10px] text-[14px] leading-[normal] text-[#060606]"
-                      title={r.label}
-                    >
+                    <span className={cn("pr-[10px]", ROW_LABEL)} title={r.label}>
                       {r.label}
                     </span>
 

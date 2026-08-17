@@ -198,7 +198,17 @@ export default async function ForecastPage({
       ...Object.fromEntries(
         projection.map((y) => {
           const { value, negative } = pick(y);
-          const display = negative ? accounting(value.negated()) : money(value);
+          /*
+            ABBREVIATED, like every other figure on these dashboards. Written out in full,
+            four columns of "$181,087,169.74" are fifteen characters each and the row reads
+            as a wall of digits — the reader is comparing years, and the digits that decide
+            that comparison are the first three. The exact figure stays on the cell's title
+            for anyone who needs the cents.
+          */
+          const display = negative
+            ? accounting(value.negated(), { compact: true })
+            : compactMoney(value);
+          const exact = negative ? accounting(value.negated()) : money(value);
           const tone =
             opts.tone === "auto"
               ? value.isNegative()
@@ -218,6 +228,7 @@ export default async function ForecastPage({
               ) : (
                 display
               ),
+              title: exact,
               tone,
               strong: opts.emphasis,
             },
@@ -383,12 +394,22 @@ export default async function ForecastPage({
               // No basis label. It named a toggle that no longer exists, and with dollars
               // and percentages now on the same row there is no single basis to name.
               { key: "row", label: "" },
+              /*
+                THE YEAR, THEN WHAT IT IS. "FY 2026-27 · current" on one line put the two
+                on equal footing and made the header the widest thing in its column; the
+                year is what a reader scans across, and "current / forecast 1" is the
+                qualifier under it.
+              */
               ...projection.map((y) => ({
                 key: y.fiscalYear,
-                label:
-                  y.index === 0
-                    ? `FY ${y.fiscalYear} · current`
-                    : `FY ${y.fiscalYear} · forecast ${y.index}`,
+                label: (
+                  <>
+                    <span className="block">FY {y.fiscalYear}</span>
+                    <span className="mt-0.5 block text-[11px] font-normal text-[#060606]">
+                      {y.index === 0 ? "current" : `forecast ${y.index}`}
+                    </span>
+                  </>
+                ),
                 align: "right" as const,
               })),
             ]}

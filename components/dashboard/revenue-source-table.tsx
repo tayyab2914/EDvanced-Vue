@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { CARD_TITLE, COLUMN_HEADER } from "@/components/dashboard/type-scale";
+import { CARD_TITLE, COLUMN_HEADER, ROW_LABEL } from "@/components/dashboard/type-scale";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { PacePill, PillLink } from "@/components/dashboard/revenue-shared";
 import type { PaceStatus } from "@/lib/dashboard/pace";
@@ -122,10 +122,7 @@ export function RevenueSourceTable({
                 i > 0 && "border-t border-dashed border-[#e7e7e7]",
               )}
             >
-              <span
-                title={r.label}
-                className="text-[14px] font-bold leading-[1.35] text-[#060606]"
-              >
+              <span title={r.label} className={ROW_LABEL}>
                 {r.label}
               </span>
               <span className={NUM}>{r.budget}</span>

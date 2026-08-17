@@ -17,7 +17,8 @@ import { FundTag } from "@/components/dashboard/shared";
 
 export interface Column {
   key: string;
-  label: string;
+  /** Usually a string. A node lets a header stack a qualifier under its title. */
+  label: ReactNode;
   align?: "left" | "right";
   /** Narrow columns keep long account names from being squeezed. */
   width?: string;

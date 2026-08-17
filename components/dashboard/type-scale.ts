@@ -50,6 +50,16 @@ export const CARD_SUBHEAD =
 export const COLUMN_HEADER =
   "text-[14px] font-bold leading-[1.15] tracking-[0.14px] text-[#060606]";
 
+/**
+ * The first cell of a table row — the name of the thing the row is about.
+ *
+ * BOLD, like the header above it. On these grids the label column is the only text a reader
+ * navigates by: they find the row by its name and then read across it, so the name has to
+ * survive being scanned past a track of coloured bars and four columns of figures. The
+ * figures in the row stay regular; weight here marks the entry point, not importance.
+ */
+export const ROW_LABEL = "text-[14px] font-bold leading-[1.35] text-[#060606]";
+
 /** A label above or beneath a figure — the metric rails, the KPI tiles, the stat strips. */
 export const METRIC_LABEL = "text-[11px] font-semibold leading-[1.4] text-[#060606]";
 
