@@ -40,7 +40,7 @@ export function FundBalanceStatusCard({
       <div className="flex items-start justify-between gap-[8px]">
         <div className="flex min-w-0 flex-col items-start gap-[8px]">
           <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
-            Reserve status
+            Reserve Status
           </span>
           <span
             className="whitespace-nowrap text-[32px] font-medium leading-[36px]"

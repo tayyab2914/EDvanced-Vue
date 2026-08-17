@@ -280,20 +280,20 @@ export default async function CashDashboard({
   const kpiData = [
     {
       key: "balance",
-      label: "Cash balance",
+      label: "Cash Balance",
       value: compactMoney(summary.endingCash),
-      sub: scope.fund ? scope.fund.name : "All funds",
+      sub: scope.fund ? scope.fund.name : "All Funds",
       note:
         momPct === null
           ? previous
             ? undefined
             : "no earlier period"
-          : `${accounting(momAmount, { compact: true })} (${signedPercent(momPct)})`,
+          : `${accounting(momAmount, { compact: true })} (${signedPercent(momPct)}) from prior month`,
       tone: momPct === null ? ("neutral" as const) : sheetTone(deltaTone(momPct, "up")),
     },
     {
       key: "days",
-      label: "Days cash on hand",
+      label: "Days Cash on Hand",
       value: daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)}`,
       sub: "days of operating cost covered",
       note: `${cashRung} · policy ≥ ${cashT.warning} days`,
@@ -301,15 +301,15 @@ export default async function CashDashboard({
     },
     {
       key: "net",
-      label: "Net cash flow (MTD)",
+      label: "Net Cash Flow (MTD)",
       value: accounting(summary.netCashFlowMtd, { compact: true }),
-      sub: scope.label,
+      sub: "receipts less disbursements",
       note:
         summary.netCashFlowMtd === null
           ? undefined
           : summary.netCashFlowMtd.isNegative()
-            ? "Outflow"
-            : "Inflow",
+            ? "Net Outflow"
+            : "Net Inflow",
       tone:
         summary.netCashFlowMtd === null
           ? ("neutral" as const)
@@ -317,27 +317,27 @@ export default async function CashDashboard({
     },
     {
       key: "receipts",
-      label: "Cash receipts (MTD)",
+      label: "Cash Receipts (MTD)",
       value: compactMoney(summary.receiptsMtd),
       sub: "into the district's accounts",
       tone: "neutral" as const,
     },
     {
       key: "disbursements",
-      label: "Cash disbursements (MTD)",
+      label: "Cash Disbursements (MTD)",
       value: compactMoney(summary.disbursementsMtd),
       sub: "out of the district's accounts",
       tone: "neutral" as const,
     },
     {
       key: "status",
-      label: "Cash status",
+      label: "Cash Status",
       value: cashRung === "N/A" ? "Not available" : cashRung,
       sub: `Policy ≥ ${cashT.warning} days · critical below ${cashT.critical}`,
       note:
         daysVsTarget === null
           ? undefined
-          : `${daysVsTarget < 0 ? "" : "+"}${Math.round(daysVsTarget)} days vs target`,
+          : `${Math.abs(Math.round(daysVsTarget))} days ${daysVsTarget < 0 ? "below" : "above"} policy target`,
       tone: rungTone(cashRung),
     },
   ];
@@ -655,7 +655,9 @@ export default async function CashDashboard({
   ];
 
   const detailsHref = `/data/cash-position?fy=${scope.fiscalYear}&period=${scope.period}`;
-  const subject = scope.fund ? scope.fund.name : "All funds";
+  // Heading case: this is a tile CAPTION beside "Cash Balance" / "Days Cash on Hand", and
+  // it also titles the by-fund ledger below.
+  const subject = scope.fund ? scope.fund.name : "All Funds";
 
   return (
     <div className="animate-fade-up space-y-[18px]">
@@ -690,17 +692,20 @@ export default async function CashDashboard({
             arrow={false}
             icon="dollar"
             tone="green"
-            label="Cash balance"
+            label="Cash Balance"
             caption={subject}
             value={compactMoney(summary.endingCash)}
-            sub="Ending cash balance"
+            sub="Ending balance"
             delta={
               momPct === null
                 ? undefined
                 : {
-                    text: `${accounting(momAmount, { compact: true })} (${signedPercent(momPct)})`,
+                    // Magnitude plus the period it is measured against; the arrow carries
+                    // the sign, so "($2.96M) (−6.61%)" was signing the same fall twice.
+                    text: `${compactMoney(momAmount === null ? null : momAmount.abs())} (${percent(Math.abs(momPct))})`,
                     tone: deltaTone(momPct, "up"),
                     direction: momPct < 0 ? "down" : momPct > 0 ? "up" : "flat",
+                    note: "from prior month",
                   }
             }
             unavailableReason="No cash position file was committed for this period."
@@ -710,7 +715,7 @@ export default async function CashDashboard({
             arrow={false}
             icon="calendar"
             tone="green"
-            label="Days cash on hand"
+            label="Days Cash on Hand"
             caption={subject}
             value={daysCash === null ? NOT_AVAILABLE : `${fmtDays(daysCash)} days`}
             sub="Operating days supported by available cash"
@@ -724,16 +729,17 @@ export default async function CashDashboard({
             arrow={false}
             icon="wallet"
             tone="green"
-            label="Net cash flow (MTD)"
-            caption={scope.label}
+            /* No period caption: "(MTD)" in the heading and the period pill on the band's
+               own header already say which month this is. */
+            label="Net Cash Flow (MTD)"
             value={accounting(summary.netCashFlowMtd, { compact: true })}
-            sub="Net cash generated this month"
+            sub="Receipts less disbursements"
             chip={
               summary.netCashFlowMtd === null
                 ? undefined
                 : summary.netCashFlowMtd.isNegative()
-                  ? "Outflow"
-                  : "Inflow"
+                  ? "Net Outflow"
+                  : "Net Inflow"
             }
           />
 
@@ -741,10 +747,9 @@ export default async function CashDashboard({
             arrow={false}
             icon="arrow-down"
             tone="red"
-            label="Cash receipts (MTD)"
-            caption="Collected this period"
+            label="Cash Receipts (MTD)"
             value={compactMoney(summary.receiptsMtd)}
-            sub="Cash received during the current month"
+            sub="Received this month"
           />
         </OverviewTileRow>
 
@@ -755,18 +760,19 @@ export default async function CashDashboard({
         */}
         <CashSplitCard
           status={{
-            label: "Cash status",
+            label: "Cash Status",
             value: cashRung === "N/A" ? "N/A" : cashRung,
+            // "above" / "below" rather than "+13" / "−13": the capsule stands alone with no
+            // arrow beside it, so the sign had nothing to lean on.
             chip:
               daysVsTarget === null
                 ? `Policy ≥ ${cashT.warning} days`
-                : `${daysVsTarget < 0 ? "−" : "+"}${Math.abs(Math.round(daysVsTarget))} days vs board target`,
+                : `${Math.abs(Math.round(daysVsTarget))} days ${daysVsTarget < 0 ? "below" : "above"} policy target`,
           }}
           disbursements={{
-            label: "Cash disbursements (MTD)",
-            caption: "Paid out this period",
+            label: "Cash Disbursements (MTD)",
             value: compactMoney(summary.disbursementsMtd),
-            note: "Cash paid during the current month",
+            note: "Paid this month",
           }}
         />
       </OverviewSection>

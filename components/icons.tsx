@@ -35,6 +35,7 @@ export type IconName =
   | "bank"
   | "lightbulb"
   | "warning"
+  | "check-circle"
   | "arrow-up"
   | "arrow-down"
   | "arrow-right"
@@ -95,6 +96,7 @@ const PATHS: Record<IconName, string> = {
     '<path d="M9.2 17.5a6.2 6.2 0 1 1 5.6 0"/><path d="M9.5 20.2h5M10.2 22.2h3.6"/><path d="M9.2 17.5h5.6"/>',
   warning:
     '<path d="M10.3 3.9 2.6 17.3a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9.3v4.4"/><path d="M12 17.2h.01"/>',
+  "check-circle": '<circle cx="12" cy="12" r="9"/><path d="m8.3 12.2 2.5 2.5 4.9-5"/>',
   "arrow-up": '<path d="M12 20V4"/><path d="m5.5 10.5 6.5-6.5 6.5 6.5"/>',
   "arrow-down": '<path d="M12 4v16"/><path d="m5.5 13.5 6.5 6.5 6.5-6.5"/>',
   "arrow-right": '<path d="M4 12h16"/><path d="m13.5 5.5 6.5 6.5-6.5 6.5"/>',

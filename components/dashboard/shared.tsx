@@ -231,10 +231,14 @@ export function PolicyEchoCard({
 /**
  * "1000 — General Fund" — the small tag that says WHERE a figure came from.
  *
- * Rendered by the mover cards and the alert lists, and only on the All Funds view. The
- * client's note on both: a district-wide variance or an overspend alert that does not name
- * a fund "does not tell me where to go". The tag names it, and links to the same screen
- * with the fund selector moved — the drill-down a reader expects is this page, narrowed.
+ * Rendered by the mover cards, and only on the All Funds view. The client's note: a
+ * district-wide variance that does not name a fund "does not tell me where to go". The tag
+ * names it, and links to the same screen with the fund selector moved — the drill-down a
+ * reader expects is this page, narrowed.
+ *
+ * The alert lists used to render these too. They now use the wider two-column WHERE rows in
+ * components/dashboard/alert-list.tsx, which align their amounts down the card where a row
+ * of inline tags could not.
  *
  * A LINK, not a filter chip with an ✕. Nothing here holds selection state; the fund scope
  * is a URL parameter (lib/dashboard/scope.ts), so the tag is an anchor and the back button

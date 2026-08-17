@@ -470,13 +470,19 @@ export default async function ExecutiveDashboard({
   const kpiData = [
     {
       key: "revenues",
-      label: "Total revenues (YTD)",
+      label: "Revenue Collected (YTD)",
       value: compactMoney(point?.revenueYtd),
       sub:
         point && toNumber(point.revenueBudget)
           ? `${percent(((toNumber(point.revenueYtd) ?? 0) / (toNumber(point.revenueBudget) || 1)) * 100)} of annual budget collected`
           : "No revenue budget uploaded",
-      note: revVarPct === null ? undefined : `${signedPercent(revVarPct)} vs budget to date`,
+      // The direction is carried by the WORD, not by a minus sign: "23.68% below budget to
+      // date" reads at a glance where "−23.68% vs budget to date" makes the reader decode
+      // the sign first. Same treatment on every variance line in the product.
+      note:
+        revVarPct === null
+          ? undefined
+          : `${percent(Math.abs(revVarPct))} ${revVarPct < 0 ? "below" : "above"} budget to date`,
       tone: revVarPct === null ? ("neutral" as const) : sheetTone(deltaTone(revVarPct, "up")),
       icon: "dollar" as const,
       tileTone: "green" as const,
@@ -485,18 +491,18 @@ export default async function ExecutiveDashboard({
         revVarPct === null
           ? undefined
           : {
-              text: signedPercent(revVarPct),
+              text: `${percent(Math.abs(revVarPct))} ${revVarPct < 0 ? "below" : "above"}`,
               tone: deltaTone(revVarPct, "up"),
               direction: (revVarPct < 0 ? "down" : revVarPct > 0 ? "up" : "flat") as
                 | "down"
                 | "up"
                 | "flat",
-              note: "vs budget to date",
+              note: "budget to date",
             },
     },
     {
       key: "expenditures",
-      label: "Total expenditures (YTD)",
+      label: "Expenditures (YTD)",
       value: compactMoney(point?.expenditureYtd),
       sub:
         point && toNumber(point.expenditureBudget)
@@ -530,9 +536,12 @@ export default async function ExecutiveDashboard({
     },
     {
       key: "days-cash",
-      label: "Days of operating cash",
+      label: "Days Cash on Hand",
       value: daysCash === null ? NOT_AVAILABLE : fmtDays(daysCash),
-      sub: "Days of cash on hand",
+      // Not "Days of cash on hand" any more — that is now the label, and a sub-line that
+      // repeats its own heading is a wasted row on the print sheet (the screen tile hides
+      // the sub for tiles 3–4, so this line only ever shows there).
+      sub: "Operating days supported by available cash",
       note: `${cashRung} · policy ≥ ${cashT.warning} days`,
       tone: rungTone(cashRung),
       icon: "clock" as const,
@@ -544,7 +553,7 @@ export default async function ExecutiveDashboard({
     },
     {
       key: "available",
-      label: "Available budget",
+      label: "Available Budget",
       value: accounting(facts?.availableBudget, { compact: true }),
       sub: "Remaining budget available to spend",
       note:

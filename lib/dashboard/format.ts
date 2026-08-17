@@ -165,6 +165,21 @@ export function percent(v: Numeric | null | undefined, dp = 2): string {
   return `${n.toFixed(dp)}%`;
 }
 
+/**
+ * A THRESHOLD, not a measurement — "80%", "82.5%", never "80.00%".
+ *
+ * `percent` fixes two decimals because a measured figure needs a stable width to sit in a
+ * column and to be compared against its neighbours. A policy rule is neither: it appears in
+ * prose ("Warning ≥ 80% · Critical ≥ 95%"), it is a round number in nearly every district's
+ * board policy, and ".00" there reads as false precision. Decimals are kept when the
+ * threshold actually has them.
+ */
+export function pctRule(v: Numeric | null | undefined, maxDp = 2): string {
+  const n = toNumber(v);
+  if (n === null) return NOT_AVAILABLE;
+  return `${Number(n.toFixed(maxDp))}%`;
+}
+
 /** +3.21% / −0.80%. The sign is the message, so it is always shown. */
 export function signedPercent(v: Numeric | null | undefined, dp = 2): string {
   const n = toNumber(v);

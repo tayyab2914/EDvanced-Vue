@@ -2,7 +2,6 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { FundTag } from "@/components/dashboard/shared";
 import { codeName, type LabelMode } from "@/lib/text";
 import type { AlertSeverity } from "@/lib/alerts/catalog";
 import type { StatusRung } from "@/lib/dashboard/status";
@@ -48,6 +47,20 @@ const CHIP: Record<DisplaySeverity, string> = {
   INFORMATIONAL: "bg-acceptable-bg text-acceptable",
 };
 
+/** The Alert Overview tile's ground — the same tints at half strength, over the card's white. */
+const TILE: Record<DisplaySeverity, string> = {
+  CRITICAL: "bg-action-bg/60",
+  WARNING: "bg-monitor-bg/60",
+  INFORMATIONAL: "bg-acceptable-bg/60",
+};
+
+/** The glyph on that tile: the MARK step, not the ink step — it sits on a tint, not on type. */
+const CHIP_INK: Record<DisplaySeverity, string> = {
+  CRITICAL: "text-action-mark",
+  WARNING: "text-monitor-mark",
+  INFORMATIONAL: "text-acceptable-mark",
+};
+
 export interface AlertRow {
   id: string;
   severity: DisplaySeverity;
@@ -65,9 +78,53 @@ export interface AlertRow {
   funds?: { id: string; code: string; name: string; detail: string; href?: string }[];
 }
 
+/**
+ * One "1000 — General · $10.92M below expected" row under an alert.
+ *
+ * A LINK, not a chip with an ✕ — nothing here holds selection state, the fund scope is a
+ * URL parameter (lib/dashboard/scope.ts), so this is an anchor and the back button undoes
+ * it. `grid-cols-subgrid` over `col-span-2` is what lets one anchor occupy both of the
+ * parent's tracks while still aligning with its siblings.
+ */
+function FundWhereRow({
+  label,
+  detail,
+  href,
+}: {
+  label: string;
+  detail?: string;
+  href?: string;
+}) {
+  const cell = "bg-[#f4f5f7] py-[7px] text-[11.5px] leading-[15px]";
+  const body = (
+    <>
+      <span className={cn(cell, "truncate rounded-l-[6px] pl-2.5 pr-5 text-ink-muted")}>
+        {label}
+      </span>
+      <span
+        className={cn(cell, "rounded-r-[6px] pl-5 pr-2.5 text-right tabular-nums text-muted-2")}
+      >
+        {detail}
+      </span>
+    </>
+  );
+
+  return href ? (
+    <Link
+      href={href}
+      className="col-span-2 grid grid-cols-subgrid items-center rounded-[6px] transition-opacity hover:opacity-75"
+    >
+      {body}
+    </Link>
+  ) : (
+    <span className="col-span-2 grid grid-cols-subgrid items-center">{body}</span>
+  );
+}
+
 export function AlertList({
   alerts,
   empty = "Nothing needs attention in this period.",
+  emptyNote,
   max,
   /** Makes each row a link — the client's "allow alerts to become clickable". */
   href,
@@ -80,17 +137,30 @@ export function AlertList({
 }: {
   alerts: AlertRow[];
   empty?: string;
+  /**
+   * The reassuring second line under an empty state — "Cash position is within all policy
+   * thresholds." `empty` states the fact; this says what the fact means, which is the
+   * difference between a reader believing the card and wondering whether it failed to load.
+   */
+  emptyNote?: string;
   max?: number;
   href?: string;
   mode?: LabelMode;
 }) {
   if (alerts.length === 0) {
     return (
-      <div className="flex items-center gap-2.5 rounded-lg bg-strong-bg px-3.5 py-3 text-[12.5px] text-strong">
-        <span aria-hidden className="font-bold">
-          ✓
+      <div className="flex items-start gap-2.5 rounded-[10px] bg-strong-bg/70 px-3.5 py-3">
+        <span aria-hidden className="mt-px flex-none text-strong">
+          <Icon name="check-circle" size={16} />
         </span>
-        {empty}
+        <span className="min-w-0">
+          <span className="block text-[12.5px] font-semibold leading-snug text-strong">
+            {empty}
+          </span>
+          {emptyNote && (
+            <span className="mt-0.5 block text-[11.5px] leading-snug text-muted-2">{emptyNote}</span>
+          )}
+        </span>
       </div>
     );
   }
@@ -174,19 +244,28 @@ export function AlertList({
               here, both work, and the tags line up under the message rather than the glyph.
             */}
             {funds.length > 0 && (
-              <span className="flex flex-wrap items-center gap-1.5 pb-3 pl-9">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2">
+              <div className="pb-3 pl-9">
+                <span className="block text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2">
                   Where
                 </span>
-                {funds.map((f) => (
-                  <FundTag
-                    key={f.id}
-                    label={codeName(f.code, f.name, mode)}
-                    detail={f.detail}
-                    href={f.href}
-                  />
-                ))}
-              </span>
+                {/*
+                  Two columns that ALIGN DOWN THE CARD, sized to their content rather than
+                  the card's width. Each row is one link, so it spans both tracks and takes
+                  the parent's columns via `subgrid` — the alternative, a per-row flex, lets
+                  a long fund name in row two push its amount out of line with row one's,
+                  and a stack of money figures that does not right-align reads as noise.
+                */}
+                <div className="mt-1.5 grid w-fit max-w-full grid-cols-[minmax(0,auto)_auto] gap-y-[3px]">
+                  {funds.map((f) => (
+                    <FundWhereRow
+                      key={f.id}
+                      label={codeName(f.code, f.name, mode)}
+                      detail={f.detail}
+                      href={f.href}
+                    />
+                  ))}
+                </div>
+              </div>
             )}
           </li>
         );
@@ -199,29 +278,26 @@ export function AlertList({
 }
 
 /**
- * §3.3c's Alert Summary — the Executive dashboard's shortlist.
+ * The Alerts page's tally — three tiles, and NOT the alerts themselves.
  *
- * It used to be three rows of counts. The client's note was that the section "looks good"
- * but wanted the icons changed, and the mockup beside it shows the ALERTS THEMSELVES rather
- * than a tally — which is the better card: a count of two tells a superintendent to click,
- * where the two sentences tell them whether they need to.
+ * This card used to lead with a shortlist of the top three alert sentences over a strip of
+ * counts. The shortlist is gone at the client's request: every one of those sentences is
+ * already on this page in its own domain card a few hundred pixels below, so the card was
+ * asking a reader to read the same three alerts twice and then work out which of the four
+ * cards beneath held the ones it had left out.
  *
- * The counts are kept as a strip beneath, so nothing that was on the card has been lost.
+ * What is left is the one thing the domain cards below cannot say on their own: the shape
+ * of the period in three numbers. "Where do I go" is answered by the cards; "how bad is
+ * today" is answered here.
  */
-export function AlertSummary({
-  alerts,
+export function AlertOverview({
   critical,
   warning,
   informational,
-  href,
-  max = 3,
 }: {
-  alerts: AlertRow[];
   critical: number;
   warning: number;
   informational: number;
-  href: string;
-  max?: number;
 }) {
   const counts: { severity: DisplaySeverity; label: string; count: number }[] = [
     { severity: "CRITICAL", label: "Critical", count: critical },
@@ -229,37 +305,41 @@ export function AlertSummary({
     { severity: "INFORMATIONAL", label: "Informational", count: informational },
   ];
 
-  return (
-    <div className="flex flex-col gap-3">
-      <AlertList
-        alerts={alerts}
-        max={max}
-        href={href}
-        empty="No thresholds have been crossed this period."
-      />
+  /**
+   * Only the critical tally takes its severity's ink. Three coloured numerals would make
+   * the row a decoration; one makes it a signal, and the tinted grounds and glyphs are
+   * already carrying which tile is which.
+   */
+  const FIGURE: Record<DisplaySeverity, string> = {
+    CRITICAL: "text-action",
+    WARNING: "text-ink",
+    INFORMATIONAL: "text-ink",
+  };
 
-      <ul className="grid grid-cols-3 gap-2 border-t border-line-soft pt-3">
-        {counts.map((c) => (
-          <li key={c.severity} className="min-w-0">
-            <span className="flex items-center gap-1.5">
-              <span
-                aria-hidden
-                className={cn(
-                  "flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full",
-                  CHIP[c.severity],
-                )}
-              >
-                <Icon name={GLYPH[c.severity]} size={10} />
-              </span>
-              <span className="text-[16px] font-semibold tabular-nums text-ink">{c.count}</span>
-            </span>
-            <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-2">
-              {c.label}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
+  return (
+    <ul className="grid grid-cols-3 gap-2.5">
+      {counts.map((c) => (
+        <li
+          key={c.severity}
+          className={cn(
+            "flex min-w-0 flex-col items-center justify-center gap-1 rounded-[10px] px-2 py-7",
+            TILE[c.severity],
+          )}
+        >
+          <span aria-hidden className={cn("mb-0.5", CHIP_INK[c.severity])}>
+            <Icon name={GLYPH[c.severity]} size={24} />
+          </span>
+          <span
+            className={cn("text-[26px] font-semibold leading-[30px] tabular-nums", FIGURE[c.severity])}
+          >
+            {c.count}
+          </span>
+          <span className="block max-w-full truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-2">
+            {c.label}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

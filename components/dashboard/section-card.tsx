@@ -109,6 +109,50 @@ export function SectionCard({
 }
 
 /**
+ * The card's destination, set at the TOP RIGHT rather than beside the title.
+ *
+ * The Alerts redesign gives every domain card two links, and they are not the same link:
+ * this one leaves for that domain's dashboard, and `CardFooterLink` below stays inside
+ * Alerts. Putting the departure at the far right and the continuation at the foot is what
+ * keeps a reader from having to read both to tell them apart.
+ *
+ * Green, and the same 45°-rotated `ArrowGlyph` the card title's capsule uses — one arrow
+ * shape for "goes somewhere else" across the product.
+ */
+export function CardActionLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-[6px] whitespace-nowrap text-[11.5px] leading-[14px] tracking-[0.1px] text-[#1A932E] transition-opacity hover:opacity-70"
+    >
+      <ArrowGlyph color="#1A932E" className="-rotate-45" />
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * The "View all revenue alerts ›" link at a card's foot.
+ *
+ * `mt-auto` is why the card is asked for `bodyClassName="flex flex-col"`: in a grid row the
+ * cards stretch to the tallest, and without it a short card's link floats up mid-air while
+ * its neighbour's sits at the bottom. The two links must line up along the row.
+ */
+export function CardFooterLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="mt-auto inline-flex w-fit items-center gap-1.5 pt-4 text-[12.5px] font-medium text-brand transition-colors hover:text-brand-dark"
+    >
+      {children}
+      <span aria-hidden className="text-[11px]">
+        ›
+      </span>
+    </Link>
+  );
+}
+
+/**
  * The footer bar four dashboards end with — a note and, usually, somewhere to go next.
  */
 export function FooterInfoBar({

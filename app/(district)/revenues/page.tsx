@@ -249,7 +249,7 @@ export default async function RevenueDashboard({
   const kpiData = [
     {
       key: "total",
-      label: "Total revenues (YTD)",
+      label: "Revenue Collected (YTD)",
       value: compactMoney(bySource.total.actualYtd),
       sub: `${percent(bySource.total.consumption.percent)} of budget collected`,
       note: collectedPct === null ? undefined : `${percent(collectedPct)} collected`,
@@ -257,30 +257,30 @@ export default async function RevenueDashboard({
     },
     {
       key: "variance",
-      label: "Revenue variance (YTD)",
+      label: "Revenue Variance (YTD)",
       value: accounting(bySource.total.pace.amount, { compact: true }),
-      sub: "Compared to expected YTD collections",
+      sub: "Compared with expected collections",
       note:
         varPct === null
           ? undefined
-          : `${signedPercent(varPct)} ${varPct < 0 ? "below" : "above"} budget`,
+          : `${percent(Math.abs(varPct))} ${varPct < 0 ? "below" : "above"} expected`,
       tone: varPct === null ? ("neutral" as const) : sheetTone(deltaTone(varPct, "up")),
     },
     {
       key: "remaining",
-      label: "Remaining to collect",
+      label: "Remaining to Collect",
       value: compactMoney(overCollected ? remaining.abs() : remaining),
       sub: overCollected
         ? "collected above the full-year budget"
         : "Remaining of annual revenue budget",
       note: overCollected
         ? "Over-collected"
-        : `${percent(100 - (collectedPct ?? 0))} outstanding`,
+        : `${percent(100 - (collectedPct ?? 0))} of annual budget remaining`,
       tone: overCollected ? ("positive" as const) : ("neutral" as const),
     },
     {
       key: "mom",
-      label: "Month over month change",
+      label: "Change from Prior Month",
       value: compactMoney(point?.revenueMtd),
       sub: "Revenue collected this period",
       note:
@@ -288,12 +288,12 @@ export default async function RevenueDashboard({
           ? previous
             ? undefined
             : "no earlier period"
-          : `${signedPercent(momPct)} ${momPct < 0 ? "decrease" : "increase"}`,
+          : `${percent(Math.abs(momPct))} ${momPct < 0 ? "decrease" : "increase"}`,
       tone: momPct === null ? ("neutral" as const) : sheetTone(deltaTone(momPct, "up")),
     },
     {
       key: "status",
-      label: "Revenue status (YTD)",
+      label: "Revenue Status (YTD)",
       value: statusRung === "N/A" ? "Not available" : statusRung,
       sub:
         varPct === null
@@ -301,15 +301,15 @@ export default async function RevenueDashboard({
           : Math.abs(varPct) < revT.warning
             ? "within revenue collection target"
             : "outside revenue collection target",
-      note: `Policy ± ${revT.warning.toFixed(2)}%`,
+      note: `Target ± ${revT.warning.toFixed(2)}%`,
       tone: rungTone(statusRung),
     },
     {
       key: "days",
-      label: "Days in fiscal year",
+      label: "Days Elapsed",
       value: String(daysIn.elapsed),
       sub: "Fiscal year completed",
-      note: `${((daysIn.elapsed / daysIn.total) * 100).toFixed(1)}% elapsed`,
+      note: `${((daysIn.elapsed / daysIn.total) * 100).toFixed(1)}% of fiscal year elapsed`,
       tone: "neutral" as const,
     },
   ];
@@ -584,15 +584,15 @@ export default async function RevenueDashboard({
             arrow={false}
             icon="dollar"
             tone="green"
-            label="Total Revenue (YTD)"
+            label="Revenue Collected (YTD)"
             value={compactMoney(bySource.total.actualYtd)}
-            sub="Of Annual budget collected"
+            sub="of budget collected"
             subPct={collectedPct}
             delta={
               varPct === null
                 ? undefined
                 : {
-                    text: `${percent(Math.abs(varPct))} ${varPct < 0 ? "decrease" : "increase"} vs budget up to date`,
+                    text: `${percent(Math.abs(varPct))} ${varPct < 0 ? "below" : "above"} budget to date`,
                     tone: deltaTone(varPct, "up"),
                     direction: varPct < 0 ? "down" : varPct > 0 ? "up" : "flat",
                   }
@@ -603,15 +603,14 @@ export default async function RevenueDashboard({
             arrow={false}
             icon="pie"
             tone="blue"
-            label="Revenue variance"
-            caption="Year to date"
+            label="Revenue Variance (YTD)"
             value={accounting(bySource.total.pace.amount, { compact: true })}
-            sub="Compared to expected YTD collections"
+            sub="Compared with expected collections"
             delta={
               varPct === null
                 ? undefined
                 : {
-                    text: `${percent(Math.abs(varPct))} ${varPct < 0 ? "below" : "above"} budget`,
+                    text: `${percent(Math.abs(varPct))} ${varPct < 0 ? "below" : "above"} expected`,
                     tone: deltaTone(varPct, "up"),
                     direction: varPct < 0 ? "down" : varPct > 0 ? "up" : "flat",
                   }
@@ -622,13 +621,17 @@ export default async function RevenueDashboard({
             arrow={false}
             icon="chart"
             tone="purple"
-            label="Remaining to collect"
-            caption="Year to date"
+            /*
+              NO "Year to date" CAPTION. The $169.04M here is what is left of the ANNUAL
+              revenue budget, not a year-to-date figure — the caption was making a claim
+              about the number that the arithmetic behind it does not support.
+            */
+            label="Remaining to Collect"
             value={compactMoney(overCollected ? remaining.abs() : remaining)}
             chip={
               overCollected
                 ? "Over-collected"
-                : `${percent(100 - (collectedPct ?? 0))} outstanding`
+                : `${percent(100 - (collectedPct ?? 0))} of annual budget remaining`
             }
           />
 
@@ -636,14 +639,16 @@ export default async function RevenueDashboard({
             arrow={false}
             icon="trend-up"
             tone="amber"
-            label="Month over month change"
-            caption={previous ? `vs period ${previous.period}` : "no earlier period"}
+            label="Change from Prior Month"
+            /* The caption now only carries the EMPTY state — "vs period 2" restated what
+               the heading already says, and the arrow on the delta below carries direction. */
+            caption={previous ? undefined : "No earlier period"}
             value={compactMoney(point?.revenueMtd)}
             delta={
               momPct === null
                 ? undefined
                 : {
-                    text: `${signedPercent(momPct)} ${momPct < 0 ? "decrease" : "increase"}`,
+                    text: `${percent(Math.abs(momPct))} ${momPct < 0 ? "decrease" : "increase"}`,
                     tone: deltaTone(momPct, "up"),
                     direction: momPct < 0 ? "down" : momPct > 0 ? "up" : "flat",
                   }
@@ -653,10 +658,10 @@ export default async function RevenueDashboard({
 
         <RevenueStatusStrip
           rung={statusRung}
-          policyNote={`Policy ± ${revT.warning.toFixed(2)}%`}
+          policyNote={`Target ± ${revT.warning.toFixed(2)}%`}
           spark={monthlyVariance}
           days={String(daysIn.elapsed)}
-          elapsedNote={`${((daysIn.elapsed / daysIn.total) * 100).toFixed(1)}% elapsed`}
+          elapsedNote={`${((daysIn.elapsed / daysIn.total) * 100).toFixed(1)}% of fiscal year elapsed`}
         />
       </OverviewSection>
 

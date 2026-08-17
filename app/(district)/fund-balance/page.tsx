@@ -537,7 +537,7 @@ export default async function FundBalancePage({
   const kpiData = [
     {
       key: "total",
-      label: "Total fund balance",
+      label: "Total Fund Balance",
       value: compactMoney(totalNow),
       sub: scope.fund ? scope.fund.name : "All funds",
       note:
@@ -545,26 +545,26 @@ export default async function FundBalancePage({
           ? previous
             ? undefined
             : "no earlier period"
-          : `${accounting(change, { compact: true })}${changePct === null ? "" : ` (${signedPercent(changePct)})`}`,
+          : `${accounting(change, { compact: true })}${changePct === null ? "" : ` (${signedPercent(changePct)})`} from prior month`,
       tone: change === null ? ("neutral" as const) : sheetTone(deltaTone(toNumber(change), "up")),
     },
     {
       key: "change",
-      label: "Change from prior month",
+      label: "Change from Prior Month",
       value: accounting(change, { compact: true }),
-      sub: "movement in total fund balance",
-      note: previous ? `since period ${previous.period}` : "no earlier period",
+      sub: "Total fund balance change",
+      note: previous ? undefined : "no earlier period",
       tone: change === null ? ("neutral" as const) : sheetTone(deltaTone(toNumber(change), "up")),
     },
     {
       key: "unassigned",
-      label: "Unassigned fund balance",
+      label: "Unassigned Fund Balance",
       value: compactMoney(unassignedNow),
-      sub: core.generalFund ? `${core.generalFund.name} only` : "General fund only",
+      sub: core.generalFund ? core.generalFund.name : "General Fund",
       note:
         unassignedChange === null
           ? undefined
-          : `${accounting(unassignedChange, { compact: true })} vs prior`,
+          : `${accounting(unassignedChange, { compact: true })} in unassigned, from prior month`,
       tone:
         unassignedChange === null
           ? ("neutral" as const)
@@ -580,7 +580,7 @@ export default async function FundBalancePage({
     },
     {
       key: "reserve-status",
-      label: "Reserve status",
+      label: "Reserve Status",
       value: reserveRung === "N/A" ? "Not available" : reserveRung,
       sub: `Policy ${statutoryMinimum.toFixed(2)}% – ${reserveT.target.toFixed(2)}%`,
       note: `Warning below ${reserveT.warning.toFixed(2)}%`,
@@ -978,17 +978,22 @@ export default async function FundBalancePage({
             arrow={false}
             icon="dollar"
             tone="green"
-            label="Total fund balance"
+            label="Total Fund Balance"
             caption={scope.fund ? scope.fund.name : "All funds"}
             value={compactMoney(totalNow)}
-            sub={previous ? "from prior period" : "no earlier period"}
+            /* "from prior period" was a dangling fragment above a delta line that already
+               ends in "from prior month". The sub-line only carries the empty state now. */
+            sub={previous ? undefined : "No earlier period"}
             delta={
               change === null
                 ? undefined
                 : {
-                    text: `${accounting(change, { compact: true })}${changePct === null ? "" : ` (${signedPercent(changePct)})`}`,
+                    // Magnitudes, not signed accounting: the arrow beside this line is the
+                    // direction, so "($1.92M) (−8.65%)" spent three marks saying "down".
+                    text: `${compactMoney(change.abs())}${changePct === null ? "" : ` (${percent(Math.abs(changePct))})`}`,
                     tone: deltaTone(toNumber(change), "up"),
                     direction: change.isNegative() ? "down" : "up",
+                    note: "from prior month",
                   }
             }
             unavailableReason="Needs an opening fund balance for the year."
@@ -998,15 +1003,22 @@ export default async function FundBalancePage({
             arrow={false}
             icon="gauge"
             tone="teal"
-            label="Change from prior month"
-            caption={previous ? `Since period ${previous.period}` : "No earlier period"}
+            label="Change from Prior Month"
+            caption={previous ? undefined : "No earlier period"}
             value={accounting(change, { compact: true })}
-            sub="Monthly change in total fund balance"
+            sub="Total fund balance change"
             delta={
               change === null
                 ? undefined
                 : {
-                    text: signedPercent(changePct),
+                    // `changePct` is null when the prior month was zero — there is no
+                    // percentage to state then, only the direction the arrow already draws.
+                    text:
+                      changePct === null
+                        ? change.isNegative()
+                          ? "Decrease"
+                          : "Increase"
+                        : `${percent(Math.abs(changePct))} ${changePct < 0 ? "decrease" : "increase"}`,
                     tone: deltaTone(toNumber(change), "up"),
                     direction: change.isNegative() ? "down" : "up",
                   }
@@ -1017,18 +1029,21 @@ export default async function FundBalancePage({
             arrow={false}
             icon="wallet"
             tone="green"
-            label="Unassigned fund balance"
-            caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
+            label="Unassigned Fund Balance"
+            caption={core.generalFund ? core.generalFund.name : "General Fund"}
             value={compactMoney(unassignedNow)}
-            chip="Available General Fund reserve"
+            chip="Available Reserves"
             delta={
               unassignedChange === null
                 ? undefined
                 : {
-                    text: accounting(unassignedChange, { compact: true }),
+                    // This IS the movement in the unassigned balance specifically — see
+                    // `unassignedChange` above — so the line names what it measures rather
+                    // than leaving the reader to assume it restates the total's change.
+                    text: compactMoney(unassignedChange.abs()),
                     tone: deltaTone(toNumber(unassignedChange), "up"),
                     direction: unassignedChange.isNegative() ? "down" : "up",
-                    note: previous ? `vs period ${previous.period}` : undefined,
+                    note: "in unassigned, from prior month",
                   }
             }
           />
@@ -1038,9 +1053,12 @@ export default async function FundBalancePage({
             icon="chart"
             tone="red"
             label={reserveTileLabel(reserve)}
-            caption={core.generalFund ? `${core.generalFund.name} only` : "General fund only"}
+            caption={core.generalFund ? core.generalFund.name : "General Fund"}
             value={percent(reserve?.percent)}
-            sub={`As a % ${reserveOf}`}
+            /* The figure AND its denominator in one sentence — "4.94% of projected General
+               Fund revenue" — rather than "As a % of …", which names the denominator but
+               makes the reader carry the percentage down from the line above. */
+            sub={`${percent(reserve?.percent)} ${reserveOf}`}
             status={reserveRung}
             statusNote={`Target ≥ ${reserveT.target.toFixed(2)}%`}
             statusInline

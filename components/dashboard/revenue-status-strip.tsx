@@ -7,11 +7,11 @@ import type { StatusRung } from "@/lib/dashboard/status";
 /**
  * The Revenue redesign's status strip — a transcription of Figma 46:3495 ("Cards") with the
  * two page-level floaters the mockup leaves outside it reunited: the "Unhealthy" pill
- * (46:3518) and the "→ Policy ± 5.00%" line (46:3520).
+ * (46:3518) and the "→ Target ± 5.00%" line (46:3520).
  *
  * Two panes on one white bordered card, the same construction as the Executive band's
- * OverviewSplitCard: "Revenue status" with its verdict in 25px ink and a sparkline of the
- * monthly variance beside it, then "Days in fiscal year" with the design's green calendar.
+ * OverviewSplitCard: "Revenue Status (YTD)" with its verdict in 25px ink and a sparkline of
+ * the monthly variance beside it, then "Days Elapsed" with the design's green calendar.
  *
  * THE SPARKLINE IS COMPUTED, NOT TRACED. The mockup ships a frozen red squiggle
  * (Chart 3, trend Down); this one draws the district's own monthly variance series in the
@@ -125,13 +125,13 @@ export function RevenueStatusStrip({
 }: {
   rung: StatusRung;
   verdict?: string;
-  /** "Policy ± 5.00%" — the rule the verdict was judged against. */
+  /** "Target ± 5.00%" — the rule the verdict was judged against. */
   policyNote: string;
   /** Monthly variance %, nulls for months without data — the squiggle's series. */
   spark: (number | null)[];
   /** Days into the fiscal year, pre-formatted. */
   days: string;
-  /** "16.7% elapsed" — the outlined capsule under the figure. */
+  /** "16.7% of fiscal year elapsed" — the outlined capsule under the figure. */
   elapsedNote: string;
 }) {
   const ink = RUNG_INK[rung];
@@ -146,11 +146,11 @@ export function RevenueStatusStrip({
         <div className="flex w-full min-w-0 flex-col gap-[6px] rounded-[16px] p-[16px] sm:w-[301px] sm:min-w-[254px] sm:flex-none">
           <div className="flex items-start justify-between gap-[8px]">
             <div className="flex min-w-0 flex-col items-start">
+              {/* The period lives IN the heading — "Revenue Status (YTD)" — rather than on
+                  a second grey line under it. The band repeated "Year to date" under four
+                  headings in a row, which is where the clutter came from. */}
               <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
-                Revenue status
-              </span>
-              <span className="text-[14px] leading-normal text-[rgba(121,121,121,0.55)]">
-                Year to date
+                Revenue Status (YTD)
               </span>
               <span
                 className="whitespace-nowrap text-[25px] font-medium leading-[36px]"
@@ -191,7 +191,7 @@ export function RevenueStatusStrip({
           <div className="flex items-start justify-between gap-[8px]">
             <div className="flex min-w-0 flex-col items-start gap-[8px]">
               <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
-                Days in fiscal year
+                Days Elapsed
               </span>
               <span className="text-[32px] font-medium leading-[36px] text-[#1f1f21] [font-variant-numeric:proportional-nums]">
                 <CountUp value={days} />

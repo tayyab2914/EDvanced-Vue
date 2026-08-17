@@ -1,15 +1,14 @@
 import { cn } from "@/lib/cn";
 import { CountUp } from "@/components/count-up";
-import { ArrowGlyph } from "@/components/dashboard/overview-panel";
 import type { PaceLabel } from "@/lib/dashboard/pace";
 
 /**
  * The Expenditure redesign's status strip — a transcription of Figma 55:3218 ("Cards") with
  * the two page-level floaters reunited: the outlined "11.06% below expected spending"
- * capsule (55:3226) and the "→ 3.9% of budget" capsule (55:3239).
+ * capsule (55:3226) and the "3.9% of budget" capsule (55:3239).
  *
  * Two panes on one white bordered card, the same construction as the Revenue status strip:
- * "Expenditure status" with its verdict in 32px ink and the design's cube glyph beside it,
+ * "Expenditure Status" with its verdict in 32px ink and the design's cube glyph beside it,
  * then "Encumbrances" with the 25px figure and the purple ledger-lines glyph.
  *
  * The pane titles disagree about their own ink — #1f1f21 on the left, #797979 on the right —
@@ -109,7 +108,7 @@ export function ExpenditureStatusStrip({
           <div className="flex items-start justify-between gap-[8px]">
             <div className="flex min-w-0 flex-col items-start gap-[8px]">
               <span className="text-[15px] font-medium leading-[20px] text-[#1f1f21]">
-                Expenditure status
+                Expenditure Status
               </span>
               <span
                 className="whitespace-nowrap text-[32px] font-medium leading-[36px]"
@@ -157,10 +156,9 @@ export function ExpenditureStatusStrip({
               <LinesGlyph />
             </span>
           </div>
-          <span className="inline-flex w-fit max-w-full items-center gap-[3px] rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-black">
-            <span className="flex size-[10px] flex-none items-center justify-center">
-              <ArrowGlyph color="#060606" />
-            </span>
+          {/* NO ARROW GLYPH. "→ 3.6% of budget" implied a movement; the figure is a share,
+              and the design's own arrow was decoration on a statement. */}
+          <span className="inline-flex w-fit max-w-full items-center rounded-[20px] border-[0.8px] border-[#9e9e9e] bg-white px-[8px] py-px text-[10px] leading-normal tracking-[0.1px] text-black">
             <span className="truncate">{encumbranceNote}</span>
           </span>
         </div>

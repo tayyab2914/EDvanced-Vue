@@ -26,6 +26,7 @@ import {
   compactMoney,
   accounting,
   percent,
+  pctRule,
   signedPercent,
   toNumber,
   deltaTone,
@@ -301,26 +302,28 @@ export default async function ExpenditureDashboard({
   const kpiData = [
     {
       key: "total",
-      label: "Total expenditures (YTD)",
+      label: "Expenditures (YTD)",
       value: compactMoney(byFunction.total.actualYtd),
       sub: `${percent(byFunction.total.consumption.percent)} of full-year budget`,
-      note: `${percent(byFunction.total.consumption.percent)} spent`,
+      note: undefined,
       tone: "neutral" as const,
     },
     {
       key: "utilisation",
-      label: "Budget utilization",
+      label: "Budget Utilization",
       value: percent(byFunction.total.utilisation.percent),
-      sub: "spend plus encumbrances",
-      note: `${utilRung} · warning ${utilT.warning.toFixed(2)}%`,
+      sub: "spent + committed",
+      note: `${utilRung} · warning ≥ ${pctRule(utilT.warning)}`,
       tone: rungTone(utilRung),
     },
     {
       key: "available",
-      label: "Available budget",
+      label: "Available Budget",
       value: accounting(byFunction.total.available, { compact: true }),
       sub: `of ${compactMoney(byFunction.total.budget)} budgeted`,
-      note: byFunction.total.available.isNegative() ? "Overcommitted" : "Remaining",
+      note: byFunction.total.available.isNegative()
+        ? "Overcommitted"
+        : `${percent(sharePercent(byFunction.total.available, byFunction.total.budget))} remaining`,
       tone: byFunction.total.available.isNegative()
         ? ("negative" as const)
         : ("positive" as const),
@@ -335,7 +338,7 @@ export default async function ExpenditureDashboard({
     },
     {
       key: "mom",
-      label: "Month over month change",
+      label: "Change from Prior Month",
       value: compactMoney(point?.expenditureMtd),
       sub: "spent this period",
       note:
@@ -343,18 +346,18 @@ export default async function ExpenditureDashboard({
           ? previous
             ? undefined
             : "no earlier period"
-          : `${signedPercent(momPct)} ${momPct < 0 ? "decrease" : "increase"}`,
+          : `${percent(Math.abs(momPct))} ${momPct < 0 ? "decrease" : "increase"}`,
       tone: momPct === null ? ("neutral" as const) : sheetTone(deltaTone(momPct, "down")),
     },
     {
       key: "status",
-      label: "Expenditure status (YTD)",
+      label: "Expenditure Status (YTD)",
       value: totalPace.label === "N/A" ? "Not available" : totalPace.label,
       sub:
         varPct === null
           ? "needs an expenditure budget"
-          : `${signedPercent(varPct)} vs budget to date`,
-      note: `Policy ± ${fcT.warning.toFixed(2)}%`,
+          : `${percent(Math.abs(varPct))} ${varPct < 0 ? "below" : "above"} expected spending`,
+      note: `Target ± ${pctRule(fcT.warning)}`,
       tone: rungTone(totalPace.rung),
     },
   ];
@@ -718,52 +721,60 @@ export default async function ExpenditureDashboard({
             arrow={false}
             icon="receipt"
             tone="blue"
-            label="Total expenditures"
-            caption="Year to date"
+            /*
+              ONE PERIOD MARKER PER TILE. "Total expenditures" over "Year to date" over a
+              "23.02% spent" delta said the same thing three ways — and "spent" was the same
+              percentage the ring beside the sub-line already draws. The period moves into
+              the heading and the delta goes.
+            */
+            label="Expenditures (YTD)"
             value={compactMoney(byFunction.total.actualYtd)}
-            sub="Of annual budget expended"
+            sub="of annual budget expended"
             subPct={consumptionPct}
-            delta={{
-              text: `${percent(byFunction.total.consumption.percent)} spent`,
-              tone: "neutral",
-            }}
           />
 
           <OverviewKpiTile
             arrow={false}
             icon="gauge"
             tone={utilRung === "Action Required" ? "red" : utilRung === "Monitor" ? "amber" : "green"}
-            label="Budget utilization"
-            caption="Spend plus encumbrances"
+            label="Budget Utilization"
             value={percent(byFunction.total.utilisation.percent)}
-            sub="Includes expenditures and encumbrances"
+            sub="spent + committed"
             status={utilRung}
             statusInline
-            statusNote={`Warning at ${utilT.warning.toFixed(2)}% · critical at ${utilT.critical.toFixed(2)}%`}
+            /* Thresholds without trailing zeros, and the ladder stated as the comparison it
+               actually is — "Warning ≥ 80%", not "Warning at 80.00%". `pctRule` drops the
+               decimals only when the threshold is whole, so an 82.5% policy still prints. */
+            statusNote={`Warning ≥ ${pctRule(utilT.warning)} · Critical ≥ ${pctRule(utilT.critical)}`}
           />
 
           <OverviewKpiTile
             arrow={false}
             icon="wallet"
             tone="teal"
-            label="Available budget"
-            caption="Budget less spend and encumbrances"
+            label="Available Budget"
             value={accounting(byFunction.total.available, { compact: true })}
-            chip={byFunction.total.available.isNegative() ? "Overcommitted" : "Remaining"}
+            /* "Remaining" alone stated nothing the $-figure above it had not already. The
+               share of the annual budget is the part a reader cannot work out by looking. */
+            chip={
+              byFunction.total.available.isNegative()
+                ? "Overcommitted"
+                : `${percent(sharePercent(byFunction.total.available, byFunction.total.budget))} remaining`
+            }
           />
 
           <OverviewKpiTile
             arrow={false}
             icon="trend-up"
             tone="red"
-            label="Month over month change"
-            caption={previous ? `vs period ${previous.period}` : "no earlier period"}
+            label="Change from Prior Month"
+            caption={previous ? undefined : "No earlier period"}
             value={compactMoney(point?.expenditureMtd)}
             delta={
               momPct === null
                 ? undefined
                 : {
-                    text: `${signedPercent(momPct)} ${momPct < 0 ? "decrease" : "increase"}`,
+                    text: `${percent(Math.abs(momPct))} ${momPct < 0 ? "decrease" : "increase"}`,
                     tone: deltaTone(momPct, "down"),
                     direction: momPct < 0 ? "down" : momPct > 0 ? "up" : "flat",
                   }

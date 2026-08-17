@@ -14,8 +14,6 @@ import {
   accounting,
   percent,
   toNumber,
-  signedPercent,
-  deltaTone,
   days as fmtDays,
   NOT_AVAILABLE,
 } from "@/lib/dashboard/format";
@@ -121,10 +119,13 @@ export default async function ForecastPage({
   const first = projection[0];
   const last = projection[projection.length - 1];
   const change = first && last ? last.unassigned.minus(first.unassigned) : null;
-  const changePct =
-    first && change && !first.unassigned.isZero()
-      ? toNumber(change.dividedBy(first.unassigned.abs()).times(100))
-      : null;
+  /*
+    NO PERCENTAGE CHANGE HERE ANY MORE. The tile used to print one beside the dollars, and
+    over a plan whose base can be a DEFICIT the arithmetic is not wrong so much as
+    meaningless — going from −$23.31M to −$107.12M is a "−359.53% decrease" only if you
+    accept a negative denominator, and a board reads that as a rate rather than as the
+    $83.81M it actually is. The two endpoints are printed instead.
+  */
   const lowest = projection.reduce(
     (lo, y) =>
       lo === null ||
@@ -265,23 +266,21 @@ export default async function ForecastPage({
             arrow={false}
             icon="dollar"
             tone="green"
-            label={`Projected ${years}-year change`}
-            caption="Unassigned fund balance"
+            label={`${years}-year Projected Change`}
+            caption="Unassigned Fund Balance"
             value={accounting(change, { compact: true })}
             valueInk={change === null ? undefined : change.isNegative() ? "#fd4438" : "#1a932e"}
+            /*
+              THE WALK, AS AN ARROW: "−$23.31M → −$107.12M". "From X to Y" is the same two
+              endpoints spelled out, and the delta line under it ("−359.53% decrease") was a
+              third statement of a change the figure above and the endpoints below both
+              already make — on a base that swings through zero, a percentage change of a
+              deficit is closer to noise than to information.
+            */
             sub={
               first && last
-                ? `From ${compactMoney(first.unassigned)} to ${compactMoney(last.unassigned)}`
+                ? `${accounting(first.unassigned, { compact: true })} → ${accounting(last.unassigned, { compact: true })}`
                 : undefined
-            }
-            delta={
-              changePct === null
-                ? undefined
-                : {
-                    text: `${signedPercent(changePct)} ${changePct < 0 ? "decrease" : "increase"}`,
-                    tone: deltaTone(changePct, "up"),
-                    direction: changePct < 0 ? "down" : "up",
-                  }
             }
           />
 
@@ -289,10 +288,12 @@ export default async function ForecastPage({
             arrow={false}
             icon="chart"
             tone="red"
-            label="Projected lowest point"
+            label="Lowest Projected Reserve %"
             caption={lowest ? `FY ${lowest.fiscalYear}` : "Not enough data"}
             value={percent(lowest?.unassignedPercentOfRevenue)}
-            sub="Unassigned fund balance % of revenues"
+            /* Names the DENOMINATOR, since the label already names the subject. Revenues is
+               this screen's divisor throughout — see `shareOfRevenue` above. */
+            sub="of projected General Fund revenue"
             status={ladder(toNumber(lowest?.unassignedPercentOfRevenue), fcT)}
           />
 
@@ -300,26 +301,25 @@ export default async function ForecastPage({
             arrow={false}
             icon="calendar"
             tone="green"
-            label="Days of operating expenses"
-            caption="Unassigned reserve, at plan end"
+            label="Projected Days in Reserve"
+            /* The plan-end year IS the caption now; the chip under the figure used to say
+               "Days in reserve by FY 2029-30", which repeated both the label and this. */
+            caption={last ? `FY ${last.fiscalYear}` : "At plan end"}
             value={daysAtEnd === null ? NOT_AVAILABLE : fmtDays(daysAtEnd)}
-            chip={`Days in reserve${last ? ` by FY ${last.fiscalYear}` : ""}`}
           />
 
           <OverviewKpiTile
             arrow={false}
             icon="shield"
             tone="purple"
-            label="Board policy"
-            caption={`${fund.name} only`}
+            label="Board Reserve Target"
+            caption={fund.name}
             value={`${reserveT.target.toFixed(2)}%`}
             valueInk="#1a932e"
-            sub={
-              <span>
-                Unassigned fund balance %
-                <span className="block font-normal text-[#797979]">Target (minimum)</span>
-              </span>
-            }
+            /* One line, not two: "Target (minimum)" under "Unassigned fund balance %" split
+               a single idea across two rows, and "minimum" is what the two rules below
+               (warning / critical) are measured down from. */
+            sub="Minimum Unassigned Fund Balance"
             chipRow={
               <>
                 <span

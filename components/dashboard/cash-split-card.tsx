@@ -70,8 +70,12 @@ export function CashSplitCard({
   };
   disbursements: {
     label: string;
-    /** "Paid out this period". */
-    caption: string;
+    /**
+     * The lighter second line under the label. Optional — the redesigned copy folds the
+     * period into the heading ("Cash Disbursements (MTD)") and leaves this empty rather
+     * than restating it.
+     */
+    caption?: string;
     value: string;
     /** The bordered mini-capsule with the tiny arrow — "Cash paid during the current month". */
     note?: string;
@@ -120,9 +124,11 @@ export function CashSplitCard({
               <span className="text-[15px] font-medium leading-[20px] text-[#797979]">
                 {disbursements.label}
               </span>
-              <span className="text-[14px] leading-normal text-[rgba(121,121,121,0.55)]">
-                {disbursements.caption}
-              </span>
+              {disbursements.caption && (
+                <span className="text-[14px] leading-normal text-[rgba(121,121,121,0.55)]">
+                  {disbursements.caption}
+                </span>
+              )}
               <span className="text-[25px] font-medium leading-[36px] text-[#1f1f21] [font-variant-numeric:proportional-nums]">
                 {disbursements.value}
               </span>

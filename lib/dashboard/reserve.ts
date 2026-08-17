@@ -56,9 +56,23 @@ export function reserveSubject(reserve: ReserveCaptionInput | null): string {
   return reserve?.actual ? "Unassigned fund balance" : "Projected unassigned fund balance";
 }
 
-/** Tile label. Same distinction, kept short enough for a KPI header. */
+/**
+ * Tile label. Same distinction, in the heading case the KPI band uses.
+ *
+ * NOT "Projected unassigned %". "Projected unassigned" is an unfinished phrase, and the
+ * trailing "%" was labelling the unit rather than naming the subject — the figure IS a
+ * percentage, printed at 28px directly under the label. The sub-line carries the percentage
+ * and its denominator together instead.
+ *
+ * THE ACTUAL VARIANT KEEPS ITS "%", and that asymmetry is deliberate. On the Fund Balance
+ * band this tile stands immediately beside "Unassigned Fund Balance", which prints the same
+ * reserve in DOLLARS under the same "General Fund" caption. While the year is running the
+ * two are told apart by the word "Projected"; once it closes, that word is gone and only
+ * the "%" is left to say which of the pair is the ratio. Dropping it there would leave two
+ * adjacent tiles under one identical heading.
+ */
 export function reserveTileLabel(reserve: ReserveCaptionInput | null): string {
-  return reserve?.actual ? "Unassigned fund balance %" : "Projected unassigned %";
+  return reserve?.actual ? "Unassigned Fund Balance %" : "Projected Unassigned Fund Balance";
 }
 
 /**
