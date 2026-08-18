@@ -206,11 +206,15 @@ export function CashReserveGauge({
           }
         >
           <PanelRungPill rung={rung} size="sm" />
+          {/* The headline is `whitespace-nowrap` and the arc is round, so on a phone —
+              where the whole gauge is ~307px wide — "66 Days of Cash Reserve" set at the
+              design's size ran out over the red band on both sides. It steps down with the
+              arc below `sm` and takes the design's size back as soon as there is room. */}
           <p
             className={
               compact
-                ? "whitespace-nowrap text-[16px] font-bold leading-[normal] tracking-[0.17px] text-[#060606] [font-variant-numeric:proportional-nums]"
-                : "whitespace-nowrap text-[26px] leading-[normal] tracking-[0.28px] text-[#060606] [font-variant-numeric:proportional-nums]"
+                ? "whitespace-nowrap text-[12px] font-bold leading-[normal] tracking-[0.17px] text-[#060606] [font-variant-numeric:proportional-nums] sm:text-[16px]"
+                : "whitespace-nowrap text-[17px] leading-[normal] tracking-[0.28px] text-[#060606] [font-variant-numeric:proportional-nums] sm:text-[26px]"
             }
           >
             <CountUp value={`${Math.round(value)} Days of Cash Reserve`} />
@@ -218,8 +222,8 @@ export function CashReserveGauge({
           <p
             className={
               compact
-                ? "text-[11px] leading-[normal] tracking-[0.11px] text-[#060606]"
-                : "text-[14px] leading-[normal] tracking-[0.14px] text-[#060606]"
+                ? "text-[9px] leading-[normal] tracking-[0.11px] text-[#060606] sm:text-[11px]"
+                : "text-[11px] leading-[normal] tracking-[0.14px] text-[#060606] sm:text-[14px]"
             }
           >
             Cash Reserve

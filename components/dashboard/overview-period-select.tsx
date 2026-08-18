@@ -154,7 +154,7 @@ export function OverviewPeriodSelect({
   };
 
   return (
-    <div ref={ref} className="relative flex-none">
+    <div ref={ref} className="relative flex-none max-w-full">
       <button
         ref={buttonRef}
         type="button"
@@ -173,7 +173,7 @@ export function OverviewPeriodSelect({
         aria-label={`Reporting period: ${label}. Change period.`}
         className={cn(PERIOD_PILL, PILL_INTERACTIVE)}
       >
-        {label}
+        <span className="min-w-0 truncate">{label}</span>
         {pending ? (
           <Spinner size={13} />
         ) : (

@@ -388,7 +388,13 @@ function Panel({
   } as const;
 
   return (
-    <section className={cn("flex flex-col gap-3 rounded-xl border bg-white p-3.5", TONE[tone])}>
+    // `min-w-0`: these panels are grid items, and a grid item will not shrink below its own
+    // min-content unless told it may. One of the three (the component table) has a wider
+    // min-content than a phone, and because a one-column grid gives every item the same
+    // track, that ONE panel widened all three past the card and the hints were clipped.
+    <section
+      className={cn("flex min-w-0 flex-col gap-3 rounded-xl border bg-white p-3.5", TONE[tone])}
+    >
       <header>
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.055em]">

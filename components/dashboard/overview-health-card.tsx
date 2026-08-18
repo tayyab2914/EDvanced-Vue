@@ -1,4 +1,5 @@
 import type { StatusRung } from "@/lib/dashboard/status";
+import { cn } from "@/lib/cn";
 import { CountUp } from "@/components/count-up";
 import { OverviewPanel, PanelRungPill } from "@/components/dashboard/overview-panel";
 import { CARD_TITLE, CARD_SUBTITLE, COLUMN_HEADER } from "@/components/dashboard/type-scale";
@@ -110,7 +111,19 @@ function TrendGlyph({ values, id, label }: { values: (number | null)[]; id: stri
   );
 }
 
-const COLS = "grid grid-cols-[36.85%_22.32%_15.91%_16.36%_minmax(0,1fr)] items-center";
+/**
+ * The design's five columns, WITHOUT the `grid` that used to lead them.
+ *
+ * Below `sm` the table folds into two lines per indicator rather than becoming a 720px
+ * sideways scroll inside a ~307px card, and that means the display switches — so `grid`
+ * has to be the caller's `sm:grid` rather than a permanent part of this template. Both
+ * call sites read the same track list either way, which is what this constant is for.
+ */
+const COLS = "grid-cols-[36.85%_22.32%_15.91%_16.36%_minmax(0,1fr)]";
+
+/** The folded row: indicator on one line, the four value cells wrapping under it. */
+const MOBILE_ROW =
+  "flex flex-col items-start gap-[8px] border-b border-black/[0.06] py-[14px] last:border-0";
 
 export function OverviewHealthCard({ rows }: { rows: HealthRow[] }) {
   return (
@@ -124,35 +137,56 @@ export function OverviewHealthCard({ rows }: { rows: HealthRow[] }) {
         </p>
       </header>
 
-      <div className="mt-[24px] overflow-x-auto">
-        <div className="min-w-[720px]">
-          <div className={COLS} aria-hidden>
+      <div className="mt-[24px] sm:overflow-x-auto">
+        <div className="sm:min-w-[720px]">
+          {/* The column headings label columns; there are none until `sm`, where the
+              folded rows carry their own inline "Current" / "Target" prefixes instead. */}
+          <div className={cn("hidden sm:grid", COLS)} aria-hidden>
             {["Indicator", "Current", "Target", "Status", "Trend"].map((h) => (
               <span key={h} className={COLUMN_HEADER}>
                 {h}
               </span>
             ))}
           </div>
-          <div aria-hidden className="mt-[10px] h-px w-full bg-black/10" />
+          <div aria-hidden className="hidden h-px w-full bg-black/10 sm:mt-[10px] sm:block" />
 
           <ul aria-hidden>
             {rows.map((r) => (
-              <li key={r.id} className={`${COLS} h-[60px]`}>
-                <span className="pr-[12px] text-[14px] leading-[normal] tracking-[0.14px] text-[#060606]">
+              <li
+                key={r.id}
+                className={cn(
+                  MOBILE_ROW,
+                  "sm:grid sm:h-[60px] sm:items-center sm:gap-0 sm:border-0 sm:py-0",
+                  COLS,
+                )}
+              >
+                <span className="pr-[12px] text-[14px] font-semibold leading-[normal] tracking-[0.14px] text-[#060606] sm:font-normal">
                   {r.indicator}
                 </span>
-                <span className="text-[14px] leading-[normal] tracking-[0.14px] text-[#060606] [font-variant-numeric:proportional-nums]">
-                  <CountUp value={r.current} />
-                </span>
-                <span className="text-[14px] leading-[normal] tracking-[0.14px] text-[#060606] [font-variant-numeric:proportional-nums]">
-                  {r.target}
-                </span>
-                <span>
-                  <PanelRungPill rung={r.rung} label={WORD[r.rung]} />
-                </span>
-                <span>
-                  <TrendGlyph values={r.trend} id={r.id} label={`${r.indicator} trend`} />
-                </span>
+                {/* `sm:contents` dissolves this wrapper from `sm` up, so the four cells go
+                    straight back into the grid track above as the design's own columns. */}
+                <div className="flex flex-wrap items-center gap-x-[14px] gap-y-[6px] sm:contents">
+                  <span className="text-[14px] leading-[normal] tracking-[0.14px] text-[#060606] [font-variant-numeric:proportional-nums]">
+                    <span className="font-semibold sm:hidden">Current </span>
+                    <CountUp value={r.current} />
+                  </span>
+                  <span className="text-[14px] leading-[normal] tracking-[0.14px] text-[#060606] [font-variant-numeric:proportional-nums]">
+                    <span className="font-semibold sm:hidden">Target </span>
+                    {r.target}
+                  </span>
+                  {/* The verdict and its trend travel together when the folded row wraps —
+                      separately, the 22px squiggle was the only thing on a line of its own
+                      and read as a stray mark rather than as this indicator's direction.
+                      `sm:contents` again, so the grid above still sees two plain cells. */}
+                  <span className="flex items-center gap-[10px] sm:contents">
+                    <span>
+                      <PanelRungPill rung={r.rung} label={WORD[r.rung]} />
+                    </span>
+                    <span>
+                      <TrendGlyph values={r.trend} id={r.id} label={`${r.indicator} trend`} />
+                    </span>
+                  </span>
+                </div>
               </li>
             ))}
           </ul>

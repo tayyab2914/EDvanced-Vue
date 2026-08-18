@@ -108,8 +108,30 @@ function ArrowGlyph({ color, className }: { color: string; className?: string })
   );
 }
 
-/** The four columns, shared by the axis header and every row so nothing can drift. */
-const COLS = "grid grid-cols-[150px_minmax(0,1fr)_114px_92px]";
+/**
+ * The four columns, shared by the axis header and every row so nothing can drift.
+ *
+ * 150 + 114 + 92 is 356px of FIXED column before the track has been given a pixel, and the
+ * track then reserves another 66px of right margin — so this template needs ~470px before
+ * it can draw a bar at all, against the ~307px a 375px phone leaves inside the card. It did
+ * not shrink; it overflowed, and the card's `overflow-clip` sliced the Status column off
+ * and printed every bar's figures on top of each other in the stub that was left.
+ *
+ * So below `sm` the row folds instead of shrinking, into three lines that read in the same
+ * order the columns do:
+ *
+ *     Florida Education Finance Program                    [ Behind ]
+ *     [========== actual ====][== budget ==]////////////////////////
+ *     Full year $20M
+ *
+ * The pieces are reordered with `order-*` rather than moved in the markup, so the DOM order
+ * stays the column order and `sm:order-none` hands the same four spans straight back to the
+ * design's grid. Nothing about the desktop layout changes.
+ */
+const COLS = [
+  "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[10px]",
+  "sm:grid-cols-[150px_minmax(0,1fr)_114px_92px] sm:gap-x-0",
+].join(" ");
 
 /**
  * The fit check for a bar's own figure. A Server Component cannot measure text, so these
@@ -119,13 +141,15 @@ const COLS = "grid grid-cols-[150px_minmax(0,1fr)_114px_92px]";
  * OUTSIDE its segment, which errs on the readable side.
  */
 // Deliberately UNDER the track's real width — this is the NARROWEST the band is laid out
-// at, roughly what a 1280 laptop gives the card, against ~560px on a wide monitor. Both
+// at. That used to be a 1280 laptop (~420px of track); it is now a 375px PHONE, where the
+// folded row gives the track the card's full ~307px less the 52px the floated figures
+// float into — ~255px. Both
 // readers of this figure fail the same way if it flatters the layout: a label judged to fit
 // inside a bar that is really narrower gets clipped by it ($16.01M came out "$16.0"), and
 // an axis tick judged clear of the end label really overprints it ("$100M$120M"). Both were
 // live at 1280 while this said 420. Under-estimating only floats a figure that would just
 // have squeezed in, or drops a tick that would just have fitted.
-const TRACK_PX = 260;
+const TRACK_PX = 245;
 const estInsidePx = (s: string) => s.length * 5.6 + 10;
 const estOutsidePx = (s: string) => s.length * 6.4 + 2;
 
@@ -197,9 +221,11 @@ export function OverviewBudgetCard({
   return (
     <section data-reveal className="relative overflow-clip rounded-[14px] bg-white/[0.62] p-[18px]">
       {/* ---- header: title + "Go to …" pill on the left, the legend on the right ---- */}
-      <header className="flex items-start justify-between gap-4">
+      {/* Stacked below `sm`: the legend is `flex-none`, so beside a title that is itself
+          `whitespace-nowrap` it had nowhere to go and simply printed over the heading. */}
+      <header className="flex flex-col items-start gap-[10px] sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-[14px]">
+          <div className="flex flex-wrap items-center gap-x-[14px] gap-y-[6px]">
             <h2 className={cn("whitespace-nowrap", CARD_TITLE)}>
               {title}
             </h2>
@@ -220,7 +246,10 @@ export function OverviewBudgetCard({
           </p>
         </div>
 
-        <ul aria-hidden className="flex flex-none flex-col gap-[4px]">
+        <ul
+          aria-hidden
+          className="flex flex-row flex-wrap gap-x-[12px] gap-y-[4px] sm:flex-none sm:flex-col sm:gap-[4px]"
+        >
           <li className="flex items-center gap-[5px]">
             <span className={cn("size-[9px] rounded-[2px]", a.swatch)} />
             <span className="text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]">
@@ -256,8 +285,13 @@ export function OverviewBudgetCard({
                 these screens: it was 14px REGULAR over 14px regular row labels, so the
                 header and the rows beneath it carried the same weight and nothing marked
                 where the table began. See COLUMN_HEADER in type-scale.ts. */}
-            <div className={cn(COLS, "h-[26px] border-b border-black/[0.11]")}>
-              <span className={cn("self-center", COLUMN_HEADER)}>
+            <div
+              className={cn(
+                COLS,
+                "gap-y-[6px] border-b border-black/[0.11] pb-[6px] sm:h-[26px] sm:gap-y-0 sm:pb-0",
+              )}
+            >
+              <span className={cn("order-1 self-center sm:order-none", COLUMN_HEADER)}>
                 {unit}
               </span>
               {/* Ticks sit at their VALUE, not at their index: the axis ends on the data,
@@ -267,7 +301,10 @@ export function OverviewBudgetCard({
                   Bold, with the rest of the header row. They are part of the same line and
                   they are read the same way — the scale a bar is measured against — so
                   leaving them the one regular thing in a bold row broke the row in half. */}
-              <span className="relative mr-[66px] self-stretch">
+              {/* Its own full-width line on a phone, where the ticks would otherwise be
+                  squeezed into whatever the folded row left over. The explicit height
+                  replaces the stretch it gets from a one-line grid row. */}
+              <span className="relative order-3 col-span-2 mr-[52px] h-[15px] self-stretch sm:order-none sm:col-span-1 sm:mr-[66px] sm:h-auto">
                 {ticks.values.map((v, i) => (
                   <span
                     key={v}
@@ -284,10 +321,18 @@ export function OverviewBudgetCard({
                   </span>
                 ))}
               </span>
-              <span className={cn("self-start", COLUMN_HEADER)}>
+              {/* Both columns move INTO their rows on a phone — the full-year figure
+                  gets a "Full year" prefix of its own and the pill needs no heading — so
+                  the two headings would be labelling nothing. */}
+              <span className={cn("order-2 hidden self-start sm:order-none sm:block", COLUMN_HEADER)}>
                 Budget Full year
               </span>
-              <span className={cn("self-start text-right", COLUMN_HEADER)}>
+              <span
+                className={cn(
+                  "order-4 hidden self-start text-right sm:order-none sm:block",
+                  COLUMN_HEADER,
+                )}
+              >
                 Status
               </span>
             </div>
@@ -341,13 +386,23 @@ export function OverviewBudgetCard({
                 const hatchOffset = `${barEnd}% + ${clearancePx}px`;
 
                 return (
-                  <li key={r.id} className={cn(COLS, "h-[44px] items-center")}>
-                    <span className={cn("pr-[10px]", ROW_LABEL)} title={r.label}>
+                  <li
+                    key={r.id}
+                    className={cn(
+                      COLS,
+                      "gap-y-[8px] border-b border-black/[0.06] py-[12px] last:border-0",
+                      "sm:h-[44px] sm:gap-y-0 sm:border-0 sm:py-0",
+                    )}
+                  >
+                    <span
+                      className={cn("order-1 pr-[10px] sm:order-none", ROW_LABEL)}
+                      title={r.label}
+                    >
                       {r.label}
                     </span>
 
                     {/* the track: white, 28px, 7px radius — segments painted inside it */}
-                    <span className="relative mr-[66px] block h-[28px] rounded-[7px] bg-white">
+                    <span className="relative order-3 col-span-2 mr-[52px] block h-[28px] rounded-[7px] bg-white sm:order-none sm:col-span-1 sm:mr-[66px]">
                       {drawnActual > 0 && (
                         <span
                           className={cn("anim-bar absolute inset-y-0 left-0 rounded-[7px]", a.bar)}
@@ -412,11 +467,12 @@ export function OverviewBudgetCard({
                       ))}
                     </span>
 
-                    <span className="text-[14px] leading-[16px] text-[#060606]">
+                    <span className="order-4 col-span-2 text-[12px] leading-[16px] text-[#060606] sm:order-none sm:col-span-1 sm:text-[14px]">
+                      <span className="font-semibold sm:hidden">Full year </span>
                       {r.budgetFullYearDisplay}
                     </span>
 
-                    <span className="flex justify-end">
+                    <span className="order-2 flex justify-end sm:order-none">
                       <span
                         className={cn(
                           "whitespace-nowrap rounded-[20px] px-[8px] py-[5px] text-[12px] leading-[normal] tracking-[0.12px]",

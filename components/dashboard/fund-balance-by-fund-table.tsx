@@ -30,9 +30,19 @@ export interface FundBalanceFundRow {
   status: { label: string; rung: StatusRung };
 }
 
-/** The design's column grid — the fund's 228px, four figures, the classification, the pill. */
+/**
+ * The design's column grid — the fund's 228px, four figures, the classification, the pill.
+ *
+ * The Fund column's floor is 196px, not the 168 it was.
+ *
+ * The row's floors add up to the table's `min-w` below, so at that width every track sits
+ * ON its floor with only a few px of slack to share — and 168 is narrower than
+ * "3200 — Capital Projects Fund" (192px), so the fund a row is about was the one thing in
+ * it that came out as an ellipsis. Raising the floor takes the slack from the money columns,
+ * which are `whitespace-nowrap` figures that were already comfortable.
+ */
 const COLS =
-  "grid grid-cols-[minmax(170px,1.5fr)_minmax(96px,1fr)_minmax(96px,1fr)_minmax(104px,1fr)_minmax(110px,1fr)_minmax(104px,0.9fr)_minmax(56px,auto)] items-center gap-x-[12px]";
+  "grid grid-cols-[minmax(196px,1.5fr)_minmax(96px,1fr)_minmax(96px,1fr)_minmax(104px,1fr)_minmax(110px,1fr)_minmax(104px,0.9fr)_minmax(56px,auto)] items-center gap-x-[12px]";
 
 export function FundBalanceByFundTable({
   title = "Fund balance by fund",

@@ -167,7 +167,7 @@ export function FundBalanceBenchmarkCard({
               className="min-w-0 px-0.5 text-center"
               style={{ width: `${widthOf(b)}%`, marginRight: i < bands.length - 1 ? 2 : 0 }}
             >
-              <span className="block truncate text-[10px] leading-normal tracking-[0.1px] text-[#060606]">
+              <span className="block truncate text-[9px] leading-normal tracking-[0.1px] text-[#060606] sm:text-[10px]">
                 {BAND_NAME[b.rung] ?? b.rung}
               </span>
             </div>
@@ -181,7 +181,11 @@ export function FundBalanceBenchmarkCard({
               className="min-w-0 px-0.5 text-center"
               style={{ width: `${widthOf(b)}%`, marginRight: i < bands.length - 1 ? 2 : 0 }}
             >
-              <span className="block truncate text-[10px] leading-[2] tracking-[0.1px] text-[#060606]">
+              {/* A step down on a phone. These cells are sized to the BAND they name — the
+                  Monitor band is 2%–3% of a 0–7% scale, so its cell is ~39px wide however
+                  wide the card is, and "2% – 3%" set at 10px needs 42. The range a rung
+                  covers is the whole point of the row, so the type gives way, not the text. */}
+              <span className="block truncate text-[9px] leading-[2] tracking-[0.1px] text-[#060606] sm:text-[10px]">
                 {b.label}
               </span>
             </div>

@@ -1057,6 +1057,10 @@ export default async function FundBalancePage({
   const CELL_INK = { positive: "#1a932e", negative: "#fd4438", neutral: "#060606" } as const;
 
   /** The reserve components card's column grid — label, amount, share. */
+  // 150 + 96 + 150 + two 12px gaps is 420px of floor, against the ~307px a 375px phone
+  // leaves inside the card — so the "% of …" column was clipped clean off by the panel's
+  // `overflow-clip`. The card scrolls sideways below that width (see the wrapper on the
+  // Reserve components table), the same treatment the fund and cash tables already carry.
   const BREAKDOWN_COLS =
     "grid grid-cols-[minmax(150px,1fr)_minmax(96px,auto)_minmax(150px,auto)] items-center gap-x-[12px]";
 
@@ -1303,6 +1307,8 @@ export default async function FundBalancePage({
             stated as a share of the same denominator the reserve percentage uses, so the
             column adds up to the reserve percentage above it.
           */}
+          <div className="-mx-[18px] overflow-x-auto px-[18px]">
+          <div className="min-w-[420px]">
           <div
             className={cn(
               BREAKDOWN_COLS,
@@ -1357,6 +1363,8 @@ export default async function FundBalancePage({
             <span className="whitespace-nowrap text-right">
               {breakdownShare(reserve?.unassigned ?? null)}
             </span>
+          </div>
+          </div>
           </div>
           <p className="mt-auto pt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]">
             {reserveMethodology(reserve)}

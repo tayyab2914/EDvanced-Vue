@@ -60,7 +60,18 @@ export interface BreakdownBarRow {
   color: string;
 }
 
-/** The design's column grid — the label, five figures, the pill; left-aligned as drawn. */
+/**
+ * The design's column grid — the label, five figures, the pill; left-aligned as drawn.
+ *
+ * Every track has a hard `minmax` floor, so the row was never going to shrink into a
+ * phone's ~307px of card: it simply overflowed, and `OverviewPanel`'s `overflow-clip`
+ * sliced Available / Utilized / Status off the screen. The table now scrolls sideways
+ * inside the card — the same `-mx`/`px` + `min-w` wrapper fund-balance-by-fund-table.tsx
+ * and cash-by-fund-table.tsx already use, which keeps the header, the scrolling body and
+ * the total on ONE track so the three grids cannot drift apart. Above the floor it costs
+ * nothing: the container is wider than `min-w`, no scrollbar appears, and the desktop
+ * layout is untouched.
+ */
 const COLS =
   "grid grid-cols-[minmax(150px,1.4fr)_minmax(64px,1fr)_minmax(64px,1fr)_minmax(70px,1fr)_minmax(64px,1fr)_minmax(52px,0.8fr)_minmax(56px,auto)] items-center gap-x-[12px]";
 
@@ -126,7 +137,11 @@ export function ExpenditureBreakdownSection({
         {pending ? (
           <TableSkeleton />
         ) : (
-          <div key={value} className={cn(target !== null && "rev-swap-in")}>
+          <div
+            key={value}
+            className={cn(target !== null && "rev-swap-in", "-mx-[18px] overflow-x-auto px-[18px]")}
+          >
+            <div className="min-w-[620px]">
             {/* column headers */}
             <div
               className={cn(
@@ -203,6 +218,7 @@ export function ExpenditureBreakdownSection({
               </span>
               <span className="whitespace-nowrap">{total.utilized}</span>
               <span>{total.status && <PacePill status={total.status} />}</span>
+            </div>
             </div>
           </div>
         )}

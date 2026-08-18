@@ -53,7 +53,7 @@ function CornerArrow({ tone }: { tone: TileTone }) {
   return (
     <span
       aria-hidden
-      className="absolute right-[18px] top-[16px] flex size-[23px] items-center justify-center rounded-full bg-white/70"
+      className="absolute right-[10px] top-[10px] flex size-[19px] items-center justify-center rounded-full bg-white/70 sm:right-[18px] sm:top-[16px] sm:size-[23px]"
       style={{ color: TONE_INK[tone] }}
     >
       <DiagonalArrow size={16} />
@@ -203,16 +203,24 @@ export function OverviewKpiTile({
          * `pr` when the corner arrow is present: the arrow is absolutely positioned and takes
          * no width from the flow, so without it a long label runs underneath the disc.
          */}
-        <div className={cn("flex w-full items-center gap-[12px]", arrow && "pr-[26px]")}>
+        <div
+          className={cn(
+            "flex w-full items-center gap-[8px] sm:gap-[12px]",
+            // Two tiles to a phone row leaves ~127px of content; the disc keeps its own
+            // width whatever happens, so it shrinks with the type rather than squeezing
+            // the label into a two-character column.
+            arrow && "pr-[20px] sm:pr-[26px]",
+          )}
+        >
           {icon && (
             <span
-              className="flex size-[46px] flex-none items-center justify-center rounded-full"
+              className="flex size-[34px] flex-none items-center justify-center rounded-full sm:size-[46px]"
               style={{ background: TONE_TINT[tone], color: TONE_INK[tone] }}
             >
-              <Icon name={icon} size={24} />
+              <Icon name={icon} size={24} className="size-[18px] sm:size-[24px]" />
             </span>
           )}
-          <span className="min-w-0 text-[14px] font-semibold leading-[16px] text-[#060606]">
+          <span className="min-w-0 text-[12px] font-semibold leading-[14px] text-[#060606] sm:text-[14px] sm:leading-[16px]">
             {label}
             {caption && (
               <span className="block font-normal text-[#060606]">{caption}</span>
@@ -223,7 +231,7 @@ export function OverviewKpiTile({
           className={cn(
             // Proportional figures, not tabular: at 28px, tabular-nums gives every digit
             // the width of a zero and "121" reads loose. `tabular-nums` belongs in columns.
-            "text-[26px] font-bold leading-[32px] tracking-[0.28px] [font-variant-numeric:proportional-nums]",
+            "text-[20px] font-bold leading-[24px] tracking-[0.2px] [font-variant-numeric:proportional-nums] sm:text-[26px] sm:leading-[32px] sm:tracking-[0.28px]",
             unavailable ? "text-[#060606]" : "text-[#060606]",
           )}
           style={!unavailable && valueInk ? { color: valueInk } : undefined}
@@ -252,7 +260,7 @@ export function OverviewKpiTile({
          */
         <span
           className={cn(
-            "flex gap-[4px] text-[12px] font-semibold leading-[16px] tracking-[0.075px] text-[#060606]",
+            "flex gap-[4px] text-[11px] font-semibold leading-[14px] tracking-[0.075px] text-[#060606] sm:text-[12px] sm:leading-[16px]",
             /**
              * A TERNARY, not `items-start` plus a conditional `items-center`.
              *
@@ -267,7 +275,16 @@ export function OverviewKpiTile({
              * collected") that has to wrap — clipping it to one line would hide the basis
              * the figure above it is measured on.
              */
-            hasRing ? "-mr-[30px] items-center whitespace-nowrap" : "items-start",
+            /**
+             * The ring line only gets the design's overhang-and-nowrap treatment from `sm`.
+             * Two tiles to a 375px row leave the sub-line ~127px, where "of annual budget
+             * collected" set on one line runs a clear 60px past the tile it belongs to —
+             * and the tiles are `rounded`, not clipped, so it would print over its
+             * neighbour. Below `sm` it wraps inside its own column instead.
+             */
+            hasRing
+              ? "items-center sm:-mr-[30px] sm:whitespace-nowrap"
+              : "items-start",
           )}
         >
           {hasRing && <MiniRing pct={subPct} tone={tone} />}
@@ -308,7 +325,7 @@ export function OverviewKpiTile({
           ))}
 
         {delta && (
-          <span className="flex items-center gap-[4px] text-[12px] font-bold leading-[12px] tracking-[0.24px] text-[#060606]">
+          <span className="flex items-start gap-[4px] text-[11px] font-bold leading-[14px] tracking-[0.24px] text-[#060606] sm:items-center sm:text-[12px] sm:leading-[12px]">
             {delta.direction && (
               <span
                 style={{
@@ -319,6 +336,7 @@ export function OverviewKpiTile({
                         ? "#e65f2b"
                         : "#797979",
                 }}
+                className="mt-px flex-none sm:mt-0"
               >
                 <DiagonalArrow size={14} direction={delta.direction} />
               </span>
@@ -331,8 +349,8 @@ export function OverviewKpiTile({
         )}
 
         {statusNote && !(statusInline && status) && (
-          <span className="flex items-center gap-[4px] text-[12px] font-bold leading-[12px] tracking-[0.24px] text-[#060606]">
-            <span style={{ color: TONE_INK[tone] }}>
+          <span className="flex items-start gap-[4px] text-[11px] font-bold leading-[14px] tracking-[0.24px] text-[#060606] sm:items-center sm:text-[12px] sm:leading-[12px]">
+            <span className="mt-px flex-none sm:mt-0" style={{ color: TONE_INK[tone] }}>
               <DiagonalArrow size={14} />
             </span>
             {statusNote}
@@ -358,7 +376,7 @@ export function OverviewKpiTile({
    * the row when one card's sub-text wraps to an extra line.
    */
   const className =
-    "group relative flex h-full min-h-[176px] w-full flex-col rounded-[14px] bg-[#FFFFFF9E] px-[18px] pb-[10px] pt-[18px]";
+    "group relative flex h-full min-h-[148px] w-full flex-col rounded-[14px] bg-[#FFFFFF9E] px-[12px] pb-[10px] pt-[12px] sm:min-h-[176px] sm:px-[18px] sm:pt-[18px]";
 
   if (href) {
     return (
@@ -422,7 +440,7 @@ function SplitPane({
         <span className="text-[14px] font-semibold leading-[20px] text-[#060606]">
           {label}
         </span>
-        <span className="text-[32px] font-bold leading-[36px] text-[#060606] [font-variant-numeric:proportional-nums]">
+        <span className="text-[26px] font-bold leading-[30px] text-[#060606] [font-variant-numeric:proportional-nums] sm:text-[32px] sm:leading-[36px]">
           <CountUp value={value} />
         </span>
       </div>
@@ -585,7 +603,9 @@ export function OverviewSection({
 }) {
   return (
     <section className="flex flex-col items-start gap-[20px]">
-      <div className="flex w-full items-center justify-between gap-3">
+      {/* Wraps below the title on a narrow phone: "Overview" and the period capsule need
+          ~326px side by side, which is more than a 320px viewport has to give. */}
+      <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h2 className={BAND_TITLE}>
           {title}
         </h2>
@@ -614,7 +634,7 @@ export function OverviewSection({
  */
 export function OverviewTileRow({ children }: { children: ReactNode }) {
   return (
-    <div className="grid w-full grid-cols-1 items-stretch gap-[16px] sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid w-full grid-cols-2 items-stretch gap-[10px] sm:gap-[16px] xl:grid-cols-4">
       {children}
     </div>
   );

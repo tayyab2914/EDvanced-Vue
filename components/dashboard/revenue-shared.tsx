@@ -126,14 +126,32 @@ export function CapsuleStatStrip({ items, className }: { items: CapsuleStat[]; c
   return (
     <div
       className={cn(
-        "flex items-stretch overflow-clip rounded-[24px] border border-[#e7e7e7] bg-white/[0.56] px-[5px] py-[12px]",
+        "overflow-clip rounded-[24px] border border-[#e7e7e7] bg-white/[0.56] px-[5px] py-[12px]",
+        /**
+         * TWO COLUMNS ON A PHONE, the design's single row from `sm`.
+         *
+         * Four cells across ~307px gave each about 65px, which is narrower than the figures
+         * they carry: "($14.31M)" spilled over its own driver into the next cell and the
+         * notes ("current budget less actual") ran to four lines each, so the strip grew
+         * taller than the chart above it while still reading as a collision. The `contents`
+         * wrapper below means the cells are laid out by THIS container either way, so the
+         * grid needs nothing but the hairlines standing down — a vertical 27px rule between
+         * stacked rows would be pointing the wrong way.
+         */
+        "grid grid-cols-2 gap-y-[12px] sm:flex sm:items-stretch sm:gap-y-0",
         className,
       )}
     >
       {items.map((item, i) => (
         <div key={item.label} className="contents">
-          {i > 0 && <div aria-hidden className="w-px flex-none self-center bg-[#e7e7e7]" style={{ height: 27 }} />}
-          <div className="flex min-w-0 flex-1 flex-col items-start gap-[2px] px-[9px]">
+          {i > 0 && (
+            <div
+              aria-hidden
+              className="hidden w-px flex-none self-center bg-[#e7e7e7] sm:block"
+              style={{ height: 27 }}
+            />
+          )}
+          <div className="flex min-w-0 flex-col items-start gap-[2px] px-[9px] sm:flex-1">
             <span className="text-[10px] font-medium leading-[14px] text-[#060606]">
               {item.label}
             </span>

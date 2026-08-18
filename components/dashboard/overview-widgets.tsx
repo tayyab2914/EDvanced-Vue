@@ -305,22 +305,30 @@ export function RevenueCollectedWidget({
             </p>
           )}
 
-          <div className="absolute left-[108px] top-[189px] h-[64px] w-[137px]">
+          {/**
+           * The trend sits BETWEEN the two figures - a 137px picture in the 108-245px
+           * band of the design's 364px card. Below `sm` the card is only as wide as the
+           * phone (~307px inner), and "Collected $194.56M" on the left plus "Remaining
+           * $14.34M" on the right claim that band themselves: the line drew straight
+           * through both figures. The two numbers are the point of the card and the
+           * decoration is not, so the decoration goes until there is room for it.
+           */}
+          <div className="absolute left-[108px] top-[189px] hidden h-[64px] w-[137px] sm:block">
             <RevenueSparkline values={spark} />
           </div>
 
-          <div className="absolute left-0 top-[208px] flex w-full items-start justify-between">
-            <div className="flex flex-col items-start gap-[6px]">
-              <p className={cn("text-[22px] font-medium leading-normal tracking-[0.22px] text-[#31baae]", NUMS)}>
+          <div className="absolute left-0 top-[208px] flex w-full items-start justify-between gap-[8px]">
+            <div className="flex min-w-0 flex-col items-start gap-[6px]">
+              <p className={cn("text-[19px] font-medium leading-normal tracking-[0.22px] text-[#31baae] sm:text-[22px]", NUMS)}>
                 <CountUp value={collectedDisplay} />
               </p>
-              <p className="text-[14px] leading-normal text-[#060606]">Collected</p>
+              <p className="text-[13px] leading-normal text-[#060606] sm:text-[14px]">Collected</p>
             </div>
-            <div className="flex flex-col items-end gap-[6px]">
-              <p className={cn("text-[22px] font-medium leading-normal tracking-[0.22px] text-[#060606]", NUMS)}>
+            <div className="flex min-w-0 flex-col items-end gap-[6px]">
+              <p className={cn("text-[19px] font-medium leading-normal tracking-[0.22px] text-[#060606] sm:text-[22px]", NUMS)}>
                 <CountUp value={remainingDisplay} />
               </p>
-              <p className="text-[14px] leading-normal text-[#060606]">Remaining</p>
+              <p className="text-[13px] leading-normal text-[#060606] sm:text-[14px]">Remaining</p>
             </div>
           </div>
         </div>
@@ -463,8 +471,15 @@ export function BudgetStatusWidget({
       <div className="mx-auto w-[364px] max-w-full">
         <WidgetHeader title="Budget Status" />
 
-        <div className="relative mt-[24px] h-[262px]">
-          <div className="absolute -top-[25px] left-[64px]">
+        {/**
+         * The design pins the donut and the figure row at absolute offsets inside a 262px
+         * box, which only works while the card is its drawn 364px wide. Below `sm` the
+         * box goes back to flow: the ring centres itself and the four figures become a
+         * 2x2 grid, because $208.3M + $194.26M + $1.21M + $12.83M on one line needs
+         * ~430px and a phone gives the card ~307.
+         */}
+        <div className="mt-[24px] flex flex-col items-center gap-[18px] sm:relative sm:block sm:h-[262px]">
+          <div className="sm:absolute sm:-top-[25px] sm:left-[64px]">
             <BudgetDonut
               expended={expended}
               encumbered={encumbered}
@@ -473,30 +488,30 @@ export function BudgetStatusWidget({
             />
           </div>
 
-          <div className="absolute left-0 top-[208px] flex w-full items-start justify-between whitespace-nowrap">
+          <div className="grid w-full grid-cols-2 gap-x-[10px] gap-y-[14px] whitespace-nowrap sm:absolute sm:left-0 sm:top-[208px] sm:flex sm:items-start sm:justify-between sm:gap-0">
             <div className="flex flex-col items-start gap-[6px]">
-              <p className={cn("text-[26px] font-medium leading-normal tracking-[0.28px] text-[#060606]", NUMS)}>
+              <p className={cn("text-[22px] font-medium leading-normal tracking-[0.28px] text-[#060606] sm:text-[26px]", NUMS)}>
                 <CountUp value={totalDisplay} />
               </p>
-              <p className="text-[14px] leading-normal text-[#060606]">Total</p>
+              <p className="text-[12px] leading-normal text-[#060606] sm:text-[14px]">Total</p>
             </div>
             <div className="flex flex-col items-start gap-[6px]">
               <p className={cn("text-[18px] font-medium leading-normal tracking-[0.18px] text-[#1a932e]", NUMS)}>
                 <CountUp value={expendedDisplay} />
               </p>
-              <p className="text-[10px] leading-normal text-[#060606]">Expended</p>
+              <p className="text-[11px] leading-normal text-[#060606] sm:text-[10px]">Expended</p>
             </div>
             <div className="flex flex-col items-start gap-[6px]">
               <p className={cn("text-[18px] font-medium leading-normal tracking-[0.18px] text-[#6f4ec8]", NUMS)}>
                 <CountUp value={encumberedDisplay} />
               </p>
-              <p className="text-[10px] leading-normal text-[#060606]">Encumbered</p>
+              <p className="text-[11px] leading-normal text-[#060606] sm:text-[10px]">Encumbered</p>
             </div>
             <div className="flex flex-col items-start gap-[6px]">
               <p className={cn("text-[18px] font-medium leading-normal tracking-[0.18px] text-[#00b4d8]", NUMS)}>
                 <CountUp value={remainingDisplay} />
               </p>
-              <p className="text-[10px] leading-normal text-[#060606]">Remaining</p>
+              <p className="text-[11px] leading-normal text-[#060606] sm:text-[10px]">Remaining</p>
             </div>
           </div>
         </div>
@@ -591,7 +606,7 @@ export function KeyInsightsWidget({
     <div data-reveal className="relative min-h-[349px] overflow-clip rounded-[14px] bg-white/[0.62]">
       {/* The floating header — the design pins the title at (40, 23). Its "today" pill is
           gone with the other cards' capsules. */}
-      <h3 className={cn("absolute left-[40px] top-[23px]", CARD_TITLE)}>
+      <h3 className={cn("absolute left-[18px] top-[23px] sm:left-[40px]", CARD_TITLE)}>
         Key Insights
       </h3>
 
@@ -606,7 +621,7 @@ export function KeyInsightsWidget({
         <div className="absolute inset-x-0 bottom-0 top-[52px] overflow-y-auto">
           <ul className="flex flex-col pb-[12px]">
             {insights.map((i, idx) => (
-              <li key={i.id} className="relative min-h-[68px] pl-[43px] pr-[14px]">
+              <li key={i.id} className="relative min-h-[68px] pl-[40px] pr-[14px] sm:pl-[43px]">
                 {/* The 0.5px hairline at 11% black, inset 9px left and 4px right. */}
                 {idx > 0 && (
                   <span

@@ -105,8 +105,22 @@ function FundWhereRow({
   const cell = "py-[7px] text-[11px] leading-[15px]";
   const body = (
     <>
-      <span className={cn(cell, "truncate pl-2.5 pr-5 text-[#060606]")}>{label}</span>
-      <span className={cn(cell, "pl-5 pr-2.5 text-right tabular-nums text-[#060606]")}>{detail}</span>
+      {/* The 20px gutter either side of the split is 40px of a phone's ~270px row, and the
+          fund name paid for all of it — "3200 — Capital Projects Fund" came out
+          "3200 — Ca…", which names no fund at all. Below `sm` the gutter halves and the
+          name WRAPS instead of clipping; the row grounds are one background and the
+          subgrid keeps the money column aligned however tall a row becomes. */}
+      <span
+        className={cn(
+          cell,
+          "min-w-0 pl-2.5 pr-2 text-[#060606] [overflow-wrap:anywhere] sm:truncate sm:pr-5",
+        )}
+      >
+        {label}
+      </span>
+      <span className={cn(cell, "pl-2 pr-2.5 text-right tabular-nums text-[#060606] sm:pl-5")}>
+        {detail}
+      </span>
     </>
   );
 
@@ -322,7 +336,7 @@ export function AlertOverview({
         <li
           key={c.severity}
           className={cn(
-            "flex min-w-0 flex-col items-center justify-center gap-1 rounded-[10px] px-2 py-7",
+            "flex min-w-0 flex-col items-center justify-center gap-1 rounded-[10px] px-1 py-7 sm:px-2",
             TILE[c.severity],
           )}
         >
@@ -334,7 +348,16 @@ export function AlertOverview({
           >
             {c.count}
           </span>
-          <span className="block max-w-full truncate text-[10px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
+          {/* WRAPS rather than truncates. Three tiles across a phone give each ~64px of
+              content box, and "INFORMATIONAL" set at 10px with the design's tracking needs
+              ~89px — so the one tile whose label a reader cannot guess from its glyph read
+              "INFORMATIO…". Two lines cost nothing: the tiles are grid items and stretch
+              together. Still one line wherever there is room for one. */}
+          {/* The design's 0.06em tracking adds ~8px to "INFORMATIONAL", which is exactly
+              what a third of a 375px row does not have — the word came out "INFORMATIO…".
+              The tracking is what goes below `sm`, not the word: a truncated severity is
+              the one label on this card a reader cannot infer from the glyph above it. */}
+          <span className="block max-w-full text-center text-[10px] font-semibold uppercase leading-[13px] tracking-normal text-[#060606] sm:tracking-[0.06em]">
             {c.label}
           </span>
         </li>

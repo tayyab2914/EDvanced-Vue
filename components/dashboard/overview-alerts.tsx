@@ -151,8 +151,16 @@ export function OverviewAlertsPanel({
         the panel with the most rows must not be the one that sets the band's height, and a
         rail that stopped short of the charts' foot would leave the band visibly ragged.
       */}
-      <div className="relative min-h-0 flex-1">
-        <div className="absolute inset-0 overflow-y-auto">
+      {/*
+        ...but ONLY from `xl`, which is where the page actually stands this rail beside the
+        revenue card (see the grid in app/(district)/dashboard/page.tsx). Below that the rail
+        is full width and alone in its row, so `h-full` is the content's own height — and an
+        absolutely-positioned list inside it contributed no height at all, collapsing `flex-1`
+        to zero and hiding EVERY alert behind a scrollbar in a 0px box. On a phone the panel
+        counted "4 alerts" and then showed none of them.
+      */}
+      <div className="relative min-h-0 xl:flex-1">
+        <div className="xl:absolute xl:inset-0 xl:overflow-y-auto">
       {shown.length === 0 ? (
         <p className="px-[20px] pb-[10px] pt-[24px] text-center text-[12px] leading-relaxed text-[#060606]">
           No thresholds have been crossed this period.

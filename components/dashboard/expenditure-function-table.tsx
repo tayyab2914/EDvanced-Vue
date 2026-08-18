@@ -59,6 +59,16 @@ export function ExpenditureFunctionTable({
         <PillLink href={ctaHref}>{ctaLabel}</PillLink>
       </div>
 
+      {/* The six/seven columns have hard `minmax` floors — they were never going to shrink
+          into a phone's ~307px of card, they simply overflowed and `OverviewPanel`'s
+          `overflow-clip` sliced the last columns off the screen. Scrolled sideways instead,
+          the same wrapper fund-balance-by-fund-table.tsx and cash-by-fund-table.tsx already
+          use: `-mx`/`px` so the scroll runs edge to edge under the card's own padding, and a
+          `min-w` that keeps the header, the scrolling body and the total on one track so the
+          three grids cannot drift apart. Above the floor it costs nothing — the container is
+          wider than `min-w`, so no scrollbar appears and the desktop layout is untouched. */}
+      <div className="-mx-[18px] overflow-x-auto px-[18px]">
+        <div className="min-w-[560px]">
       {/* ---- column headers ---- */}
       <div className={cn(COLS, "mt-[22px] pb-[10px]", COLUMN_HEADER)}>
         <span>Indicator</span>
@@ -144,6 +154,8 @@ export function ExpenditureFunctionTable({
         <span className="flex justify-end">
           <PacePill status={total.status} />
         </span>
+      </div>
+        </div>
       </div>
     </OverviewPanel>
   );

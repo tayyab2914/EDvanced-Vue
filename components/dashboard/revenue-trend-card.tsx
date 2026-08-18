@@ -142,10 +142,13 @@ export function RevenueTrendCard({
 
   return (
     <OverviewPanel className="flex flex-col p-[18px]">
-      <div className="flex items-start justify-between gap-[12px]">
+      {/* The legend is `flex-none` — it never gives ground — so beside a heading on a
+          phone it simply printed over it. Below `sm` it drops under the header and runs as
+          one wrapping row; from `sm` it is the design's stacked top-right key again. */}
+      <div className="flex flex-col items-start gap-[10px] sm:flex-row sm:items-start sm:justify-between sm:gap-[12px]">
         <OverviewPanelHeader title={title} subtitle={subtitle} />
         {/* ---- legend — the design's stacked top-right key ---- */}
-        <ul className="flex flex-none flex-col gap-[4px] pt-[6px]">
+        <ul className="flex flex-row flex-wrap gap-x-[12px] gap-y-[4px] sm:flex-none sm:flex-col sm:gap-[4px] sm:pt-[6px]">
           <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
             <LegendSwatch color="rgba(3,140,140,0.6)" />
             Actual (YTD)

@@ -98,16 +98,28 @@ export function RevenueAlertsCard({
                   </Link>
                 </div>
                 {(a.funds?.length ?? 0) > 0 && (
-                  <div className="mt-[8px] flex items-start gap-[8px]">
-                    <span className="pt-[4px] text-[10px] font-bold leading-normal tracking-[0.08px] text-[#060606]">
+                  <div className="mt-[8px] flex flex-col items-start gap-[4px] sm:flex-row sm:gap-[8px]">
+                    {/* WHERE sits ABOVE the chips on a phone. Beside them it takes ~52px of
+                        a ~291px row, and the chips need every pixel of what is left: a fund
+                        name is 192px and its detail up to 252px, so the label's own gutter
+                        was what pushed both into an ellipsis. */}
+                    <span className="text-[10px] font-bold leading-normal tracking-[0.08px] text-[#060606] sm:pt-[4px]">
                       WHERE
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col items-start gap-[4px]">
                       {a.funds!.map((f) => {
+                        /**
+                         * STACKED ON A PHONE, the design's one-line capsule from `sm`.
+                         *
+                         * The fund and its detail share ~239px there, and they need ~340:
+                         * side by side both truncated, so the chip read "3200 — Ca…" beside
+                         * "$306K down · $7.…" — which names neither the fund nor the figure.
+                         * One above the other each gets the whole width and neither clips.
+                         */
                         const chip = (
-                          <span className="inline-flex max-w-full items-center gap-[6px] truncate rounded-[20px] bg-white px-[8px] py-[5px] text-[10px] leading-normal tracking-[0.08px] text-[#060606]">
-                            <span className="font-bold">{f.label}</span>
-                            <span className="truncate">{f.detail}</span>
+                          <span className="inline-flex max-w-full flex-col items-start gap-[2px] rounded-[14px] bg-white px-[8px] py-[5px] text-[10px] leading-normal tracking-[0.08px] text-[#060606] sm:flex-row sm:items-center sm:gap-[6px] sm:truncate sm:rounded-[20px]">
+                            <span className="max-w-full font-bold">{f.label}</span>
+                            <span className="max-w-full truncate">{f.detail}</span>
                           </span>
                         );
                         return f.href ? (
