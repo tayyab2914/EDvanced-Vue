@@ -490,10 +490,10 @@ export function BudgetStatusWidget({
 
           <div className="grid w-full grid-cols-2 gap-x-[10px] gap-y-[14px] whitespace-nowrap sm:absolute sm:left-0 sm:top-[208px] sm:flex sm:items-start sm:justify-between sm:gap-0">
             <div className="flex flex-col items-start gap-[6px]">
-              <p className={cn("text-[22px] font-medium leading-normal tracking-[0.28px] text-[#060606] sm:text-[26px]", NUMS)}>
+              <p className={cn("text-[18px] font-medium leading-normal tracking-[0.18px] text-[#060606]", NUMS)}>
                 <CountUp value={totalDisplay} />
               </p>
-              <p className="text-[12px] leading-normal text-[#060606] sm:text-[14px]">Total</p>
+              <p className="text-[11px] leading-normal text-[#060606] sm:text-[10px]">Total</p>
             </div>
             <div className="flex flex-col items-start gap-[6px]">
               <p className={cn("text-[18px] font-medium leading-normal tracking-[0.18px] text-[#1a932e]", NUMS)}>
