@@ -1007,9 +1007,12 @@ export default async function ExpenditureDashboard({
             // where to look, and link back to this page scoped to that fund.
             funds: alertFunds(scope, "/expenditures", a.funds).map((f) => ({
               id: f.id,
-              label: codeName(f.code, f.name, scope.labelMode),
+              // The closing "+ 9 other funds" line already reads as written; putting it
+              // through `codeName` would title-case it into "+ 9 Other Funds".
+              label: f.role === "total" ? f.name : codeName(f.code, f.name, scope.labelMode),
               detail: f.detail,
               href: f.href,
+              role: f.role,
             })),
           }))}
           totalCount={alerts?.alerts.length ?? 0}

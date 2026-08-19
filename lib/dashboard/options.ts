@@ -87,6 +87,15 @@ export function scopeDescription(scope: DashboardScope): string {
  * reader expects is the same screen, narrowed, not a different one.
  */
 
+/** One "where to look" row, as lib/alerts/attribution.ts builds it. */
+export type AlertFundRow = {
+  id: string;
+  code: string;
+  name: string;
+  detail: string;
+  role?: "driver" | "offset" | "total";
+};
+
 /** The fund tag on a Top Positive / Negative Variances row. */
 export function moverFund(
   scope: DashboardScope,
@@ -97,12 +106,22 @@ export function moverFund(
   return { label: fundLabel(fund, scope.labelMode), href: scopeHref(base, scope, { fund: fund.id }) };
 }
 
-/** The "where to look" chips under an alert. */
+/**
+ * The "where to look" chips under an alert.
+ *
+ * Every row links to this page scoped to that fund — EXCEPT the closing "+ 9 other funds"
+ * line, which is not a fund. It carries a synthetic id (`REST_ROW_ID`), so linking it would
+ * produce a fund filter matching nothing and a drill-down landing on an empty page.
+ */
 export function alertFunds(
   scope: DashboardScope,
   base: string,
-  funds: { id: string; code: string; name: string; detail: string }[] | undefined,
-): { id: string; code: string; name: string; detail: string; href: string }[] {
+  funds: AlertFundRow[] | undefined,
+): (AlertFundRow & { href?: string })[] {
   if (!funds || scope.fundId) return [];
-  return funds.map((f) => ({ ...f, href: scopeHref(base, scope, { fund: f.id }) }));
+  return funds.map((f) =>
+    f.role === "total"
+      ? { ...f }
+      : { ...f, href: scopeHref(base, scope, { fund: f.id }) },
+  );
 }

@@ -7,6 +7,8 @@ import {
   type AlertFacts,
 } from "@/lib/alerts/catalog";
 import { defaultPolicy, type PolicyValues } from "@/lib/policies/registry";
+import { forecastContributions, ALERT_LENS, REST_ROW_ID } from "@/lib/alerts/attribution";
+import { projectYearEnd } from "@/lib/forecast/engine";
 
 /**
  * Checks the alert catalogue: the workbook's counts, and that each alert fires on a
@@ -586,6 +588,161 @@ for (const [id, patch] of Object.entries(TRIPS)) {
   if (!fires(id, { ...healthy(), ...patch })) unreachable.push(id);
 }
 assert(unreachable.length === 0, `all 24 fire on their own fixture${unreachable.length ? ` (silent: ${unreachable.join(", ")})` : ""}`);
+
+
+// ===================== the "Where" rows under the forecast alerts =====================
+
+/**
+ * The client: "That's the right list when the district is projected over budget, but this
+ * alert fired on a projected underspend, so the list is currently pointing at the funds
+ * least responsible for it. We're changing it to rank funds by their own contribution to
+ * the projected variance, so the amounts shown add up to the figure in the alert."
+ *
+ * Both halves are checked here — the DIRECTION (the rows follow the way the alert fired)
+ * and the ARITHMETIC (nothing is silently dropped, and the per-fund figures sum to the
+ * district figure the alert quotes).
+ */
+console.log("\nForecast alerts are attributed by projected variance");
+
+type TestFund = {
+  id: string;
+  code: string;
+  name: string;
+  ytd: Prisma.Decimal;
+  budget: Prisma.Decimal;
+};
+const fund = (id: string, ytd: number, budget: number): TestFund => ({
+  id,
+  code: id,
+  name: `Fund ${id}`,
+  ytd: d(ytd),
+  budget: d(budget),
+});
+
+const SPEND_WORDS = { over: "over budget", under: "under budget" };
+const rowsFor = (funds: TestFund[], period: number) =>
+  forecastContributions(funds, period, (f) => ({ ytd: f.ytd, budget: f.budget }), SPEND_WORDS);
+const varianceOf = (f: TestFund, period: number) =>
+  projectYearEnd({ actualYtd: f.ytd, budget: f.budget, periodsElapsed: period }).variance;
+
+/**
+ * Six months in. Four funds run well under budget and one runs over, so the district lands
+ * UNDER — the exact shape the client was looking at when the old ranking pointed at the
+ * fund spending fastest.
+ */
+const UNDERSPEND: TestFund[] = [
+  fund("1000", 3_000_000, 12_000_000), // projects 6.0M against 12.0M -> 6.0M under
+  fund("2000", 1_000_000, 4_000_000), //  projects 2.0M against  4.0M -> 2.0M under
+  fund("3000", 400_000, 1_600_000), //    projects 0.8M against  1.6M -> 0.8M under
+  fund("4000", 100_000, 400_000), //      projects 0.2M against  0.4M -> 0.2M under
+  fund("5000", 1_200_000, 1_000_000), //  projects 2.4M against  1.0M -> 1.4M OVER
+];
+
+const under = rowsFor(UNDERSPEND, 6);
+const drivers = under.filter((r) => r.role === "driver");
+const offsets = under.filter((r) => r.role === "offset");
+const totals = under.filter((r) => r.role === "total");
+
+assert(
+  drivers.length > 0 && drivers.every((r) => r.detail.includes("under budget")),
+  `on a projected underspend every driver row is itself under budget (got ${drivers
+    .map((r) => r.detail)
+    .join(" | ")})`,
+);
+assert(
+  !drivers.some((r) => r.id === "5000"),
+  "the fund spending fastest is NOT ranked as a driver of an underspend",
+);
+assert(
+  drivers.map((r) => r.id).join(",") === "1000,2000,3000",
+  `drivers are the three biggest contributors, biggest first (got ${drivers
+    .map((r) => r.id)
+    .join(",")})`,
+);
+
+assert(
+  offsets.length === 1 && offsets[0]?.id === "5000",
+  `the materially offsetting fund is surfaced (got ${offsets.map((r) => r.id).join(",") || "none"})`,
+);
+assert(
+  Boolean(offsets[0]?.detail.includes("over budget") && offsets[0]?.detail.includes("offsets")),
+  `and it says which way it runs and that it offsets (got "${offsets[0]?.detail ?? ""}")`,
+);
+
+assert(
+  totals.length === 1 && totals[0]?.id === REST_ROW_ID,
+  "a closing line accounts for the funds not named",
+);
+assert(
+  totals[0]?.name === "+ 1 other fund",
+  `which counts them, singular when there is one (got "${totals[0]?.name ?? ""}")`,
+);
+
+/**
+ * THE ARITHMETIC. Every fund with a projection is either named or counted in the closing
+ * line — that is what makes the column add up rather than being an unexplained subset.
+ */
+const contributing = UNDERSPEND.filter((f) => !varianceOf(f, 6).isZero());
+const named = under.filter((r) => r.role !== "total");
+const counted = Number(totals[0]?.name.replace(/[^0-9]/g, "") ?? "0");
+assert(
+  named.length + counted === contributing.length,
+  `named funds plus the closing count equal every contributing fund (${named.length} + ${counted} vs ${contributing.length})`,
+);
+
+/**
+ * And the property the whole reconciliation rests on: the projection is a straight-line run
+ * rate, so the district's variance IS the sum of the funds'. If the alert engine ever adopts
+ * a growth assumption, this is the assert that fails.
+ */
+const perFund = UNDERSPEND.reduce((a, f) => a.plus(varianceOf(f, 6)), d(0));
+const districtWide = projectYearEnd({
+  actualYtd: UNDERSPEND.reduce((a, f) => a.plus(f.ytd), d(0)),
+  budget: UNDERSPEND.reduce((a, f) => a.plus(f.budget), d(0)),
+  periodsElapsed: 6,
+}).variance;
+assert(
+  perFund.equals(districtWide),
+  `the per-fund variances sum to the district figure the alert quotes (${perFund.toString()} vs ${districtWide.toString()})`,
+);
+
+// An overspend flips the whole list, off the same code path.
+const OVERSPEND = UNDERSPEND.map((f) =>
+  f.id === "5000" ? f : { ...f, ytd: f.budget.times("0.75") },
+);
+const overDrivers = rowsFor(OVERSPEND, 6).filter((r) => r.role === "driver");
+assert(
+  overDrivers.length > 0 && overDrivers.every((r) => r.detail.includes("over budget")),
+  "on a projected overspend the drivers are the funds running over",
+);
+
+// A counter-fund below a tenth of the variance is noise, and takes no row.
+const IMMATERIAL = [...UNDERSPEND.slice(0, 4), fund("5000", 60_000, 100_000)];
+assert(
+  rowsFor(IMMATERIAL, 6).every((r) => r.role !== "offset"),
+  "an immaterial counter-fund is not given a row",
+);
+
+// A slice landing exactly on budget has no direction to rank by.
+assert(
+  rowsFor([fund("1000", 6_000_000, 12_000_000)], 6).length === 0,
+  "a slice projecting exactly on budget attributes nothing",
+);
+
+// The four alerts that state a PROJECTION read the projection lens; the two that state
+// PACE keep the pace ranking, which is correct for them.
+assert(
+  ALERT_LENS.FORECAST_EXCEEDS_BUDGET === "spendForecastOff" &&
+    ALERT_LENS.MATERIAL_FORECAST_VARIANCE === "spendForecastOff" &&
+    ALERT_LENS.REVENUE_FORECAST_BELOW_BUDGET === "revenueForecastOff" &&
+    ALERT_LENS.REVENUE_FORECAST_ABOVE_BUDGET === "revenueForecastOff",
+  "all four forecast alerts are attributed by projected variance",
+);
+assert(
+  ALERT_LENS.BUDGET_UTILIZATION_WARNING === "spendAhead" &&
+    ALERT_LENS.BUDGET_UTILIZATION_CRITICAL === "spendAhead",
+  "and the utilisation alerts keep the pace ranking",
+);
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed === 0 ? 0 : 1);

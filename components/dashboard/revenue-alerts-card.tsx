@@ -26,7 +26,14 @@ export interface RevenueAlertItem {
   message: string;
   /** The rule that fired — "Revenue below budget". */
   title: string;
-  funds?: { id: string; label: string; detail: string; href?: string }[];
+  funds?: {
+    id: string;
+    label: string;
+    detail: string;
+    href?: string;
+    /** `total` is the closing "+ 9 other funds" line, not a fund. See attribution.ts. */
+    role?: "driver" | "offset" | "total";
+  }[];
 }
 
 const SEVERITY_PILL: Record<DisplaySeverity, { bg: string; fg: string; label: string }> = {
@@ -117,7 +124,14 @@ export function RevenueAlertsCard({
                          * One above the other each gets the whole width and neither clips.
                          */
                         const chip = (
-                          <span className="inline-flex max-w-full flex-col items-start gap-[2px] rounded-[14px] bg-white px-[8px] py-[5px] text-[10px] leading-normal tracking-[0.08px] text-[#060606] sm:flex-row sm:items-center sm:gap-[6px] sm:truncate sm:rounded-[20px]">
+                          <span
+                            className={cn(
+                              "inline-flex max-w-full flex-col items-start gap-[2px] rounded-[14px] px-[8px] py-[5px] text-[10px] leading-normal tracking-[0.08px] text-[#060606] sm:flex-row sm:items-center sm:gap-[6px] sm:truncate sm:rounded-[20px]",
+                              // The closing total carries no capsule — it sums the chips
+                              // above rather than naming another fund to open.
+                              f.role === "total" ? "opacity-70" : "bg-white",
+                            )}
+                          >
                             <span className="max-w-full font-bold">{f.label}</span>
                             <span className="max-w-full truncate">{f.detail}</span>
                           </span>

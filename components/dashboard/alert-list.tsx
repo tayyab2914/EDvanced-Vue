@@ -75,7 +75,19 @@ export interface AlertRow {
    * condition and these name the place. Empty on a single-fund page, where the scope
    * selector has already answered it.
    */
-  funds?: { id: string; code: string; name: string; detail: string; href?: string }[];
+  funds?: {
+    id: string;
+    code: string;
+    name: string;
+    detail: string;
+    href?: string;
+    /**
+     * `total` is the closing "+ 9 other funds" line rather than a fund: its name is already
+     * display-ready and must NOT go through `codeName`, which would title-case it, and it
+     * links nowhere. See lib/alerts/attribution.ts.
+     */
+    role?: "driver" | "offset" | "total";
+  }[];
 }
 
 /**
@@ -90,10 +102,14 @@ function FundWhereRow({
   label,
   detail,
   href,
+  muted = false,
 }: {
   label: string;
   detail?: string;
   href?: string;
+  /** The closing total. It carries no ground, so it reads as the sum of the rows above it
+      rather than as one more fund to click. */
+  muted?: boolean;
 }) {
   /*
     The ground is on the ROW, not on each cell. Two backgrounds meeting in the middle look
@@ -124,7 +140,10 @@ function FundWhereRow({
     </>
   );
 
-  const shape = "col-span-2 grid grid-cols-subgrid items-center rounded-[6px] bg-[#f4f5f7]";
+  const shape = cn(
+    "col-span-2 grid grid-cols-subgrid items-center rounded-[6px]",
+    muted ? "opacity-70" : "bg-[#f4f5f7]",
+  );
 
   return href ? (
     <Link href={href} className={cn(shape, "transition-opacity hover:opacity-75")}>
@@ -273,9 +292,10 @@ export function AlertList({
                   {funds.map((f) => (
                     <FundWhereRow
                       key={f.id}
-                      label={codeName(f.code, f.name, mode)}
+                      label={f.role === "total" ? f.name : codeName(f.code, f.name, mode)}
                       detail={f.detail}
                       href={f.href}
+                      muted={f.role === "total"}
                     />
                   ))}
                 </div>

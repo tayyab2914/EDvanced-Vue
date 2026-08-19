@@ -980,11 +980,12 @@ export default async function CashDashboard({
             severity: a.severity,
             message: a.message,
             title: a.title,
-            funds: ("funds" in a ? (a.funds ?? []) : []).map((f) => ({
+            funds: alertFunds(scope, "/cash", "funds" in a ? a.funds : undefined).map((f) => ({
               id: f.id,
-              label: codeName(f.code, f.name, scope.labelMode),
+              label: f.role === "total" ? f.name : codeName(f.code, f.name, scope.labelMode),
               detail: f.detail,
               href: f.href,
+              role: f.role,
             })),
           }))}
           totalCount={alerts?.alerts.length ?? 0}

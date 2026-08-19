@@ -210,16 +210,22 @@ export function OverviewAlertsPanel({
                     </span>
                     <span className="flex min-w-0 flex-col items-start gap-[3px]">
                       {funds.map((f) => {
+                        // The closing "+ 9 other funds" line is not a fund — no code to
+                        // prefix, and no white capsule, so it reads as the total of the
+                        // chips above rather than as one more place to go.
+                        const isTotal = f.role === "total";
                         const body = (
                           <>
                             <span className="font-bold">
-                              {f.code} - {f.name}
+                              {isTotal ? f.name : `${f.code} - ${f.name}`}
                             </span>
                             {f.detail && <span>{`  ${f.detail}`}</span>}
                           </>
                         );
-                        const shape =
-                          "max-w-full truncate whitespace-pre rounded-[20px] bg-white px-[8px] py-[5px] text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]";
+                        const shape = cn(
+                          "max-w-full truncate whitespace-pre rounded-[20px] px-[8px] py-[5px] text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]",
+                          isTotal ? "opacity-70" : "bg-white",
+                        );
                         return f.href ? (
                           <Link
                             key={f.id}

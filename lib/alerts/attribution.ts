@@ -4,6 +4,7 @@ import type { DatasetKind } from "@/lib/enums";
 import { currentVersionIds } from "@/lib/finance/versions";
 import { listFunds } from "@/lib/finance/funds";
 import { pace, utilisation, availableBudget } from "@/lib/finance/variance";
+import { projectYearEnd } from "@/lib/forecast/engine";
 import { memo, dbKey } from "@/lib/request-cache";
 import { compactMoney } from "@/lib/dashboard/format";
 import {
@@ -91,7 +92,9 @@ export type AlertLens =
   | "revenueBehind"
   | "revenueAhead"
   | "revenueMoved"
+  | "revenueForecastOff"
   | "spendAhead"
+  | "spendForecastOff"
   | "spendOverBudget"
   | "spendJumped"
   | "cashThin"
@@ -111,7 +114,28 @@ export interface FundContribution {
    * differently for the same number.
    */
   detail: string;
+  /**
+   * WHAT THIS ROW IS, for the renderers that need to treat it differently.
+   *
+   * `driver` is the default and the only kind the pace lenses produce — a fund carrying
+   * part of what the alert is about. The forecast lenses add two more:
+   *
+   *   `offset` — a fund moving the figure the OTHER way, materially. It is not driving the
+   *     alert and is deliberately not ranked among the funds that are, but a fund heading
+   *     over budget inside a district projected under is the one a finance officer would
+   *     most want to know about, and the driver ranking is the one list guaranteed to hide
+   *     it. Named at the client's request.
+   *
+   *   `total` — the closing "+ 9 other funds" line. NOT a fund: its id is synthetic, it
+   *     links nowhere, and its name is already display-ready (it must not be run through
+   *     `codeName`/`displayName`, which would title-case it into "+ 9 Other Funds").
+   *     It exists so the column visibly adds up to the figure in the alert above it.
+   */
+  role?: "driver" | "offset" | "total";
 }
+
+/** The id on the closing line. Not a fund, so nothing may link to it. */
+export const REST_ROW_ID = "__rest__";
 
 export type AlertAttribution = Record<AlertLens, FundContribution[]>;
 
@@ -124,15 +148,17 @@ export type AlertAttribution = Record<AlertLens, FundContribution[]>;
  */
 export const ALERT_LENS: Record<string, AlertLens> = {
   REVENUE_BELOW_BUDGET: "revenueBehind",
-  REVENUE_FORECAST_BELOW_BUDGET: "revenueBehind",
   REVENUE_ABOVE_BUDGET: "revenueAhead",
-  REVENUE_FORECAST_ABOVE_BUDGET: "revenueAhead",
+  // Both forecast alerts state a PROJECTION, so both are attributed by projected variance
+  // rather than by year-to-date pace. See `forecastContributions`.
+  REVENUE_FORECAST_BELOW_BUDGET: "revenueForecastOff",
+  REVENUE_FORECAST_ABOVE_BUDGET: "revenueForecastOff",
   REVENUE_SIGNIFICANT_CHANGE: "revenueMoved",
 
   BUDGET_UTILIZATION_WARNING: "spendAhead",
   BUDGET_UTILIZATION_CRITICAL: "spendAhead",
-  FORECAST_EXCEEDS_BUDGET: "spendAhead",
-  MATERIAL_FORECAST_VARIANCE: "spendAhead",
+  FORECAST_EXCEEDS_BUDGET: "spendForecastOff",
+  MATERIAL_FORECAST_VARIANCE: "spendForecastOff",
   BUDGET_EXCEEDED: "spendOverBudget",
   NEGATIVE_AVAILABLE_BUDGET: "spendOverBudget",
   ENCUMBRANCES_EXCEED_AVAILABLE: "spendOverBudget",
@@ -149,7 +175,9 @@ const EMPTY: AlertAttribution = {
   revenueBehind: [],
   revenueAhead: [],
   revenueMoved: [],
+  revenueForecastOff: [],
   spendAhead: [],
+  spendForecastOff: [],
   spendOverBudget: [],
   spendJumped: [],
   cashThin: [],
@@ -415,6 +443,18 @@ async function buildAttribution(
     ),
     // Movement in either direction — "significant change" is not "significant drop", and
     // the alert it serves fires both ways.
+    revenueForecastOff: forecastContributions(
+      all,
+      scope.period,
+      (f) => ({ ytd: f.revenueYtd, budget: f.revenueBudget }),
+      { over: "above budget", under: "below budget" },
+    ),
+    spendForecastOff: forecastContributions(
+      all,
+      scope.period,
+      (f) => ({ ytd: f.spendYtd, budget: f.spendBudget }),
+      { over: "over budget", under: "under budget" },
+    ),
     revenueMoved: rank(
       (f) => (f.revenueMtdBefore === null ? null : f.revenueMtd.minus(f.revenueMtdBefore).abs()),
       (a, f) =>
@@ -449,4 +489,136 @@ async function buildAttribution(
       (a) => `${compactMoney(a)} spent above collections`,
     ),
   };
+}
+
+/**
+ * A fund whose projection runs COUNTER to the alert must be worth at least this share of
+ * the district's variance before it takes a row.
+ *
+ * Ten per cent, because the row is an interruption: it is the one line under the alert that
+ * is NOT answering the question the alert asked, and a $12k fund drifting the other way
+ * inside a $4M underspend would spend a row saying nothing. At a tenth of the variance it is
+ * a figure a finance officer would act on.
+ */
+const OFFSET_FLOOR = new D("0.10");
+
+/**
+ * WHICH FUNDS ARE MAKING THE PROJECTION MISS — the rows under the four forecast alerts.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THIS EXISTS SEPARATELY FROM `committedAboveRate`
+ *
+ * The client: "The 'Where' rows list funds whose commitment pace is furthest above the
+ * districtwide rate. That's the right list when the district is projected over budget, but
+ * this alert fired on a projected underspend, so the list is currently pointing at the funds
+ * least responsible for it."
+ *
+ * Exactly right, and it is two faults rather than one. `committedAboveRate` ranks by pace
+ * against the slice's own commitment rate, which (a) has no notion of which way the alert
+ * fired, so on a projected UNDERSPEND it returns the funds spending fastest — the ones
+ * pulling the projection back toward budget — and (b) is measured in pace dollars, which are
+ * not the dollars the alert sentence quotes, so the rows never tied back to it.
+ *
+ * That ranking is still correct for BUDGET_UTILIZATION_*, which are genuinely alerts about
+ * pace. It is wrong for the four alerts that state a PROJECTION, and those now read this.
+ *
+ * IT RECONCILES, EXACTLY
+ *
+ * `projectYearEnd` is imported rather than reimplemented, and the alert engine calls it with
+ * no growth assumption (lib/alerts/engine.ts), so the projection is a straight-line run rate
+ * and therefore LINEAR:
+ *
+ *     sum(ytd_f)/periods x 12 - sum(budget_f)  ==  sum( ytd_f/periods x 12 - budget_f )
+ *
+ * The district figure IS the sum of the per-fund figures. That holds only while both sides
+ * read the same rows, and they do: `currentBudgets` and `activityTotals` sum `budget` and
+ * `actualYtd` from the current detail version under `detailWhere(filter)`, which is the same
+ * table, version and slice the aggregates at the top of this file group by fund. If the alert
+ * engine ever passes a growth assumption, per category or otherwise, this stops summing and
+ * must follow it there.
+ *
+ * WHAT THE ROWS ARE
+ *
+ *   - up to KEEP funds moving the variance the way the alert fired, biggest dollars first;
+ *   - then the largest fund moving it the OTHER way, if it clears `OFFSET_FLOOR` — the
+ *     client asked for this: "I would also surface a materially offsetting fund because I
+ *     think that would be important for the finance team to see even if it isn't driving the
+ *     overall alert";
+ *   - then a closing "+ 9 other funds" line carrying the signed remainder, so what is on
+ *     screen adds up to the figure in the alert rather than being an unexplained subset.
+ *
+ * Direction is taken from the slice's own net variance, not from the alert id, because
+ * MATERIAL_FORECAST_VARIANCE fires BOTH ways off a single id and the map above is static.
+ * The other three alerts only fire in one direction, and it is the same direction this
+ * computes, so a single lens serves all four without disagreeing with any of them.
+ */
+export function forecastContributions<T extends { id: string; code: string; name: string }>(
+  all: T[],
+  period: number,
+  pick: (f: T) => { ytd: Prisma.Decimal; budget: Prisma.Decimal },
+  words: { over: string; under: string },
+): FundContribution[] {
+  const contributions = all
+    .map((f) => {
+      const { ytd, budget } = pick(f);
+      // No budget AND no activity is not a contribution of zero — it is a fund this
+      // projection has nothing to say about, and it must not be counted in "+ N other funds".
+      if (budget.isZero() && ytd.isZero()) return null;
+      const { variance } = projectYearEnd({ actualYtd: ytd, budget, periodsElapsed: period });
+      return variance.isZero() ? null : { f, variance };
+    })
+    .filter((x): x is { f: T; variance: Prisma.Decimal } => x !== null);
+
+  const total = contributions.reduce((a, x) => a.plus(x.variance), ZERO);
+  // A district landing exactly on budget has no direction to rank by, and the alerts that
+  // read this lens cannot fire on it anyway.
+  if (total.isZero()) return [];
+
+  /** Does this fund move the figure the way the district as a whole is moving? */
+  const drives = (v: Prisma.Decimal) => v.isNegative() === total.isNegative();
+  const word = (v: Prisma.Decimal) => (v.isNegative() ? words.under : words.over);
+  const biggestFirst = (xs: { f: T; variance: Prisma.Decimal }[]) =>
+    [...xs].sort((a, b) => b.variance.abs().comparedTo(a.variance.abs()));
+
+  const rows: FundContribution[] = biggestFirst(contributions.filter((x) => drives(x.variance)))
+    .slice(0, KEEP)
+    .map(({ f, variance }) => ({
+      id: f.id,
+      code: f.code,
+      name: f.name,
+      detail: `${compactMoney(variance.abs())} projected ${word(variance)}`,
+      role: "driver" as const,
+    }));
+
+  const [counter] = biggestFirst(contributions.filter((x) => !drives(x.variance)));
+  if (counter && counter.variance.abs().greaterThanOrEqualTo(total.abs().times(OFFSET_FLOOR))) {
+    rows.push({
+      id: counter.f.id,
+      code: counter.f.code,
+      name: counter.f.name,
+      // It says which way it is going AND that it runs against the alert — without the
+      // second half a reader scanning the column reads it as one more driver.
+      detail: `${compactMoney(counter.variance.abs())} projected ${word(counter.variance)} · offsets`,
+      role: "offset",
+    });
+  }
+
+  const shown = new Set(rows.map((r) => r.id));
+  const rest = contributions.filter((x) => !shown.has(x.f.id));
+  if (rest.length === 0) return rows;
+
+  const remainder = rest.reduce((a, x) => a.plus(x.variance), ZERO);
+  rows.push({
+    id: REST_ROW_ID,
+    code: "",
+    name: `+ ${rest.length} other fund${rest.length === 1 ? "" : "s"}`,
+    // Net, and it can land either way — the funds left over are not all going one way just
+    // because the district is. "net zero" rather than "$0", which reads as a missing figure.
+    detail: remainder.isZero()
+      ? "net zero"
+      : `${compactMoney(remainder.abs())} ${word(remainder)}`,
+    role: "total",
+  });
+
+  return rows;
 }
