@@ -89,19 +89,19 @@ const VIEW_META: Record<
   { title: string; subtitle: string; info: string; noun: string }
 > = {
   type: {
-    title: "Revenue by category (YTD)",
-    subtitle: "Share of collections by revenue type",
+    title: "Revenues by Category (YTD)",
+    subtitle: "Share of YTD collections by revenue category",
     info: "The same categories the forecast projects by, so a forecast and an actual compare without a translation table between them.",
     noun: "Revenue types",
   },
   source: {
-    title: "Revenue by code and name (YTD)",
-    subtitle: "Share of collections by revenue source",
+    title: "Revenues by Code & Name (YTD)",
+    subtitle: "Share of YTD collections by revenue source",
     info: "The district's own revenue source codes, largest first. The full list with variance and status is in the table above.",
     noun: "Revenue sources",
   },
   grant: {
-    title: "Revenue by project / grant (YTD)",
+    title: "Revenues by Project / Grant (YTD)",
     subtitle: "The Project / Grant column on the revenue detail",
     info: "Grant revenue reaches the platform tagged in the required Project / Grant column, against the district's unified project master. That is what this groups by — the Grants Activity module itself is a V2 addition.",
     noun: "Projects",
@@ -135,8 +135,12 @@ const CATEGORY_TABS = [
  *    product does not yet have an engine that earns that. Remaining-to-collect is
  *    arithmetic, not a prediction.
  *
- * 2. "Budget (to date)" is now "Budget (YTD)" everywhere on this page, matching the
- *    vocabulary the rest of the dashboards use.
+ * 2. The columns are named for what they hold, not for the table they came from:
+ *    ANNUAL BUDGET is the full-year adopted/amended figure, EXPECTED (YTD) is the share
+ *    of it that should have been collected by the selected period, and COLLECTED YTD is
+ *    what actually came in. The three used to be "Budget (full year)", "Budget (YTD)" and
+ *    "Actual (YTD)" — three columns whose headings all began with the same word, which is
+ *    what made a reader stop and work out which budget each one meant.
  *
  * The layout follows the client's own diagram: two chart columns and a narrower rail
  * carrying the policy echo, the movers and the alerts.
@@ -361,7 +365,7 @@ export default async function RevenueDashboard({
         </SheetBand>
 
         <SheetBand cols="1fr 1fr">
-          <SheetCard title="Revenues — budget vs actual" note={`Through ${scope.label}`}>
+          <SheetCard title="Revenues vs. Budget (YTD)" note={`Through ${scope.label}`}>
             <LineChart
               title="Revenues, budget against actual"
               summary={`Actual collections year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
@@ -381,7 +385,7 @@ export default async function RevenueDashboard({
                 },
                 {
                   key: "budget",
-                  label: "Budget (YTD)",
+                  label: "Expected (YTD)",
                   color: "var(--color-viz-budget)",
                   points: series.points.map((p) => ({
                     value: p.hasData ? ((toNumber(p.revenueBudget) ?? 0) * p.period) / 12 : null,
@@ -389,7 +393,7 @@ export default async function RevenueDashboard({
                 },
                 {
                   key: "full",
-                  label: "Budget (full year)",
+                  label: "Annual Budget",
                   color: "var(--color-viz-reference)",
                   dashed: true,
                   markers: false,
@@ -400,7 +404,7 @@ export default async function RevenueDashboard({
             <SheetStats
               items={[
                 { label: "Actual (YTD)", value: compactMoney(bySource.total.actualYtd) },
-                { label: "Budget (YTD)", value: compactMoney(bySource.total.pace.budget) },
+                { label: "Expected (YTD)", value: compactMoney(bySource.total.pace.budget) },
                 {
                   label: "Variance (YTD)",
                   value: accounting(bySource.total.pace.amount, { compact: true }),
@@ -439,7 +443,7 @@ export default async function RevenueDashboard({
 
         <SheetBand cols="1fr">
           <SheetCard
-            title="Revenue by major source"
+            title="Revenues by Major Source"
             note={
               bySource.rows.length > SHEET_TABLE_ROWS
                 ? sheetTableNote(SHEET_TABLE_ROWS)
@@ -449,10 +453,10 @@ export default async function RevenueDashboard({
             <DataTable
               dense
               columns={[
-                { key: "source", label: "Revenue source" },
-                { key: "budget", label: "Budget", align: "right" },
-                { key: "actual", label: "Actual (YTD)", align: "right" },
-                { key: "variance", label: "Variance $", align: "right" },
+                { key: "source", label: "Revenue Source" },
+                { key: "budget", label: "Annual Budget", align: "right" },
+                { key: "actual", label: "Collected YTD", align: "right" },
+                { key: "variance", label: "Variance", align: "right" },
                 { key: "variancePct", label: "Variance %", align: "right" },
                 { key: "status", label: "Status", align: "right" },
               ]}
@@ -516,8 +520,8 @@ export default async function RevenueDashboard({
                       series the screen's status-strip sparkline draws, against the district's
                       own ± warning band rather than a hardcoded one. */}
                   <SheetCard
-                    title="Revenue variance trend"
-                    note={`Against budget to date · ± ${revT.warning.toFixed(2)}%`}
+                    title="Revenue Variance Trend"
+                    note={`Against expected YTD · ± ${revT.warning.toFixed(2)}%`}
                   >
                     <ColumnChart
                       title="Revenue variance trend"
@@ -648,6 +652,42 @@ export default async function RevenueDashboard({
       tone,
       status: revenuePace(toNumber(r.pace.percent), revT),
     }));
+
+  /**
+   * ---------- the Key Insight (64:9404) ----------
+   *
+   * The strip used to explain the page's ARITHMETIC — where the figures come from, what
+   * "remaining to collect" means, where to change the thresholds. All of it true, none of
+   * it an insight: it said the same words in every district in every period, which is the
+   * definition of a sentence a reader stops seeing. (The caveat it carried has not been
+   * lost — "current budget less actual" is still the note under Remaining to Collect on
+   * the card above, which is the figure it was a caveat about.)
+   *
+   * It now states THIS period's variance and names the sources carrying it, taken from the
+   * same `topMovers` ranking the two movers cards draw — so the sentence and the cards
+   * beside it can never disagree about which sources are responsible.
+   */
+  const varianceAmount = bySource.total.pace.amount;
+  const behind = varianceAmount.isNegative();
+  // Two names, not four: the sentence is meant to point, and a list long enough to need
+  // reading is the movers card standing right beside it.
+  const drivers = (behind ? movers.negative : movers.positive)
+    .slice(0, 2)
+    .map((r) => codeName(r.code, r.name, scope.labelMode));
+  const keyInsight =
+    bySource.rows.length === 0
+      ? "No revenue detail has been committed for this period, so there is nothing to compare against the expected YTD budget yet."
+      : varianceAmount.isZero()
+        ? "Collections are exactly at their expected YTD level for this period."
+        : `Collections are ${compactMoney(varianceAmount.abs())} ${
+            behind ? "below" : "above"
+          } expected YTD levels${
+            drivers.length === 0
+              ? ""
+              : `, with the largest ${behind ? "unfavorable" : "favorable"} variances concentrated in ${
+                  drivers.length === 2 ? `${drivers[0]} and ${drivers[1]}` : drivers[0]
+                }`
+          }.`;
 
   return (
     <div className="animate-fade-up space-y-[18px]">
@@ -807,7 +847,7 @@ export default async function RevenueDashboard({
           }))}
           stats={[
             { label: "Actual (YTD)", value: compactMoney(categories.total.actualYtd) },
-            { label: "Budget (YTD)", value: compactMoney(categories.total.pace.budget) },
+            { label: "Expected (YTD)", value: compactMoney(categories.total.pace.budget) },
             {
               label: "Variance (YTD)",
               value: accounting(categories.total.pace.amount, { compact: true }),
@@ -828,8 +868,8 @@ export default async function RevenueDashboard({
 
         {/* row 3 — budget vs actual beside the negative movers */}
         <RevenueTrendCard
-          title="Revenues — budget vs actual"
-          subtitle={`Year to date through ${scope.label}`}
+          title="Revenues vs. Budget (YTD)"
+          subtitle="Actual collections compared to expected YTD collections"
           categories={labels}
           actual={series.points.map((p) => ({ value: toNumber(p.revenueYtd) }))}
           budget={series.points.map((p) => ({
@@ -840,7 +880,7 @@ export default async function RevenueDashboard({
           summary={`Actual collections year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
           stats={[
             { label: "Actual (YTD)", value: compactMoney(bySource.total.actualYtd) },
-            { label: "Budget (YTD)", value: compactMoney(bySource.total.pace.budget) },
+            { label: "Expected (YTD)", value: compactMoney(bySource.total.pace.budget) },
             {
               label: "Variance (YTD)",
               value: accounting(bySource.total.pace.amount, { compact: true }),
@@ -891,11 +931,7 @@ export default async function RevenueDashboard({
         />
 
         {/* row 5 — the key insight, standing alone in the left column (64:9404) */}
-        <RevenueInsightCard ctaHref="/policies">
-          Revenue figures are drawn from the detail file committed for this period. Remaining to
-          collect is current budget less actual revenue — it assumes no growth and is not a
-          forecast. Adjust the thresholds above to change when these alerts fire.
-        </RevenueInsightCard>
+        <RevenueInsightCard ctaHref="/policies">{keyInsight}</RevenueInsightCard>
       </div>
     </div>
   );

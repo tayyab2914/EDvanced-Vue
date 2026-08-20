@@ -3,7 +3,7 @@ import { ChartFigure, ChartEmpty } from "@/components/dashboard/charts/chrome";
 import { OverviewPanel, OverviewPanelHeader } from "@/components/dashboard/overview-panel";
 
 /**
- * "Revenue variance trend" — a transcription of Figma 46:3259.
+ * "Revenue Variance Trend" — a transcription of Figma 46:3259.
  *
  * The design's columns are two-tone pills: a violet cap spanning the district's own ±warning
  * band, and the magenta run for everything BEYOND the band — so the pink ink on the chart is
@@ -64,8 +64,8 @@ function roundedEnd(
 }
 
 export function RevenueVarianceCard({
-  title = "Revenue variance trend",
-  subtitle = "Actual against the budget expected by each month",
+  title = "Revenue Variance Trend",
+  subtitle = "Monthly variance from expected YTD collections",
   categories,
   points,
   warning,

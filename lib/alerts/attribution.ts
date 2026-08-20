@@ -10,7 +10,6 @@ import { compactMoney } from "@/lib/dashboard/format";
 import {
   detailWhere,
   fundWhere,
-  narrows,
   filterKey,
   type FinanceFilter,
 } from "@/lib/finance/filter";
@@ -106,7 +105,7 @@ export interface FundContribution {
   code: string;
   name: string;
   /**
-   * "$1.24M behind pace" — formatted HERE, deliberately.
+   * "$1.24M below expected" — formatted HERE, deliberately.
    *
    * An alert crosses into a React component, and lib/dashboard/format.ts exists so that no
    * Prisma.Decimal ever has to. Carrying the raw figure would put the choice of compact-vs-
@@ -388,15 +387,16 @@ async function buildAttribution(
    * cannot top the list), and it sums to zero across the slice — which is the property that
    * makes "these three are pulling it up" a true statement rather than a turn of phrase.
    *
-   * The rate is the rate of what is ON SCREEN, so with a filter applied it is the selection's
-   * and the chip says so. The alert it explains was evaluated over the same slice, and
-   * measuring against a district-wide rate would rank funds by a baseline no figure on the
-   * page is computed from.
+   * The rate is the rate of what is ON SCREEN, so with a filter applied it is the
+   * selection's. The alert it explains was evaluated over the same slice, and measuring
+   * against a district-wide rate would rank funds by a baseline no figure on the page is
+   * computed from. The chip calls it "expected utilization" either way — the reader knows
+   * what is filtered from the filter bar, and naming the slice in every row cost more
+   * width than it bought.
    */
   const sliceBudget = all.reduce((a, f) => a.plus(f.spendBudget), ZERO);
   const sliceCommitted = all.reduce((a, f) => a.plus(f.spendYtd).plus(f.encumbrances), ZERO);
   const sliceRate = sliceBudget.isZero() ? null : sliceCommitted.dividedBy(sliceBudget);
-  const rateLabel = narrows(scope.filter) ? "the selection's rate" : "the district's rate";
 
   const committedAboveRate = (f: FundFigures): Prisma.Decimal | null => {
     if (sliceRate === null || f.spendBudget.isZero()) return null;
@@ -435,7 +435,10 @@ async function buildAttribution(
   return {
     revenueBehind: rank(
       (f) => revenuePace(f).amount.negated(),
-      (a) => `${compactMoney(a)} behind pace`,
+      // Two decimal places are named, not defaulted: this column stacks three or four
+      // shortfalls, and the trimmed default renders a round one as "$1M" beside
+      // "$10.92M" — two widths that read as two different precisions.
+      (a) => `${compactMoney(a, 2)} below expected`,
     ),
     revenueAhead: rank(
       (f) => revenuePace(f).amount,
@@ -465,8 +468,8 @@ async function buildAttribution(
     spendAhead: rank(committedAboveRate, (a, f) => {
       const u = utilisation(f.spendYtd, f.encumbrances, f.spendBudget).percent;
       return u === null
-        ? `${compactMoney(a)} above ${rateLabel}`
-        : `${u.toFixed(1)}% committed · ${compactMoney(a)} above ${rateLabel}`;
+        ? `${compactMoney(a)} above expected utilization`
+        : `${u.toFixed(1)}% utilized · ${compactMoney(a)} above expected utilization`;
     }),
     spendOverBudget: rank(
       (f) => utilisation(f.spendYtd, f.encumbrances, f.spendBudget).amount,
@@ -486,7 +489,7 @@ async function buildAttribution(
     ),
     balanceFalling: rank(
       (f) => f.spendYtd.minus(f.revenueYtd),
-      (a) => `${compactMoney(a)} spent above collections`,
+      (a) => `Expenditures exceeded revenues by ${compactMoney(a)}`,
     ),
   };
 }

@@ -99,7 +99,10 @@ export function reserveMethodology(reserve: ReserveCaptionInput | null): string 
   if (reserve?.actual) {
     return "Actual ending fund balance over actual General Fund revenue collected.";
   }
+  // The second sentence used to be appended by the Fund Balance page. It belongs here: it
+  // is part of the same explanation, and it applies exactly when the figures are projected
+  // rather than actual — which is the branch it now lives in.
   return reserve?.basis === "EXPENDITURE"
-    ? "Beginning fund balance plus the amended budget's net change, over budgeted General Fund expenditures."
-    : "Beginning fund balance, plus amended revenue budget, less amended expenditure budget — over projected General Fund revenue.";
+    ? "Projected ending fund balance is based on beginning fund balance plus the amended budget's net change. Reserve percentages are calculated using budgeted General Fund expenditures and update when the budget is amended, not with monthly collections."
+    : "Projected ending fund balance is based on beginning fund balance plus the amended revenue budget, less the amended expenditure budget. Reserve percentages are calculated using projected General Fund revenue and update when the budget is amended, not with monthly collections.";
 }

@@ -5,7 +5,7 @@ import { PacePill } from "@/components/dashboard/revenue-shared";
 import type { StatusRung } from "@/lib/dashboard/status";
 
 /**
- * "Fund balance by fund" — a transcription of Figma 55:3755, the Fund Balance band's
+ * "Fund Balance by Fund" — a transcription of Figma 55:3755, the Fund Balance band's
  * full-width ledger and the same construction as the Expenditure breakdown table: the 16px
  * header with its "Basis: Actual" capsule at the right, 14px regular column headers over a
  * solid rule, bold fund names, dashed rules between rows, the band's tinted status pill
@@ -45,9 +45,8 @@ const COLS =
   "grid grid-cols-[minmax(196px,1.5fr)_minmax(96px,1fr)_minmax(96px,1fr)_minmax(104px,1fr)_minmax(110px,1fr)_minmax(104px,0.9fr)_minmax(56px,auto)] items-center gap-x-[12px]";
 
 export function FundBalanceByFundTable({
-  title = "Fund balance by fund",
+  title = "Fund Balance by Fund",
   subtitle,
-  basisLabel,
   control,
   rows,
   total,
@@ -56,9 +55,14 @@ export function FundBalanceByFundTable({
 }: {
   title?: string;
   subtitle: string;
-  /** "Actual" / "Budgeted" — names the three columns the capsule swaps. */
-  basisLabel: string;
-  /** The "Basis: …" capsule — a PillSelect, passed in so this card can stay on the server. */
+  /**
+   * The "Basis: …" capsule — a PillSelect, passed in so this card can stay on the server.
+   *
+   * It is also the ONLY place the basis is now named. The three swapped columns used to
+   * repeat it — "Revenues (Actual)", "Expenditures (Actual)", "Ending fund balance
+   * (Actual)" — so a reader met the same word four times across one header row while the
+   * headings themselves went unread.
+   */
   control?: ReactNode;
   rows: FundBalanceFundRow[];
   total: { beginning: string; revenues: string; expenditures: string; ending: string };
@@ -91,19 +95,19 @@ export function FundBalanceByFundTable({
               <span>
                 Beginning
                 <br />
-                fund balance
+                Fund Balance
               </span>
-              <span>Revenues ({basisLabel})</span>
-              <span>Expenditures ({basisLabel})</span>
+              <span>Revenues</span>
+              <span>Expenditures</span>
               <span>
-                Ending fund
+                Ending Fund
                 <br />
-                balance ({basisLabel})
+                Balance
               </span>
               <span>
                 Primary
                 <br />
-                classification
+                Classification
               </span>
               <span className="text-right">Status</span>
             </div>

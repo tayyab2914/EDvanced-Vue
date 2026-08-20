@@ -8,7 +8,7 @@ import {
 import type { ViewOption } from "@/lib/dashboard/view";
 
 /**
- * "Revenue by category (YTD)" — a transcription of Figma 46:3184.
+ * "Revenues by Category (YTD)" — a transcription of Figma 46:3184.
  *
  * The band's 16px/10px header, the segmented Type / Code & Name / Project-Grant switcher,
  * share rows whose 13px track is painted in the app's categorical slot colour with the

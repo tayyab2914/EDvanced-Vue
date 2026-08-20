@@ -66,7 +66,14 @@ export const MANAGE = {
 /** Drilling down into the committed records behind a figure. */
 export const VIEW_DETAILS = {
   revenueDetail: "View Revenue Details",
-  expenditureDetail: "View Expenditure Details",
+  /**
+   * "Go to", against the family's own "View [Module] Details" — because the Expenditures
+   * dashboard links this ONE destination TWICE: the view-by band's capsule and the
+   * by-function table's, which has always read "Go to Expenditure Details". Two shapes for
+   * one destination is the exact thing this file exists to stop, so the two capsules were
+   * made to agree; the label they agreed on is the one the client chose.
+   */
+  expenditureDetail: "Go to Expenditure Details",
   cashPosition: "View Cash Position Details",
   versionHistory: "View Version History",
 } as const;

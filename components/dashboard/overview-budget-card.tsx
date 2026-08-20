@@ -122,7 +122,7 @@ function ArrowGlyph({ color, className }: { color: string; className?: string })
  *
  *     Florida Education Finance Program                    [ Behind ]
  *     [========== actual ====][== budget ==]////////////////////////
- *     Full year $20M
+ *     Annual Budget $20M
  *
  * The pieces are reordered with `order-*` rather than moved in the markup, so the DOM order
  * stays the column order and `sm:order-none` hands the same four spans straight back to the
@@ -192,7 +192,7 @@ export function OverviewBudgetCard({
   format,
   chartTitle,
   summary,
-  unit = "Millions",
+  unit = "Category",
 }: {
   title: string;
   subtitle: string;
@@ -259,13 +259,13 @@ export function OverviewBudgetCard({
           <li className="flex items-center gap-[5px]">
             <span className="size-[9px] rounded-[2px] bg-[rgba(6,109,255,0.6)]" />
             <span className="text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]">
-              Budget (YTD)
+              Expected (YTD)
             </span>
           </li>
           <li className="flex items-center gap-[5px]">
             <span className="size-[9px] rounded-[2px]" style={HATCH_SWATCH} />
             <span className="text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]">
-              Budget Full year
+              Annual Budget
             </span>
           </li>
         </ul>
@@ -321,11 +321,11 @@ export function OverviewBudgetCard({
                   </span>
                 ))}
               </span>
-              {/* Both columns move INTO their rows on a phone — the full-year figure
-                  gets a "Full year" prefix of its own and the pill needs no heading — so
-                  the two headings would be labelling nothing. */}
+              {/* Both columns move INTO their rows on a phone — the annual figure
+                  gets an "Annual Budget" prefix of its own and the pill needs no heading —
+                  so the two headings would be labelling nothing. */}
               <span className={cn("order-2 hidden self-start sm:order-none sm:block", COLUMN_HEADER)}>
-                Budget Full year
+                Annual Budget
               </span>
               <span
                 className={cn(
@@ -468,7 +468,7 @@ export function OverviewBudgetCard({
                     </span>
 
                     <span className="order-4 col-span-2 text-[12px] leading-[16px] text-[#060606] sm:order-none sm:col-span-1 sm:text-[14px]">
-                      <span className="font-semibold sm:hidden">Full year </span>
+                      <span className="font-semibold sm:hidden">Annual Budget </span>
                       {r.budgetFullYearDisplay}
                     </span>
 
@@ -496,8 +496,8 @@ export function OverviewBudgetCard({
                 <tr>
                   <th scope="col">Category</th>
                   <th scope="col">Actual (YTD)</th>
-                  <th scope="col">Budget (YTD)</th>
-                  <th scope="col">Budget (full year)</th>
+                  <th scope="col">Expected (YTD)</th>
+                  <th scope="col">Annual Budget</th>
                   <th scope="col">Status</th>
                 </tr>
               </thead>

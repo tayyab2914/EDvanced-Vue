@@ -3,7 +3,7 @@ import { OverviewPanel, OverviewPanelHeader } from "@/components/dashboard/overv
 import { FundChip, PillLink } from "@/components/dashboard/revenue-shared";
 
 /**
- * "Cash composition" — a transcription of Figma 55:5363: the share rows with their 13px
+ * "Cash Composition" — a transcription of Figma 55:5363: the share rows with their 13px
  * coloured runs and hatched remainders (the Fund Balance composition card's bar
  * treatment), the little "View by" capsule at the top right, the outlined caption chip
  * centred over the bars naming the active view, and the centred "View … Details" capsule
@@ -32,7 +32,7 @@ const HATCH: React.CSSProperties = {
 };
 
 export function CashCompositionCard({
-  title = "Cash composition",
+  title = "Cash Composition",
   subtitle,
   /** The centred outlined chip — "By cash category · all funds". */
   caption,

@@ -4,7 +4,7 @@ import { OverviewPanel, OverviewPanelHeader } from "@/components/dashboard/overv
 import { CapsuleStatStrip, type CapsuleStat } from "@/components/dashboard/revenue-shared";
 
 /**
- * "Revenues — budget vs actual" — a transcription of Figma 46:2938.
+ * "Revenues vs. Budget (YTD)" — a transcription of Figma 46:2938.
  *
  * The design's spline chart, read off its exported assets: the actual line in Primary/500
  * teal (#038C8C) with the #F5FEF8 wash under it, the budget line in Indigo/500 navy
@@ -116,6 +116,12 @@ function LegendSwatch({ color, hatched }: { color?: string; hatched?: boolean })
 export function RevenueTrendCard({
   title,
   subtitle,
+  /**
+   * What the teal series is called. "Actual (YTD)" on Revenues; the Expenditures page
+   * calls the same line "Spent (YTD)", which is the word the rest of that screen uses for
+   * money already out the door.
+   */
+  actualLabel = "Actual (YTD)",
   categories,
   actual,
   budget,
@@ -127,6 +133,7 @@ export function RevenueTrendCard({
 }: {
   title: string;
   subtitle: string;
+  actualLabel?: string;
   categories: string[];
   actual: RevenueTrendPoint[];
   budget: RevenueTrendPoint[];
@@ -151,15 +158,15 @@ export function RevenueTrendCard({
         <ul className="flex flex-row flex-wrap gap-x-[12px] gap-y-[4px] sm:flex-none sm:flex-col sm:gap-[4px] sm:pt-[6px]">
           <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
             <LegendSwatch color="rgba(3,140,140,0.6)" />
-            Actual (YTD)
+            {actualLabel}
           </li>
           <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
             <LegendSwatch color="rgba(2,40,89,0.6)" />
-            Budget (YTD)
+            Expected (YTD)
           </li>
           <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
             <LegendSwatch hatched />
-            Budget Full year
+            Annual Budget
           </li>
         </ul>
       </div>

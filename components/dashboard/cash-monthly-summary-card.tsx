@@ -4,7 +4,7 @@ import { OverviewPanel, OverviewPanelHeader } from "@/components/dashboard/overv
 import { PillLink } from "@/components/dashboard/revenue-shared";
 
 /**
- * "Monthly cash summary" — a transcription of Figma 55:5407: the month's walk as five
+ * "Monthly Cash Summary" — a transcription of Figma 55:5407: the month's walk as five
  * 105×135 bordered mini-cards — beginning, receipts, disbursements, net, ending — each
  * with its 34px tinted icon disc, 12px label, the figure in its own ink and the tiny
  * comparison note, with the centred "View … Details" capsule at the card's floor.
@@ -36,7 +36,7 @@ export interface CashSummaryStep {
 }
 
 export function CashMonthlySummaryCard({
-  title = "Monthly cash summary",
+  title = "Monthly Cash Summary",
   subtitle,
   steps,
   ctaLabel,

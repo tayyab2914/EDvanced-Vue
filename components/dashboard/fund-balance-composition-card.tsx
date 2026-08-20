@@ -3,7 +3,7 @@ import { OverviewPanel, OverviewPanelHeader } from "@/components/dashboard/overv
 import { CapsuleStatStrip, type CapsuleStat } from "@/components/dashboard/revenue-shared";
 
 /**
- * "Fund balance composition" — a transcription of Figma 55:4118: the share rows with their
+ * "Fund Balance Composition" — a transcription of Figma 55:4118: the share rows with their
  * 13px coloured runs and hatched remainders (the Expenditure band's bar treatment, at this
  * card's narrower width), the money and share figures at the row's right, the two little
  * capsules — "Basis" and "View by" — stacked at the top right, and the capsule stat strip
@@ -31,15 +31,20 @@ const HATCH: React.CSSProperties = {
 };
 
 export function FundBalanceCompositionCard({
-  title = "Fund balance composition",
-  subtitle,
+  title = "Fund Balance Composition",
+  /**
+   * FIXED, not a readout of the two capsules beside it. The subtitle used to recite the
+   * current selection — "By classification · Actual" — which is what the capsules already
+   * show, and it made the card appear to change subject every time a reader switched view.
+   */
+  subtitle = "Breakdown of ending fund balance",
   controls,
   rows,
   stats,
   empty,
 }: {
   title?: string;
-  subtitle: string;
+  subtitle?: string;
   /** The "Basis" / "View by" capsules — PillSelects, passed in so this stays on the server. */
   controls?: ReactNode;
   rows: CompositionRow[];

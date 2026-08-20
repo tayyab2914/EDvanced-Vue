@@ -97,26 +97,26 @@ export function AssumptionsForm({
         <Panel letter="A" title="Revenue assumptions" tone="green">
           <Rate
             name="revenueGrowth"
-            label="Annual revenue growth"
+            label="Annual Revenue Growth"
             defaultValue={revenueGrowth}
             errors={growthState.fieldErrors?.revenueGrowth}
-            hint="Example: 2.00. Applied to recurring revenue sources only."
+            hint="Applied annually to recurring revenue sources only."
             canEdit={canEdit}
           />
           <Amount
             name="recurringRevenueAdjustment"
-            label="Recurring revenue adjustments (annual)"
+            label="Recurring Revenue Adjustments"
             defaultValue={recurringRevenueAdjustment}
             errors={growthState.fieldErrors?.recurringRevenueAdjustment}
-            hint="A permanent change — a millage adjustment, a recurring grant. Applied every projected year."
+            hint="Permanent annual adjustments, such as a millage change or recurring grant. Applied in each projected year."
             canEdit={canEdit}
           />
           <Amount
             name="oneTimeRevenueAdjustment"
-            label="One-time revenue adjustments"
+            label="One-Time Revenue Adjustments"
             defaultValue={oneTimeRevenueAdjustment}
             errors={growthState.fieldErrors?.oneTimeRevenueAdjustment}
-            hint="Non-recurring money. Applied to the first projected year only, so it never compounds."
+            hint="Nonrecurring revenue applied to the first projected year only and excluded from future-year growth."
             canEdit={canEdit}
           />
         </Panel>
@@ -124,33 +124,33 @@ export function AssumptionsForm({
         <Panel letter="B" title="Expenditure assumptions" tone="blue">
           <Rate
             name="expenditureGrowth"
-            label="Annual expenditure growth"
+            label="Annual Expenditure Growth"
             defaultValue={expenditureGrowth}
             errors={growthState.fieldErrors?.expenditureGrowth}
-            hint="Example: 3.00. Applied to the recurring operating base below."
+            hint="Applied annually to the recurring operating base shown below."
             canEdit={canEdit}
           />
 
           <div className="rounded-lg border border-line-soft bg-panel px-3 py-2.5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-brand">
-              Recurring operating base (excludes one-time)
+              Recurring operating base
             </p>
             <dl className="mt-2 flex flex-col gap-1.5">
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-[11px] text-[#060606]">Total FY {fiscalYear} projected spending</dt>
+                <dt className="text-[11px] text-[#060606]">Projected FY {fiscalYear} Expenditures</dt>
                 <dd className="text-[12px] font-semibold tabular-nums text-[#060606]">
                   {totalBudgetedDisplay}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-[11px] text-[#060606]">Less: one-time / carryforward</dt>
+                <dt className="text-[11px] text-[#060606]">Less: One-Time & Carryforward Expenditures</dt>
                 <dd className="text-[12px] font-semibold tabular-nums text-action">
                   {oneTimeDisplay}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3 border-t border-line pt-1.5">
                 <dt className="text-[11px] font-semibold text-[#060606]">
-                  Recurring operating base
+                  Recurring Operating Base
                 </dt>
                 <dd className="text-[13px] font-semibold tabular-nums text-[#060606]">
                   {recurringBaseDisplay}
@@ -161,25 +161,25 @@ export function AssumptionsForm({
 
           <Amount
             name="oneTimeExpenditure"
-            label="One-time and carryforward expenditures"
+            label="One-Time & Carryforward Expenditures"
             defaultValue={oneTimeExpenditure}
             errors={growthState.fieldErrors?.oneTimeExpenditure}
-            hint="Excluded from the base above so growth compounds on operations, not on a one-off capital year."
+            hint="Excluded from the recurring base so annual growth applies only to ongoing operations."
             canEdit={canEdit}
           />
           <Amount
             name="recurringExpenditureAdjustment"
-            label="Recurring expenditure adjustments (annual)"
+            label="Recurring Expenditure Adjustments"
             defaultValue={recurringExpenditureAdjustment}
             errors={growthState.fieldErrors?.recurringExpenditureAdjustment}
-            hint="A permanent cost the current run-rate does not contain yet."
+            hint="Permanent annual costs not included in the current operating base."
             canEdit={canEdit}
           />
 
           {canEdit && (
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <Button type="submit" disabled={growthPending}>
-                {growthPending ? "Saving…" : "Save revenue & expenditure"}
+                {growthPending ? "Saving…" : "Save Revenue & Expenditure Assumptions"}
               </Button>
               {growthState.success && (
                 <span className="text-[12px] text-strong">{growthState.success}</span>
@@ -200,7 +200,7 @@ export function AssumptionsForm({
         <Panel
           letter="C"
           title="Fund balance component assumptions"
-          subtitle={`How each component of ${fundName} is forecast`}
+          subtitle={`How each ${fundName} balance component is projected`}
           tone="purple"
           info={<MethodHelp />}
         >
@@ -208,7 +208,7 @@ export function AssumptionsForm({
             <table className="min-w-full">
               <thead>
                 <tr>
-                  {["Component", `Current balance`, "Forecast method", ""].map((h) => (
+                  {["Component", "Current balance", "Projection method", ""].map((h) => (
                     <th
                       key={h}
                       scope="col"
@@ -233,14 +233,14 @@ export function AssumptionsForm({
           </div>
 
           <p className="rounded-lg bg-panel px-3 py-2.5 text-[11px] leading-relaxed text-[#060606]">
-            These amounts are subtracted from the projected total fund balance to calculate
-            the projected unassigned fund balance.
+            Projected component balances are subtracted from total projected fund balance to
+            calculate projected unassigned fund balance.
           </p>
 
           {canEdit && (
             <div className="flex flex-wrap items-center gap-3">
               <Button type="submit" disabled={componentPending}>
-                {componentPending ? "Saving…" : "Save component methods"}
+                {componentPending ? "Saving…" : "Save Component Assumptions"}
               </Button>
               {componentState.success && (
                 <span className="text-[12px] text-strong">{componentState.success}</span>
@@ -280,7 +280,7 @@ function ComponentRowFields({
             name={`method_${row.component}`}
             value={method}
             onChange={(e) => setMethod(e.target.value as ForecastMethod)}
-            aria-label={`${FUND_BALANCE_COMPONENT_LABELS[row.component]} forecast method`}
+            aria-label={`${FUND_BALANCE_COMPONENT_LABELS[row.component]} projection method`}
             className="h-8 w-full min-w-[150px] rounded-lg border border-line bg-white px-2 text-[12px] text-[#060606] outline-none transition-colors focus:border-brand"
           >
             {FORECAST_METHOD_VALUES.map((m) => (
@@ -324,7 +324,7 @@ function ComponentRowFields({
 }
 
 /**
- * The forecast methods, explained — one line per method, in the order they appear in the
+ * The projection methods, explained — one line per method, in the order they appear in the
  * dropdown. This used to sit in the table's fourth column, one copy per row, which spent a
  * fifth of panel C's width restating four fixed sentences; the reader who needs them needs
  * them once, while choosing, and never again. So they live behind the `?` in the header,
@@ -338,7 +338,7 @@ function MethodHelp() {
     <span className="relative flex-none">
       <button
         type="button"
-        aria-label="What each forecast method does"
+        aria-label="What each projection method does"
         className="peer flex h-4.5 w-4.5 items-center justify-center rounded-full text-[#5b4bb5] opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:opacity-100"
       >
         <Icon name="help" size={15} aria-hidden="true" />
@@ -350,7 +350,7 @@ function MethodHelp() {
         className="pointer-events-none absolute right-0 top-5.5 z-20 w-65.5 rounded-lg border border-line bg-white p-2.5 text-left opacity-0 shadow-[0_10px_24px_rgba(9,20,38,0.14)] transition-opacity peer-hover:opacity-100 peer-focus-visible:opacity-100"
       >
         <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#5b4bb5]">
-          Forecast methods
+          Projection methods
         </span>
         <span className="mt-1.5 flex flex-col gap-1.5">
           {FORECAST_METHOD_VALUES.map((m) => (

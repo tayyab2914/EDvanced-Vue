@@ -182,40 +182,69 @@ export function FundLevelNotice({ subject }: { subject: string }) {
 }
 
 /**
- * A read-only echo of the district's own thresholds, beside the figures they judge.
+ * A read-only echo of the district’s own thresholds, beside the figures they judge.
  *
- * §5.16's argument for showing these to Viewers is that someone being measured should be
+ * §5.16’s argument for showing these to Viewers is that someone being measured should be
  * able to read the ruler. The "Manage" link appears only for those who can actually change
  * them — a link that leads to a page you cannot use is worse than no link.
+ *
+ * Rows may be GROUPED. Alert thresholds come in pairs — a warning and a critical, once for
+ * the position as it stands and once for the forecast — and the flat list had to carry that
+ * split inside every label ("Current position — warning"), which repeated the group name on
+ * each row and left the two pairs reading as four unrelated settings. A heading states the
+ * split once and lets each row be the word that actually differs.
  */
+export interface PolicyEchoRow {
+  label: string;
+  value: string;
+  note?: string;
+}
+
 export function PolicyEchoCard({
   rows,
+  groups,
   manageHref,
   manageLabel = MANAGE.policies,
 }: {
-  rows: { label: string; value: string; note?: string }[];
+  rows?: PolicyEchoRow[];
+  /** Named sets of rows, each with its own heading and one line saying what it judges. */
+  groups?: { label: string; note?: string; rows: PolicyEchoRow[] }[];
   manageHref?: string;
   manageLabel?: string;
 }) {
+  const sections = groups ?? [{ label: "", note: undefined, rows: rows ?? [] }];
+
   return (
     <div>
-      <dl className="flex flex-col">
-        {rows.map((r, i) => (
-          <div
-            key={r.label}
-            className={cn(
-              "flex items-baseline justify-between gap-3 py-2",
-              i < rows.length - 1 && "border-b border-line-soft",
-            )}
-          >
-            <dt className="min-w-0 flex-1 text-[12px] text-[#060606]">
-              {r.label}
-              {r.note && <span className="block text-[11px] text-[#060606]">{r.note}</span>}
-            </dt>
-            <dd className="flex-none text-[12px] font-semibold tabular-nums text-[#060606]">{r.value}</dd>
-          </div>
-        ))}
-      </dl>
+      {sections.map((g, gi) => (
+        <div key={g.label || gi} className={cn(gi > 0 && "mt-4")}>
+          {g.label && (
+            <div className="mb-1">
+              <p className="text-[12px] font-semibold text-[#060606]">{g.label}</p>
+              {g.note && <p className="text-[11px] text-[#060606]">{g.note}</p>}
+            </div>
+          )}
+          <dl className="flex flex-col">
+            {g.rows.map((r, i) => (
+              <div
+                key={r.label}
+                className={cn(
+                  "flex items-baseline justify-between gap-3 py-2",
+                  i < g.rows.length - 1 && "border-b border-line-soft",
+                )}
+              >
+                <dt className="min-w-0 flex-1 text-[12px] text-[#060606]">
+                  {r.label}
+                  {r.note && <span className="block text-[11px] text-[#060606]">{r.note}</span>}
+                </dt>
+                <dd className="flex-none text-[12px] font-semibold tabular-nums text-[#060606]">
+                  {r.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
       {manageHref && (
         <Link
           href={manageHref}
@@ -228,6 +257,7 @@ export function PolicyEchoCard({
     </div>
   );
 }
+
 
 /**
  * "1000 — General Fund" — the small tag that says WHERE a figure came from.
@@ -251,7 +281,7 @@ export function FundTag({
   href,
 }: {
   label: string;
-  /** "$1.24M behind pace" — why this fund is being named. */
+  /** "$1.24M below expected" — why this fund is being named. */
   detail?: string;
   href?: string;
 }) {

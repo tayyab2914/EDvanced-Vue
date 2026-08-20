@@ -9,7 +9,7 @@ import { CapsuleStatStrip, type CapsuleStat } from "@/components/dashboard/reven
 import type { StatusRung } from "@/lib/dashboard/status";
 
 /**
- * "Fund balance trend" — a transcription of Figma 55:3838, on the same spline kit as the
+ * "Fund Balance Trend" — a transcription of Figma 55:3838, on the same spline kit as the
  * Revenue trend card: the total in Indigo/500 navy over its #EAFAFE wash, the unassigned
  * reserve in Primary/500 teal over #F5FEF8, dot markers on both, #F2F4F7 gridlines, 12px
  * #667085 labels and the "Month" caption, the stacked legend top right with the reference
@@ -117,7 +117,7 @@ function LegendSwatch({ color, hatched }: { color?: string; hatched?: boolean })
 }
 
 export function FundBalanceTrendCard({
-  title = "Fund balance trend",
+  title = "Fund Balance Trend",
   subtitle,
   rung,
   categories,
@@ -160,16 +160,16 @@ export function FundBalanceTrendCard({
         <ul className="flex flex-row flex-wrap gap-x-[12px] gap-y-[4px] sm:flex-none sm:flex-col sm:gap-[4px] sm:pt-[6px]">
           <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
             <LegendSwatch color="rgba(2,40,89,0.6)" />
-            Ending FB (Actual)
+            Ending Fund Balance
           </li>
           <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
             <LegendSwatch color="rgba(3,140,140,0.6)" />
-            Unassigned (Actual)
+            Unassigned Fund Balance
           </li>
           {hasBudgeted && (
             <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
               <LegendSwatch hatched />
-              Ending FB (Budgeted)
+              Budgeted Ending Fund Balance
             </li>
           )}
         </ul>

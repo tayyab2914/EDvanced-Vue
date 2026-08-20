@@ -4,14 +4,14 @@ import { CARD_TITLE, CARD_BODY } from "@/components/dashboard/type-scale";
 import { OverviewPanel, ArrowGlyph } from "@/components/dashboard/overview-panel";
 
 /**
- * "Key insight" — the 64:9404 revision of the page's closing statement (previously the
+ * "Key Insight" — the 64:9404 revision of the page's closing statement (previously the
  * 30px 46:3284 banner): a slim 95px strip with a 14px bold title over the sentence at
  * 12px in the design's 50% black, and the violet "View Financial Policies" capsule
- * sitting at the strip's bottom right. The copy is the caller's — the same sentence the
- * old info bar carried, so nothing the page used to say is lost.
+ * sitting at the strip's bottom right. The copy is the caller's — see the note above the
+ * `keyInsight` sentence in app/(district)/revenues/page.tsx.
  */
 export function RevenueInsightCard({
-  title = "Key insight",
+  title = "Key Insight",
   ctaLabel = "View Financial Policies",
   ctaHref,
   children,

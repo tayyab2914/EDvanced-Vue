@@ -488,7 +488,7 @@ const pace = fire({ ...healthy(), forecastReservePercent: d("2.5") }).find(
   (x) => x.id === "FORECAST_WARNING",
 )!.hit!.message;
 assert(
-  pace.includes("On the current pace"),
+  pace.includes("current projected pace"),
   `the pace alert distinguishes itself from the budget projection (got "${pace}")`,
 );
 assert(

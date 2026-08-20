@@ -30,8 +30,8 @@ export default async function FundBalanceAlertsTab({
   return (
     <FundBalanceShell scope={scope} active="/fund-balance/alerts" alertCount={fbAlerts.length}>
       <SectionCard
-        title="Current position"
-        subtitle="Raised from the reserve as it stands"
+        title="Current Position"
+        subtitle="Based on the current fund balance position"
         footer={GO_TO.policies}
         footerHref="/policies"
       >
@@ -56,7 +56,7 @@ export default async function FundBalanceAlertsTab({
 
       <SectionCard
         title="Forecast"
-        subtitle="Raised from the projected year-end reserve"
+        subtitle="Based on the projected year-end fund balance"
         footer={GO_TO.forecast}
         footerHref={options.link(
           `/fund-balance/forecast?fy=${scope.fiscalYear}&period=${scope.period}`,

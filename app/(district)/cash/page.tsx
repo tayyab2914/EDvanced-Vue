@@ -14,6 +14,7 @@ import {
   daysCashOnHand,
 } from "@/lib/finance/cash";
 import { trendNarrative } from "@/lib/alerts/insights";
+import { MONTH_NAMES, periodToMonth } from "@/lib/periods/fiscal";
 import { ladder, bands as statusBands } from "@/lib/dashboard/status";
 import {
   compactMoney,
@@ -251,7 +252,12 @@ export default async function CashDashboard({
             id: "NEGATIVE_RUN",
             severity: "INFORMATIONAL" as const,
             title: "Cash flow trend",
-            message: `Net cash flow has been negative in ${run.negative} of the last ${run.of} months with data.`,
+            // "for the last 3" only where every month in the window ran negative; a 2-of-3
+            // window is a different fact and says so.
+            message:
+              run.negative === run.of
+                ? `Net cash flow was negative for the last ${run.of} reporting months.`
+                : `Net cash flow was negative in ${run.negative} of the last ${run.of} reporting months.`,
           },
         ]
       : []),
@@ -262,15 +268,23 @@ export default async function CashDashboard({
     subject: `${scope.fund ? scope.fund.name : "All funds"} cash`,
     current: summary.endingCash,
     previous: summary.previousEndingCash,
-    periodLabel: scope.label,
-    previousLabel: previous ? `period ${previous.period}` : "the prior period",
+    // The month alone — "ending September at $41.79M". The card sits under a page header
+    // and a period pill that both carry the fiscal year, so spelling out
+    // "September 2026 (FY 2026-27)" mid-sentence was the third printing of it.
+    periodLabel: MONTH_NAMES[periodToMonth(scope.period, scope.startMonth) - 1],
+    // "the prior MONTH" only when the month before this one actually committed data —
+    // `previous` walks back past empty periods, and calling a three-month gap a month
+    // would misstate the change the sentence then quantifies. Same rule as the executive
+    // dashboard's fund balance caption.
+    previousLabel:
+      previous?.period === scope.period - 1 ? "the prior month" : "the prior period",
   });
   const coverage =
     daysCash === null
       ? "Days cash on hand cannot be computed until a cash file and an adopted expenditure budget are both committed."
-      : `The district currently has ${fmtDays(daysCash)} days of cash on hand, which is ${
-          daysVsTarget !== null && daysVsTarget < 0 ? "below" : "at or above"
-        } the board target of ${cashT.warning} days, and sits in ${cashRung} status.`;
+      : `The district has ${fmtDays(daysCash)} days of cash on hand, ${
+          daysVsTarget !== null && daysVsTarget < 0 ? "falling short of" : "exceeding"
+        } the Board target of ${cashT.warning} days and remaining in ${cashRung} status.`;
 
   const summaryHref = options.query
     ? `/cash?${options.query}&view=summary`
@@ -892,7 +906,7 @@ export default async function CashDashboard({
       <div className="grid grid-cols-1 items-stretch gap-x-[10px] gap-y-[12px] xl:grid-cols-[minmax(0,2.45fr)_minmax(0,1fr)]">
         {/* row 1 — the by-fund ledger beside the health dial */}
         <CashByFundTable
-          subtitle={`${subject} · beginning + receipts − disbursements`}
+          subtitle="Beginning Cash + Receipts − Disbursements = Ending Cash"
           ctaLabel={VIEW_DETAILS.cashPosition}
           ctaHref={detailsHref}
           rows={tableRows}
@@ -918,7 +932,7 @@ export default async function CashDashboard({
 
         {/* row 2 — the trend beside the composition */}
         <CashTrendCard
-          subtitle={subject}
+          subtitle="Ending cash balance by month"
           ctaLabel={VIEW_DETAILS.cashPosition}
           ctaHref={detailsHref}
           categories={forecastLabels}
@@ -930,7 +944,7 @@ export default async function CashDashboard({
         />
 
         <CashCompositionCard
-          subtitle="Where the balance is held, as reported on the cash file"
+          subtitle="Breakdown of ending cash balance"
           caption={`By ${view === "fund" ? "fund" : "cash category"} · ${scope.fund ? scope.fund.name : "all funds"}`}
           control={<PillSelect options={CASH_VIEWS} value={view} size="sm" />}
           rows={compositionRows}
@@ -952,13 +966,11 @@ export default async function CashDashboard({
           <OverviewPanel className="flex flex-1 flex-wrap items-center justify-between gap-x-[24px] gap-y-[10px] p-[18px]">
             <div className="min-w-0 flex-1 basis-[280px]">
               <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-[#060606]">
-                Key insight
+                Key Insight
               </p>
               <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-[#060606]">
                 {movement ? `${movement} ` : ""}
-                {coverage} Cash balances are unaudited and reflect the file committed for{" "}
-                {scope.label}; the 30-day projection is straight-lined from recent months and
-                no alert reads it.
+                {coverage}
               </p>
             </div>
             <Link
@@ -974,7 +986,7 @@ export default async function CashDashboard({
         </div>
 
         <RevenueAlertsCard
-          title="Cash alerts"
+          title="Cash Alerts"
           alerts={cashAlerts.map((a) => ({
             id: a.id,
             severity: a.severity,

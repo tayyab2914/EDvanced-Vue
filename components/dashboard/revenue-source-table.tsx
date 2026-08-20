@@ -5,7 +5,7 @@ import { PacePill, PillLink } from "@/components/dashboard/revenue-shared";
 import type { PaceStatus } from "@/lib/dashboard/pace";
 
 /**
- * "Revenue by major source" — a transcription of Figma 46:3339.
+ * "Revenues by Major Source" — a transcription of Figma 46:3339.
  *
  * A 20px title with the white "Go to Revenue Details" capsule at the right, then a six-column
  * table: 14px regular headers, bold 14px source names that wrap inside a 161px column, the
@@ -49,7 +49,7 @@ export interface SourceRow {
  * the container width, which is the same for all three — see GUTTER.
  */
 const COLS =
-  "grid grid-cols-[minmax(150px,280px)_minmax(76px,1fr)_minmax(76px,1fr)_minmax(56px,0.8fr)_minmax(84px,1fr)_84px] items-center gap-x-[12px]";
+  "grid grid-cols-[minmax(150px,280px)_minmax(76px,1fr)_minmax(76px,1fr)_minmax(72px,0.8fr)_minmax(84px,1fr)_84px] items-center gap-x-[12px]";
 
 /**
  * The other half of that: the body scrolls, so its scrollbar eats into its content box and
@@ -67,7 +67,7 @@ const GUTTER = "overflow-y-auto [scrollbar-gutter:stable] [scrollbar-width:thin]
 const NUM = "whitespace-nowrap text-right tabular-nums text-[14px] leading-normal text-[#060606]";
 
 export function RevenueSourceTable({
-  title = "Revenue by major source",
+  title = "Revenues by Major Source",
   ctaLabel = "Go to Revenue Details",
   ctaHref,
   rows,
@@ -96,26 +96,26 @@ export function RevenueSourceTable({
           three grids cannot drift apart. Above the floor it costs nothing — the container is
           wider than `min-w`, so no scrollbar appears and the desktop layout is untouched. */}
       <div className="-mx-[18px] overflow-x-auto px-[18px]">
-        <div className="min-w-[600px]">
+        <div className="min-w-[620px]">
       {/* ---- column headers ---- */}
       <div className={cn(COLS, GUTTER, "mt-[22px] pb-[10px]", COLUMN_HEADER)}>
-        <span>Indicator</span>
+        <span>Revenue Source</span>
         <span className="text-right">
+          Annual
+          <br />
           Budget
-          <br />
-          (full year)
         </span>
         <span className="text-right">
-          Actual
+          Collected
           <br />
-          (YTD)
+          YTD
         </span>
         <span className="text-right">
-          % of
+          %
           <br />
-          budget
+          Collected
         </span>
-        <span className="text-right">Variance $</span>
+        <span className="text-right">Variance</span>
         <span className="text-right">Status</span>
       </div>
       <div aria-hidden className="h-px w-full bg-[#e7e7e7]" />

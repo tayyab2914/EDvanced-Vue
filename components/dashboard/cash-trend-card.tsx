@@ -138,7 +138,7 @@ export function CashTrendCard({
           <ul className="flex flex-row flex-wrap gap-x-[12px] gap-y-[4px] sm:flex-none sm:flex-col sm:gap-[4px] sm:pt-[6px]">
             <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
               <span aria-hidden className="size-[9px] flex-none rounded-[2px]" style={{ background: "rgba(3,140,140,0.6)" }} />
-              Ending cash balance
+              Ending Cash
             </li>
             <li className="flex items-center gap-[5px] text-[10px] leading-[2] tracking-[0.08px] text-[#060606]">
               <span
@@ -148,7 +148,7 @@ export function CashTrendCard({
                   backgroundImage: `repeating-linear-gradient(135deg, ${FORECAST} 0px, ${FORECAST} 1px, transparent 1px, transparent 3px)`,
                 }}
               />
-              30-day projection
+              30-Day Projection
             </li>
           </ul>
         )}

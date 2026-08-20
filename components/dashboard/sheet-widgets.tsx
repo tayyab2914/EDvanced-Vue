@@ -138,7 +138,7 @@ export function SheetBudgetBars({
   title,
   summary,
   format,
-  unit = "Millions",
+  unit = "Category",
 }: {
   rows: BudgetBarRow[];
   /** green = revenues, purple = expenditures — the two cards' only difference. */
@@ -176,12 +176,12 @@ export function SheetBudgetBars({
           </li>
           <li className="flex items-center gap-[4px]">
             <span className="size-[7px] rounded-[2px] bg-[rgba(6,109,255,0.6)]" />
-            <span className="text-[7.5px] leading-[9px] text-[#060606]">Budget (YTD)</span>
+            <span className="text-[7.5px] leading-[9px] text-[#060606]">Expected (YTD)</span>
           </li>
           <li className="flex items-center gap-[4px]">
             <span className="size-[7px] rounded-[2px]" style={HATCH_SWATCH} />
             <span className="text-[7.5px] leading-[9px] text-[#060606]">
-              Budget Full year
+              Annual Budget
             </span>
           </li>
         </ul>
@@ -206,7 +206,7 @@ export function SheetBudgetBars({
               </span>
             ))}
           </span>
-          <span className="text-[7.5px] leading-[9px] text-[#060606]">Full year</span>
+          <span className="text-[7.5px] leading-[9px] text-[#060606]">Annual</span>
           <span className="text-right text-[7.5px] leading-[9px] text-[#060606]">Status</span>
         </div>
 
@@ -340,8 +340,8 @@ export function SheetBudgetBars({
             <tr>
               <th scope="col">Category</th>
               <th scope="col">Actual (YTD)</th>
-              <th scope="col">Budget (YTD)</th>
-              <th scope="col">Budget (full year)</th>
+              <th scope="col">Expected (YTD)</th>
+              <th scope="col">Annual Budget</th>
               <th scope="col">Status</th>
             </tr>
           </thead>

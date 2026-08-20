@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 
 /**
- * The "Key insight" bar under the Fund Balance Trend chart — Figma 3:12493, which is a
+ * The "Key Insight" bar under the Fund Balance Trend chart — Figma 3:12493, which is a
  * macOS "Mini Tip" popover instance: white card, soft shadow, an arrow notch pointing up
  * at the card it annotates, and a close control.
  *
@@ -30,7 +30,7 @@ export function OverviewInsightTip({ children }: { children: ReactNode }) {
       <div className="flex items-start gap-[12px]">
         <div className="min-w-0 flex-1">
           <p className="text-[16px] font-semibold leading-[22px] tracking-[-0.43px] text-[#060606]">
-            Key insight 💡
+            Key Insight 💡
           </p>
           <p className="mt-[4px] text-[14px] leading-[20px] tracking-[-0.23px] text-[#060606]">
             {children}

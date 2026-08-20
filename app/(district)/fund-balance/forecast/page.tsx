@@ -38,6 +38,7 @@ import { PageHeader } from "@/components/page-header";
 import { cn } from "@/lib/cn";
 import {
   FUND_BALANCE_COMPONENT_LABELS,
+  FORECAST_METHOD_LABELS,
   type FundBalanceComponent,
   type ForecastMethod,
 } from "@/lib/enums";
@@ -259,6 +260,9 @@ export default async function ForecastPage({
    * ===================================================================================
    */
   const years = Math.max(projection.length - 1, 1);
+  // The page says "three-year" in two places. `years` is derived from what was actually
+  // projected, so spelling it out here keeps the sentence true if the horizon ever moves.
+  const horizon = ["", "one", "two", "three", "four", "five"][years] ?? String(years);
 
   return (
     <FundBalanceShell scope={scope} active="/fund-balance/forecast" alertCount={fbAlerts.length}>
@@ -354,8 +358,8 @@ export default async function ForecastPage({
       {/* ================= the calculation flow ================= */}
       <OverviewPanel className="p-[18px]">
         <OverviewPanelHeader
-          title="1. Forecast assumptions"
-          subtitle="Set your assumptions for revenues, expenditures and fund balance components."
+          title="1. Forecast Assumptions"
+          subtitle={`Set assumptions for revenue, expenditures, and fund balance components used in the ${horizon}-year forecast.`}
         />
         <div className="mt-[10px]">
           <AssumptionsForm
@@ -384,8 +388,10 @@ export default async function ForecastPage({
 
       <OverviewPanel className="p-[18px]">
         <OverviewPanelHeader
-          title="2. Fund balance forecast"
-          subtitle="Financial health view · forecast results update automatically when you adjust assumptions"
+          title="2. Fund Balance Forecast"
+          subtitle={`${horizon.charAt(0).toUpperCase()}${horizon.slice(
+            1,
+          )}-year outlook · results update automatically as assumptions change`}
         />
         <div className="mt-[10px]">
           <DataTable
@@ -406,7 +412,7 @@ export default async function ForecastPage({
                   <>
                     <span className="block">FY {y.fiscalYear}</span>
                     <span className="mt-0.5 block text-[11px] font-normal text-[#060606]">
-                      {y.index === 0 ? "current" : `forecast ${y.index}`}
+                      {y.index === 0 ? "Current" : `Year ${y.index}`}
                     </span>
                   </>
                 ),
@@ -414,22 +420,22 @@ export default async function ForecastPage({
               })),
             ]}
             rows={[
-              moneyRow("Beginning total fund balance", (y) => ({ value: y.beginning }), {
+              moneyRow("Beginning Fund Balance", (y) => ({ value: y.beginning }), {
                 emphasis: true,
               }),
-              moneyRow("(+) Total revenues", (y) => ({ value: y.projectedRevenue }), {
+              moneyRow("+ Projected Revenues", (y) => ({ value: y.projectedRevenue }), {
                 indent: true,
               }),
               moneyRow(
-                "(−) Total expenditures (recurring + additions)",
+                "− Projected Expenditures",
                 (y) => ({ value: y.projectedExpenditure, negative: true }),
                 { indent: true, tone: "negative" },
               ),
-              moneyRow("= Net surplus / (deficit)", (y) => ({ value: y.netChange }), {
+              moneyRow("= Projected surplus / (deficit)", (y) => ({ value: y.netChange }), {
                 emphasis: true,
                 tone: "auto",
               }),
-              moneyRow("Ending total fund balance", (y) => ({ value: y.total }), {
+              moneyRow("Projected Ending Fund Balance", (y) => ({ value: y.total }), {
                 emphasis: true,
               }),
               componentRow("RESTRICTED"),
@@ -443,7 +449,7 @@ export default async function ForecastPage({
               {
                 id: "reserve-percent",
                 cells: {
-                  row: { value: "Unassigned fund balance % of revenues" },
+                  row: { value: "Unassigned Fund Balance %" },
                   ...Object.fromEntries(
                     projection.map((y) => [
                       y.fiscalYear,
@@ -455,7 +461,7 @@ export default async function ForecastPage({
               {
                 id: "status",
                 cells: {
-                  row: { value: "Reserve status", strong: true },
+                  row: { value: "Reserve Status", strong: true },
                   ...Object.fromEntries(
                     projection.map((y) => [
                       y.fiscalYear,
@@ -482,14 +488,14 @@ export default async function ForecastPage({
         </div>
 
         <p className="mt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]">
-          Percentages are each figure&apos;s share of that year&apos;s projected revenues.
-          Growth is applied from the current year&apos;s projected pace, not from the adopted
-          budget. Expenditure growth compounds on the recurring operating base only, so
-          one-time and carryforward spending does not build into future years.
+          Percentages represent each component&apos;s share of projected revenue for that
+          year. Revenue and expenditure growth is applied to the current projected operating
+          base, not the adopted budget. One-time and carryforward expenditures are excluded
+          from the recurring base and do not compound into future years.
           {projection.some((y) => y.componentsExceedTotal) && (
             <span className="mt-1 block text-[#b76a12]">
-              In at least one year the designated components add up to more than the projected
-              ending balance, which leaves a negative unassigned reserve.
+              In at least one projected year, designated fund balance components exceed the
+              projected ending fund balance, resulting in a negative unassigned fund balance.
             </span>
           )}
         </p>
@@ -499,8 +505,8 @@ export default async function ForecastPage({
       <div className="grid grid-cols-1 items-stretch gap-x-[10px] gap-y-[12px] xl:grid-cols-[minmax(0,1.76fr)_minmax(0,1fr)]">
         <OverviewPanel className="flex flex-col p-[18px]">
           <OverviewPanelHeader
-            title="Reserve trend"
-            subtitle="Projected unassigned fund balance as a share of revenues"
+            title="Unassigned Fund Balance Trend"
+            subtitle="Projected unassigned fund balance as a % of projected General Fund revenue"
           />
           <div className="mt-[10px]">
             <LineChart
@@ -512,7 +518,7 @@ export default async function ForecastPage({
               zeroBased={false}
               legend={false}
               thresholds={[
-                { at: reserveT.target, label: `Target ${reserveT.target}%`, color: "var(--color-strong-mark)" },
+                { at: reserveT.target, label: `Board Target ${reserveT.target}%`, color: "var(--color-strong-mark)" },
                 { at: fcT.warning, label: `Warning ${fcT.warning}%`, color: "var(--color-monitor-mark)" },
                 { at: fcT.critical, label: `Critical ${fcT.critical}%`, color: "var(--color-action-mark)" },
               ]}
@@ -534,7 +540,7 @@ export default async function ForecastPage({
 
         <OverviewPanel className="flex flex-col p-[18px]">
           <div className="flex flex-wrap items-center justify-between gap-[10px]">
-            <OverviewPanelHeader title="Forecast alerts" />
+            <OverviewPanelHeader title="Forecast Alerts" />
             <PillLink href={options.link("/alerts")} arrow="#FD4438" className="border-[0.8px] border-[#e7e7e7]">
               {GO_TO.alerts}
             </PillLink>
@@ -550,7 +556,15 @@ export default async function ForecastPage({
             />
           </div>
 
-          <dl className="mt-auto flex flex-col border-t border-[#e7e7e7] pt-[10px]">
+          {/* The methods chosen in panel C of card 1, restated where the alerts are read —
+              a reserve alert is only interpretable next to the rules that produced it. It
+              had no heading, so four "Carry Forward"s sat under the alert list looking like
+              part of it. */}
+          <div className="mt-auto border-t border-[#e7e7e7] pt-[10px]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.05em] text-[#060606]">
+              Fund Balance Component Methods
+            </p>
+            <dl className="mt-[4px] flex flex-col">
             {componentRules.map((r) => (
               <div
                 key={r.component}
@@ -558,11 +572,12 @@ export default async function ForecastPage({
               >
                 <dt className="text-[#060606]">{FUND_BALANCE_COMPONENT_LABELS[r.component]}</dt>
                 <dd className="text-right font-semibold text-[#060606]">
-                  {methodLabel(methodOf.get(r.component))}
+                  {FORECAST_METHOD_LABELS[methodOf.get(r.component) ?? "CARRY_FORWARD"]}
                 </dd>
               </div>
             ))}
-          </dl>
+            </dl>
+          </div>
         </OverviewPanel>
       </div>
 
@@ -572,10 +587,17 @@ export default async function ForecastPage({
           Note
         </p>
         <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-[#060606]">
-          These projections extrapolate the current year&apos;s pace and apply your own growth
-          assumptions and component rules. They are a planning aid, not a budget. Statutory
-          minimum {statutoryMinimum.toFixed(2)}% · forecast warning {fcT.warning.toFixed(2)}% ·
-          forecast critical {fcT.critical.toFixed(2)}%.
+          Forecasts are based on the current projected operating base, user-defined growth
+          assumptions, and selected fund balance component methods. Results are intended for
+          planning purposes and do not represent an adopted budget.
+        </p>
+        {/* The four thresholds on their own line — they were the tail of the paragraph
+            above, where a reader looking up "what is the warning again" had to read a
+            disclaimer to find it. */}
+        <p className="mt-[6px] text-[12px] leading-[16px] tracking-[-0.23px] text-[#060606]">
+          Board target {reserveT.target.toFixed(2)}% · Statutory minimum{" "}
+          {statutoryMinimum.toFixed(2)}% · Warning {fcT.warning.toFixed(2)}% · Critical{" "}
+          {fcT.critical.toFixed(2)}%
         </p>
         {userCan(user, "configure_district") && (
           <Link
@@ -591,16 +613,3 @@ export default async function ForecastPage({
   );
 }
 
-
-function methodLabel(method: ForecastMethod | undefined): string {
-  switch (method) {
-    case "ONE_TIME_CARRYFORWARD":
-      return "One-time carryforward";
-    case "INCREASE_BY_PERCENT":
-      return "Increase by %";
-    case "MANUAL_OVERRIDE":
-      return "Manual override";
-    default:
-      return "Carry forward";
-  }
-}

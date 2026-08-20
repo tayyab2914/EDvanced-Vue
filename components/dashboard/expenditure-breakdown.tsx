@@ -73,7 +73,7 @@ export interface BreakdownBarRow {
  * layout is untouched.
  */
 const COLS =
-  "grid grid-cols-[minmax(150px,1.4fr)_minmax(64px,1fr)_minmax(64px,1fr)_minmax(70px,1fr)_minmax(64px,1fr)_minmax(52px,0.8fr)_minmax(56px,auto)] items-center gap-x-[12px]";
+  "grid grid-cols-[minmax(150px,1.4fr)_minmax(64px,1fr)_minmax(64px,1fr)_minmax(78px,1fr)_minmax(70px,1fr)_minmax(60px,0.8fr)_minmax(56px,auto)] items-center gap-x-[12px]";
 
 const HATCH: React.CSSProperties = {
   backgroundImage:
@@ -141,7 +141,7 @@ export function ExpenditureBreakdownSection({
             key={value}
             className={cn(target !== null && "rev-swap-in", "-mx-[18px] overflow-x-auto px-[18px]")}
           >
-            <div className="min-w-[620px]">
+            <div className="min-w-[650px]">
             {/* column headers */}
             <div
               className={cn(
@@ -150,11 +150,30 @@ export function ExpenditureBreakdownSection({
               )}
             >
               <span>{column}</span>
-              <span>Budget</span>
-              <span>Actual (YTD)</span>
+              {/* Two lines each, as the sibling tables set them: at these widths a heading
+                  that wraps on its own breaks wherever the track happens to end, and the
+                  seven headings then sat on six different baselines. */}
+              <span>
+                Annual
+                <br />
+                Budget
+              </span>
+              <span>
+                Spent
+                <br />
+                YTD
+              </span>
               <span>Encumbered</span>
-              <span>Available</span>
-              <span>Utilized</span>
+              <span>
+                Available
+                <br />
+                Budget
+              </span>
+              <span>
+                %
+                <br />
+                Utilized
+              </span>
               <span>Status</span>
             </div>
             <div aria-hidden className="h-px w-full bg-[#e7e7e7]" />

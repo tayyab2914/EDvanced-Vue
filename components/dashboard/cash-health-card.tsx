@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { CARD_TITLE } from "@/components/dashboard/type-scale";
+import { CARD_TITLE, CARD_SUBTITLE } from "@/components/dashboard/type-scale";
 import { OverviewPanel, PanelRungPill } from "@/components/dashboard/overview-panel";
 import type { StatusRung } from "@/lib/dashboard/status";
 
@@ -49,12 +49,15 @@ function arc(fromPct: number, toPct: number): string {
 
 export function CashHealthCard({
   title = "Cash Health",
+  subtitle = "Days cash on hand compared to policy",
   days,
   rung,
   target,
   critical,
 }: {
   title?: string;
+  /** What the dial is measuring — the sibling cards all carry one under the title. */
+  subtitle?: string;
   /** Days cash on hand — null when it cannot be computed. */
   days: number | null;
   rung: StatusRung;
@@ -115,6 +118,7 @@ export function CashHealthCard({
       <h2 className={cn("pl-[16px]", CARD_TITLE)}>
         {title}
       </h2>
+      {subtitle && <p className={cn("pl-[16px]", CARD_SUBTITLE)}>{subtitle}</p>}
 
       {/* ---- the dial ---- */}
       <div className="mt-[10px] flex justify-center">

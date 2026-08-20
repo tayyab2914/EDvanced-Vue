@@ -410,11 +410,18 @@ export default async function ExecutiveDashboard({
           reservePct >= reserveT.target ? "at or above" : "below"
         } the district target of ${reserveT.target.toFixed(2)}%.`
     : trendNarrative({
-        subject: `${scope.fund ? scope.fund.name : "All funds"} ending fund balance`,
+        // "Total fund balance", not "All funds ending fund balance": the card's own title
+        // and the series legend beside the chart already say which balance and whose, so
+        // the caption only has to name the line the reader is looking at.
+        subject: scope.fund ? `${scope.fund.name} fund balance` : "Total fund balance",
         current: endingFundBalance,
         previous: previous?.fundBalance ?? null,
-        periodLabel: scope.label,
-        previousLabel: previous ? `period ${previous.period}` : "the prior period",
+        // No `periodLabel` — the card's "As of" line already carries the period. The
+        // comparison is only "the prior MONTH" when the month before this one actually
+        // committed data; `previousPoint` walks back past empty periods, and calling a
+        // three-month gap a month would misstate the change the sentence then quantifies.
+        previousLabel:
+          previous?.period === scope.period - 1 ? "the prior month" : "the prior period",
       });
 
   // ---------- §3.2c cash position ----------
@@ -735,7 +742,8 @@ export default async function ExecutiveDashboard({
   const revenueCard = (
     <OverviewBudgetCard
       title="Revenues vs Budget (YTD)"
-      subtitle="Top five sources compared to expected YTD collections"
+      subtitle="Top five revenue sources compared to expected YTD collections"
+      unit="Revenue Source"
       ctaLabel={GO_TO.revenues}
       ctaHref={options.link("/revenues")}
       accent="green"
@@ -748,8 +756,9 @@ export default async function ExecutiveDashboard({
 
   const expenditureCard = (
     <OverviewBudgetCard
-      title="Expenditures vs Budget (YTD)"
-      subtitle="By object, compared to expected YTD expenses"
+      title="Expenditures vs. Budget (YTD)"
+      subtitle="Expenditure objects compared to expected YTD spending"
+      unit="Expenditure Object"
       ctaLabel={GO_TO.expenditures}
       ctaHref={options.link("/expenditures")}
       accent="purple"
@@ -827,7 +836,7 @@ export default async function ExecutiveDashboard({
     <OverviewTrendCard
       compact
       title="Fund Balance Trend"
-      subtitle={isGeneralFund ? scopeDescription(scope) : "Policy Applies to General Funds Only"}
+      subtitle={isGeneralFund ? scopeDescription(scope) : "General Fund · Board reserve policy"}
       ctaLabel={GO_TO.fundBalance}
       ctaHref={options.link("/fund-balance")}
       badge={scope.fundLevelOnly ? <FundLevelOnly what="Fund balance is" /> : undefined}
@@ -863,13 +872,21 @@ export default async function ExecutiveDashboard({
    * walk beneath — see components/dashboard/overview-cash-card.tsx. The gauge's bands are
    * still the district's own thresholds via `statusBands(cashT)`, never the mockup's.
    */
+  // The period, in the two halves the cash card's subtitle sets apart. The fiscal year's
+  // hyphen becomes an EN DASH: "2026–27" is a span of years, and the hyphen it arrives with
+  // is the URL parameter's, not typography.
+  const asOfMonth = scope.label.replace(/\s*\(FY[^)]*\)\s*$/, "");
+  const fiscalYearLabel = scope.fiscalYear.replace(/-/g, "–");
+
   const cashCard = (
     <OverviewCashCard
       compact
-      title="Cash position"
-      // `scope.label` already ends in "(FY 2026-27)" for period scopes; appending the year
-      // again printed it twice — a duplication old enough that the mockup transcribed it.
-      subtitle={`As of ${scope.label}${scope.label.includes("FY") ? "" : ` (FY ${scope.fiscalYear})`}`}
+      title="Cash Position"
+      // `scope.label` is "September 2026 (FY 2026-27)" — the period selector's own label,
+      // which parenthesises the fiscal year (and which the mockup transcribed as-is, year
+      // printed twice, because the page used to append it again). The card sets the two
+      // halves side by side instead: "As of September 2026 · FY 2026–27".
+      subtitle={`As of ${asOfMonth} · FY ${fiscalYearLabel}`}
       ctaLabel={GO_TO.cash}
       ctaHref={options.link("/cash")}
       badge={scope.fundLevelOnly ? <FundLevelOnly what="Cash is" /> : undefined}
@@ -1056,7 +1073,7 @@ export default async function ExecutiveDashboard({
                     />
                   </SheetCard>
 
-                  <SheetCard title="Expenditures vs Budget (YTD)" note="By object">
+                  <SheetCard title="Expenditures vs. Budget (YTD)" note="By object">
                     <SheetBudgetBars
                       accent="purple"
                       title="Expenditures against budget"

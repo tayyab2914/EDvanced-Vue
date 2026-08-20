@@ -3,7 +3,7 @@ import { ChartFigure, ChartEmpty } from "@/components/dashboard/charts/chrome";
 import { OverviewPanel, OverviewPanelHeader } from "@/components/dashboard/overview-panel";
 
 /**
- * "Budget utilization trend" — a transcription of Figma 55:3483, on the same chart kit as
+ * "Budget Utilization Trend" — a transcription of Figma 55:3483, on the same chart kit as
  * the Revenue variance card: #F2F4F7 gridlines, #667085 labels, the design's magenta
  * columns rounded only at the tip, the bold value tag at each tip, and the district's OWN
  * thresholds drawn as tagged dashed rules — warning in the axis grey, critical in red.
@@ -41,8 +41,8 @@ function roundedTop(x: number, yTop: number, yBottom: number, w: number): string
 }
 
 export function ExpenditureUtilizationCard({
-  title = "Budget utilization trend",
-  subtitle = "Spend plus encumbrances against your policy thresholds",
+  title = "Budget Utilization Trend",
+  subtitle = "Monthly budget utilization compared to established thresholds",
   categories,
   points,
   warning,

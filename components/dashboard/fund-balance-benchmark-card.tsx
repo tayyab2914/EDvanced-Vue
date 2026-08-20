@@ -3,7 +3,7 @@ import { OverviewPanel, OverviewPanelHeader } from "@/components/dashboard/overv
 import type { StatusBand, StatusRung } from "@/lib/dashboard/status";
 
 /**
- * "Fund balance %" — a transcription of Figma 55:4200, the policy benchmark strip on the
+ * "Unassigned Fund Balance" — a transcription of Figma 55:4200, the policy benchmark strip on the
  * redesign's card: the 12px segmented band over its 8%-black track (Action #EE201C,
  * Monitor #E65F2B, Acceptable #4AB1D9, Strong #1A932E — the exported fills), the value as
  * a tinted capsule riding above its own position with the design's short tick lines
@@ -40,8 +40,8 @@ const VALUE_PILL: Record<StatusRung, { bg: string; fg: string }> = {
 const BAND_NAME: Partial<Record<StatusRung, string>> = { "Action Required": "Action" };
 
 export function FundBalanceBenchmarkCard({
-  title = "Fund balance %",
-  subtitle = "Policy benchmark",
+  title = "Unassigned Fund Balance",
+  subtitle = "Compared to Board reserve policy",
   value,
   rung,
   bands,

@@ -4,7 +4,7 @@ import { resolveScope } from "@/lib/dashboard/scope";
 import { labelMode } from "@/lib/dashboard/label-mode";
 import { loadCore, reserveThresholds, forecastReserveThresholds } from "@/lib/dashboard/load";
 import { ladder, bands as statusBands, ruleOf } from "@/lib/dashboard/status";
-import { reserveCaption, reserveSubject } from "@/lib/dashboard/reserve";
+import { reserveCaption } from "@/lib/dashboard/reserve";
 import { percent, toNumber } from "@/lib/dashboard/format";
 import { MANAGE } from "@/lib/dashboard/cta";
 import { SectionCard } from "@/components/dashboard/section-card";
@@ -41,28 +41,31 @@ export default async function FundBalancePoliciesTab({
   return (
     <FundBalanceShell scope={scope} active="/fund-balance/policies" alertCount={fbAlerts.length}>
       <Row cols="2">
-        <SectionCard title="Reserve goals" info="What the district aims to hold, and what it is required to hold.">
+        <SectionCard
+          title="Fund Balance Goals"
+          info="What the district aims to hold, and what it is required to hold."
+        >
           <PolicyEchoCard
             rows={[
               {
-                label: "District target",
+                label: "District Target",
                 value: `${Number(policy.fundBalance.target).toFixed(2)}%`,
-                note: "What the district strives to maintain for long-term stability.",
+                note: "Long-term unassigned fund balance target.",
               },
               {
-                label: "Board policy minimum",
+                label: "Board Policy Minimum",
                 value: `${Number(policy.fundBalance.boardPolicyMinimum).toFixed(2)}%`,
-                note: "Required by board policy.",
+                note: "Minimum unassigned fund balance required by Board policy.",
               },
               {
-                label: "State minimum (required reserve)",
+                label: "State Required Reserve",
                 value: `${Number(policy.fundBalance.stateMinimum).toFixed(2)}%`,
-                note: "Required by state law, and the reserve the breakdown separates from excess unassigned.",
+                note: "Minimum reserve required under Florida law.",
               },
               {
                 // The one setting on this screen that is not a threshold — it decides what
                 // every OTHER number here is a percentage of. See lib/enums.ts.
-                label: "Measurement basis",
+                label: "Measurement Basis",
                 value: reserve?.basis === "EXPENDITURE" ? "Expenditures" : "Revenue",
                 note:
                   reserve?.basis === "EXPENDITURE"
@@ -75,21 +78,28 @@ export default async function FundBalancePoliciesTab({
           />
         </SectionCard>
 
-        <SectionCard title="Alert thresholds" info="When the platform raises a warning or a critical alert.">
+        <SectionCard
+          title="Alert Thresholds"
+          info="When the platform raises a warning or a critical alert."
+        >
           <PolicyEchoCard
-            rows={[
+            groups={[
               {
-                label: "Current position — warning",
-                value: `${reserveT.warning.toFixed(2)}%`,
-                note: "From the reserve as it stands today.",
+                label: "Current Position",
+                note: "Evaluates the district’s current unassigned fund balance.",
+                rows: [
+                  { label: "Warning", value: `${reserveT.warning.toFixed(2)}%` },
+                  { label: "Critical", value: `${reserveT.critical.toFixed(2)}%` },
+                ],
               },
-              { label: "Current position — critical", value: `${reserveT.critical.toFixed(2)}%` },
               {
-                label: "Forecast — warning",
-                value: `${fcT.warning.toFixed(2)}%`,
-                note: "From the projected year-end reserve.",
+                label: "Forecast",
+                note: "Evaluates projected unassigned fund balance in future years.",
+                rows: [
+                  { label: "Warning", value: `${fcT.warning.toFixed(2)}%` },
+                  { label: "Critical", value: `${fcT.critical.toFixed(2)}%` },
+                ],
               },
-              { label: "Forecast — critical", value: `${fcT.critical.toFixed(2)}%` },
             ]}
           />
         </SectionCard>
@@ -110,7 +120,14 @@ export default async function FundBalancePoliciesTab({
           value={reservePct}
           bands={statusBands(reserveT)}
           format={(v) => `${v.toFixed(v % 1 === 0 ? 0 : 2)}%`}
-          label={`${reserveSubject(reserve)} as a share ${reserveCaption(reserve)}.`}
+          // NOT `reserveSubject()`. That helper names the reserve on every tile in the
+          // product, where "Projected unassigned fund balance" is the right length; this
+          // strip is the one place the reader is being shown the ruler, so it spells out
+          // that the figure is a YEAR-END position and states the ratio as a percentage
+          // rather than "a share" — the wording the district's board papers use.
+          label={`${
+            reserve?.actual ? "Year-end" : "Projected year-end"
+          } unassigned fund balance as a % ${reserveCaption(reserve)}.`}
         />
       </SectionCard>
     </FundBalanceShell>

@@ -203,31 +203,51 @@ export default async function FundBalancePage({
   ]);
 
   const opening = toNumber(series.opening?.total) ?? 0;
+  // `short` is the print sheet's axis label — see WaterfallStep. The screen wraps the full
+  // names onto two lines; the sheet's single-line axis cannot.
   const steps = [
-    { label: "Beginning", value: opening, anchor: true, display: compactMoney(series.opening?.total) },
     {
-      label: "Operating revenue",
+      label: "Beginning Fund Balance",
+      short: "Beginning",
+      value: opening,
+      anchor: true,
+      display: compactMoney(series.opening?.total),
+    },
+    {
+      label: "Revenues",
       value: toNumber(totals.operatingRevenueYtd) ?? 0,
       display: compactMoney(totals.operatingRevenueYtd),
     },
-    { label: "Transfers in", value: toNumber(totals.transfersInYtd) ?? 0, display: compactMoney(totals.transfersInYtd) },
     {
-      label: "Other financing",
+      label: "Transfers In",
+      value: toNumber(totals.transfersInYtd) ?? 0,
+      display: compactMoney(totals.transfersInYtd),
+    },
+    {
+      label: "Other Financing Sources",
+      short: "Other financing",
       value: toNumber(totals.otherFinancingYtd) ?? 0,
       display: compactMoney(totals.otherFinancingYtd),
     },
     {
-      label: "Operating spend",
+      label: "Expenditures",
       value: -(toNumber(totals.operatingExpenditureYtd) ?? 0),
       display: accounting(totals.operatingExpenditureYtd.negated(), { compact: true }),
     },
     {
-      label: "Transfers out",
+      label: "Transfers Out",
       value: -(toNumber(totals.transfersOutYtd) ?? 0),
       display: accounting(totals.transfersOutYtd.negated(), { compact: true }),
     },
-    { label: "Ending", value: toNumber(totalNow) ?? 0, anchor: true, display: compactMoney(totalNow) },
+    {
+      label: "Ending Fund Balance",
+      short: "Ending",
+      value: toNumber(totalNow) ?? 0,
+      anchor: true,
+      display: compactMoney(totalNow),
+    },
   ];
+  const sheetSteps = steps.map((s) => ({ ...s, label: s.short ?? s.label }));
   // Seven components, not the reference's six — other financing sources are a real
   // movement and dropping them would stop the last bar equalling the running total.
   const foots = waterfallFoots(steps, toNumber(totalNow) ?? 0);
@@ -625,12 +645,12 @@ export default async function FundBalancePage({
 
         <SheetBand cols="1.15fr 1fr">
           <SheetCard
-            title="Fund balance trend"
+            title="Fund Balance Trend"
             badge={<StatusBadge status={reserveRung} size="sm" dot={false} />}
             note={scope.fund ? scope.fund.name : "All funds"}
           >
             <LineChart
-              title="Fund balance trend"
+              title="Fund Balance Trend"
               summary={`Total and unassigned fund balance by month for fiscal year ${scope.fiscalYear}.`}
               categories={labels}
               format={(v) => compactMoney(v, 0)}
@@ -685,13 +705,13 @@ export default async function FundBalancePage({
           </SheetCard>
 
           <SheetCard
-            title="Fund balance waterfall"
+            title="Fund Balance Waterfall"
             note={foots ? "Beginning · movements · ending" : "Does not reconcile"}
           >
             <WaterfallChart
-              title="Fund balance waterfall"
+              title="Fund Balance Waterfall"
               summary={`How the fund balance moved from ${compactMoney(series.opening?.total)} at the start of the year to ${compactMoney(totalNow)}.`}
-              steps={steps}
+              steps={sheetSteps}
               format={(v) => compactMoney(v, 0)}
               height={260}
             />
@@ -707,7 +727,7 @@ export default async function FundBalancePage({
               <>
         <SheetBand cols="1fr">
           <SheetCard
-            title="Fund balance by fund"
+            title="Fund Balance by Fund"
             note={
               withBalance.length > SHEET_TABLE_ROWS
                 ? sheetTableNote(SHEET_TABLE_ROWS)
@@ -779,12 +799,12 @@ export default async function FundBalancePage({
             its name in. Everything else on this band reads at any width. */}
         <SheetBand cols="0.95fr 1.3fr 1.15fr">
           <SheetCard
-            title="Fund balance composition"
+            title="Fund Balance Composition"
             note={`By classification · ${basisLabel}`}
           >
             {components.length > 0 ? (
               <ShareBars
-                title="Fund balance composition"
+                title="Fund Balance Composition"
                 summary="How the fund balance splits between its designated components and the unassigned reserve."
                 rows={components.map((c) => ({
                   id: c.label,
@@ -815,7 +835,7 @@ export default async function FundBalancePage({
               printed in three places on page one; this is the only card that says which band
               of the district's OWN policy it lands in, which is the judgement the rest of the
               page is reporting. */}
-          <SheetCard title="Policy benchmark" note={`Target ${reserveT.target.toFixed(2)}%`}>
+          <SheetCard title="Unassigned Fund Balance" note={`Target ${reserveT.target.toFixed(2)}%`}>
             {/* The value capsule hangs 26px above the strip, so the strip needs that much
                 headroom or the capsule sits on the card's title. */}
             <div className="pt-[26px]">
@@ -837,9 +857,9 @@ export default async function FundBalancePage({
           </SheetCard>
 
           {/* The statutory reserve test, General Fund only whatever the page is filtered to —
-              the same lines the screen's Reserve components card carries. */}
+              the same lines the screen's Reserve Components card carries. */}
           <SheetCard
-            title="Reserve components"
+            title="Reserve Components"
             note={`${gf ? gf.name : "General fund"} · ${isOutturn ? "Actual" : "Projected"}`}
           >
             <DataTable
@@ -946,14 +966,14 @@ export default async function FundBalancePage({
   // ---------- the trend card's capsule strip ----------
   const trendStats: CapsuleStat[] = [
     {
-      label: "Ending FB (Actual)",
+      label: "Ending Fund Balance",
       value: compactMoney(totalNow),
       // The budgeted figure as the note rather than the reserve percentage: that
       // percentage is computed on the projected balance, so printing it under an actual
       // dollar amount invited exactly the reconciliation that cannot be done.
       note: budgetedNow ? `${compactMoney(budgetedNow)} budgeted` : undefined,
     },
-    { label: "Unassigned (Actual)", value: compactMoney(unassignedNow) },
+    { label: "Unassigned Fund Balance", value: compactMoney(unassignedNow) },
     {
       label: "Status",
       value: reserveRung === "N/A" ? "Not available" : reserveRung,
@@ -1018,24 +1038,28 @@ export default async function FundBalancePage({
     tone?: "positive" | "negative" | "neutral";
   }[] = [
     {
-      label: "Beginning fund balance",
+      label: "Beginning Fund Balance",
       value: compactMoney(position.beginning),
       note: "Fixed for the year",
     },
     {
-      label: isOutturn ? "Actual revenues" : "Budgeted revenues",
+      label: isOutturn ? "Actual Revenues" : "Revenue Budget",
       value: compactMoney(position.revenue),
       note: isOutturn ? "Collected to date" : "Latest amended budget",
     },
     {
-      label: isOutturn ? "Actual expenditures" : "Budgeted expenditures",
+      label: isOutturn ? "Actual Expenditures" : "Expenditure Budget",
       value: compactMoney(position.expenditure),
       note: isOutturn ? "Spent to date" : "Latest amended budget",
     },
     {
-      label: isOutturn ? "Ending fund balance" : "Projected ending fund balance",
+      label: isOutturn ? "Ending Fund Balance" : "Projected Ending Fund Balance",
       value: compactMoney(position.ending),
-      note: "Beginning + revenues − expenditures",
+      // Names the cells directly above it, so the sum can be checked by reading down the
+      // card rather than by knowing which "revenues" the line meant.
+      note: isOutturn
+        ? "Beginning Balance + Revenues − Expenditures"
+        : "Beginning Balance + Revenue Budget − Expenditure Budget",
     },
     // The fifth cell is the reserve test where the reserve test applies, and the change
     // in the balance everywhere else — same rule as before the redesign.
@@ -1048,19 +1072,53 @@ export default async function FundBalancePage({
           tone: isShort ? ("negative" as const) : ("positive" as const),
         }
       : {
-          label: isOutturn ? "Change in fund balance" : "Projected change",
+          label: isOutturn ? "Change in Fund Balance" : "Projected Change",
           value: accounting(positionChange, { compact: true }),
-          note: "Against the beginning balance",
+          note: "From beginning fund balance",
           tone: positionTone,
         },
   ];
   const CELL_INK = { positive: "#1a932e", negative: "#fd4438", neutral: "#060606" } as const;
 
+  /**
+   * ---------- the Key Insight bar (Figma 55:4229) ----------
+   *
+   * It used to advertise the Forecasting tab — "want to see the future? build a three-year
+   * projection …". A sentence about a DIFFERENT page, identical in every district and every
+   * period; the capsule beside it already goes there and already says so.
+   *
+   * It now states the one number this whole page is built around — where the General Fund's
+   * unassigned balance lands against the board's target — and only THEN points at the
+   * forecast, as the thing to do about it. The figures are `reservePct` and `reserveT`, the
+   * same pair the benchmark strip and the status pill read, so the closing line cannot
+   * disagree with the card above it.
+   */
+  const reserveGap = reservePct === null ? null : reservePct - reserveT.target;
+  const againstTarget =
+    reserveGap === null
+      ? ""
+      : reserveGap >= 0
+        ? "at or above"
+        : // "Slightly" is earned, not decorative: half a percentage point of reserve on a
+          // $200M revenue base is ~$1M, which is the scale at which a board stops reading
+          // the miss as a rounding difference.
+          reserveGap > -0.5
+          ? "slightly below"
+          : "below";
+  const keyInsight =
+    reservePct === null || !gf
+      ? "A General Fund reserve percentage cannot be computed for this period. Review the three-year forecast to see how revenue and expenditure assumptions affect future reserves."
+      : `The ${gf.name} ${
+          isOutturn ? "ended at" : "is projected to end at"
+        } a ${percent(reservePct)} unassigned fund balance, ${againstTarget} the Board's ${reserveT.target.toFixed(
+          2,
+        )}% reserve target. Review the three-year forecast to see how current revenue and expenditure assumptions affect future reserves.`;
+
   /** The reserve components card's column grid — label, amount, share. */
   // 150 + 96 + 150 + two 12px gaps is 420px of floor, against the ~307px a 375px phone
   // leaves inside the card — so the "% of …" column was clipped clean off by the panel's
   // `overflow-clip`. The card scrolls sideways below that width (see the wrapper on the
-  // Reserve components table), the same treatment the fund and cash tables already carry.
+  // Reserve Components table), the same treatment the fund and cash tables already carry.
   const BREAKDOWN_COLS =
     "grid grid-cols-[minmax(150px,1fr)_minmax(96px,auto)_minmax(150px,auto)] items-center gap-x-[12px]";
 
@@ -1183,8 +1241,7 @@ export default async function FundBalancePage({
 
       {/* ---------- the by-fund ledger, full width ---------- */}
       <FundBalanceByFundTable
-        subtitle={`${basisLabel} · beginning + revenues − expenditures`}
-        basisLabel={basisLabel}
+        subtitle="Beginning Fund Balance + Revenues − Expenditures = Ending Fund Balance"
         /*
           ONE TOGGLE, NOT TWO TABLES — same bargain as before the redesign: a capsule keeps
           one row per fund and swaps the three figures that actually differ, and it is the
@@ -1250,11 +1307,6 @@ export default async function FundBalancePage({
         />
 
         <FundBalanceCompositionCard
-          subtitle={`${
-            view === "fund"
-              ? `By fund · ${scope.fund ? scope.fund.name : "all funds"}`
-              : "By classification"
-          } · ${basisLabel}`}
           controls={
             <>
               <PillSelect
@@ -1274,7 +1326,7 @@ export default async function FundBalancePage({
 
         {/* row 2 — the waterfall beside the policy benchmark */}
         <FundBalanceWaterfallCard
-          subtitle="Beginning · this year's movements · ending"
+          subtitle="Changes from beginning to ending fund balance"
           steps={steps}
           format={(v) => compactMoney(v, 0)}
           summary={`How the fund balance moved from ${compactMoney(series.opening?.total)} at the start of the year to ${compactMoney(totalNow)}.`}
@@ -1290,16 +1342,16 @@ export default async function FundBalancePage({
           rung={reserveRung}
           bands={statusBands(reserveT)}
           target={reserveT.target}
-          note={`Policy target: maintain unassigned fund balance at ${reserveT.target.toFixed(2)}% ${reserveOf}. The dotted rule marks the target.`}
+          note={`Board Policy: Maintain Unassigned Fund Balance at ${reserveT.target.toFixed(2)}% ${reserveOf}. The dotted line represents the policy target.`}
         />
 
         {/* row 3 — the reserve components beside the ending position */}
         <OverviewPanel className="flex flex-col p-[18px]">
           <OverviewPanelHeader
-            title="Reserve components"
-            subtitle={`${gf ? gf.name : "General fund"} · ${
-              isOutturn ? "Actual ending balance" : "Projected ending balance"
-            }`}
+            title="Reserve Components"
+            subtitle={`${isOutturn ? "Actual" : "Projected"} ${
+              gf ? gf.name : "General Fund"
+            } ending balance`}
           />
           {/*
             The statutory reserve test, which applies to the General Fund only — every row
@@ -1368,9 +1420,6 @@ export default async function FundBalancePage({
           </div>
           <p className="mt-auto pt-[12px] text-[10px] leading-[1.7] tracking-[0.1px] text-[#060606]">
             {reserveMethodology(reserve)}
-            {reserve && !reserve.actual
-              ? " The projection moves when the board amends the budget, not with month-to-month collections."
-              : ""}
             {gf && !generalRow
               ? ` The designated components are omitted because this page is filtered away from ${gf.name}; the required reserve and the balance above it are the General Fund's regardless.`
               : ""}
@@ -1380,8 +1429,10 @@ export default async function FundBalancePage({
         <OverviewPanel className="flex flex-col p-[18px]">
           <div className="flex flex-wrap items-start justify-between gap-[10px]">
             <OverviewPanelHeader
-              title={isOutturn ? "Ending position" : "Projected ending position"}
-              subtitle={positionSubject}
+              title={isOutturn ? "Ending Position" : "Projected Ending Position"}
+              subtitle={`${
+                isOutturn ? "Year-end fund balance" : "Projected year-end fund balance"
+              } · ${positionSubject}`}
             />
             {/* The badge is the RESERVE status, which exists for the General Fund only. */}
             {isGeneralScope && <PanelRungPill rung={reserveRung} size="sm" />}
@@ -1415,9 +1466,12 @@ export default async function FundBalancePage({
               {scope.fundLevelOnly && !isOutturn
                 ? "The budgeted terms are not shown under a cost centre filter: the budget figures carry the whole filter while the beginning balance is fund-level, so the subtraction would mix two grains. "
                 : ""}
-              The required reserve is a General Fund test and is not applied across funds.
+              The reserve requirement applies to the General Fund only and is not evaluated
+              across all funds.
               {gf && reservePct !== null
-                ? ` ${gf.name} is at ${percent(reservePct)} ${reserveOf} (${reserveRung}) — see Reserve components beside this card.`
+                ? ` The ${gf.name} is ${
+                    isOutturn ? "at" : "currently projected at"
+                  } ${percent(reservePct)} of revenue (${reserveRung}). See Reserve Components for additional detail.`
                 : ""}
             </p>
           )}
@@ -1428,11 +1482,10 @@ export default async function FundBalancePage({
       <OverviewPanel className="flex flex-wrap items-center justify-between gap-x-[24px] gap-y-[10px] p-[18px]">
         <div className="min-w-0 flex-1 basis-[280px]">
           <p className="text-[12px] font-bold leading-[22px] tracking-[-0.43px] text-[#060606]">
-            Key insight
+            Key Insight
           </p>
           <p className="text-[12px] leading-[16px] tracking-[-0.23px] text-[#060606]">
-            Want to see the future? Build a three-year projection from your own growth
-            assumptions and see how reserves hold up.
+            {keyInsight}
           </p>
         </div>
         <Link

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { ArrowGlyph } from "@/components/dashboard/overview-panel";
+import { InfoDot } from "@/components/dashboard/info-dot";
 import { CARD_TITLE, CARD_SUBTITLE, METRIC_LABEL } from "@/components/dashboard/type-scale";
 
 /**
@@ -65,15 +66,7 @@ export function SectionCard({
                   nobody can read. */}
               <span className="min-w-0">{title}</span>
               {badge}
-              {info && (
-                <span
-                  title={info}
-                  aria-label={info}
-                  className="flex size-[15px] flex-none cursor-help items-center justify-center rounded-full bg-black/[0.07] text-[10px] font-bold text-[#060606]"
-                >
-                  i
-                </span>
-              )}
+              {info && <InfoDot text={info} />}
             </h2>
             {footer && footerHref && (
               <Link

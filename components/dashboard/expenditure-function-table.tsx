@@ -1,11 +1,12 @@
 import { cn } from "@/lib/cn";
-import { CARD_TITLE, COLUMN_HEADER, ROW_LABEL } from "@/components/dashboard/type-scale";
+import { CARD_TITLE, CARD_SUBTITLE, COLUMN_HEADER, ROW_LABEL } from "@/components/dashboard/type-scale";
 import { OverviewPanel } from "@/components/dashboard/overview-panel";
 import { PacePill, PillLink } from "@/components/dashboard/revenue-shared";
+import { VIEW_DETAILS } from "@/lib/dashboard/cta";
 import type { StatusRung } from "@/lib/dashboard/status";
 
 /**
- * "Expenditures by function (YTD)" — a transcription of Figma 55:3056, the Expenditure
+ * "Expenditures by Function (YTD)" — a transcription of Figma 55:3056, the Expenditure
  * band's sibling of the Revenue source table and deliberately the same construction: a 20px
  * title with the white capsule at the right (the mockup's own label reads "Go to Revenue
  * Details" — a copy-paste the caller corrects), 14px regular headers, bold 14px function
@@ -36,16 +37,18 @@ export interface FunctionRow {
 
 /** The design's column grid — 161px of label, four figures, the pill hard right. */
 const COLS =
-  "grid grid-cols-[minmax(150px,161px)_minmax(56px,0.9fr)_minmax(64px,0.9fr)_minmax(64px,0.9fr)_minmax(76px,1fr)_minmax(64px,auto)] items-center gap-x-[12px]";
+  "grid grid-cols-[minmax(150px,161px)_minmax(64px,0.9fr)_minmax(64px,0.9fr)_minmax(78px,0.9fr)_minmax(76px,1fr)_minmax(64px,auto)] items-center gap-x-[12px]";
 
 export function ExpenditureFunctionTable({
-  title = "Expenditures by function (YTD)",
-  ctaLabel = "Go to Expenditure Details",
+  title = "Expenditures by Function (YTD)",
+  subtitle = "YTD spending and commitments by functional area",
+  ctaLabel = VIEW_DETAILS.expenditureDetail,
   ctaHref,
   rows,
   total,
 }: {
   title?: string;
+  subtitle?: string;
   ctaLabel?: string;
   ctaHref: string;
   rows: FunctionRow[];
@@ -54,8 +57,14 @@ export function ExpenditureFunctionTable({
   return (
     <OverviewPanel className="flex flex-col p-[18px]">
       {/* ---- header ---- */}
-      <div className="flex flex-wrap items-center justify-between gap-[10px] pt-[9px]">
-        <h2 className={CARD_TITLE}>{title}</h2>
+      <div className="flex flex-wrap items-start justify-between gap-[10px] pt-[9px]">
+        {/* The mockup gave this table a bare title while every card around it carries a
+            line saying what its figures are. Its sibling below the fold reads the same way
+            now, so the two tables introduce themselves alike. */}
+        <div className="min-w-0">
+          <h2 className={CARD_TITLE}>{title}</h2>
+          <p className={CARD_SUBTITLE}>{subtitle}</p>
+        </div>
         <PillLink href={ctaHref}>{ctaLabel}</PillLink>
       </div>
 
@@ -68,18 +77,26 @@ export function ExpenditureFunctionTable({
           three grids cannot drift apart. Above the floor it costs nothing — the container is
           wider than `min-w`, so no scrollbar appears and the desktop layout is untouched. */}
       <div className="-mx-[18px] overflow-x-auto px-[18px]">
-        <div className="min-w-[560px]">
+        <div className="min-w-[590px]">
       {/* ---- column headers ---- */}
       <div className={cn(COLS, "mt-[22px] pb-[10px]", COLUMN_HEADER)}>
-        <span>Indicator</span>
-        <span>Budget</span>
+        <span>Function</span>
         <span>
-          Actual
+          Annual
           <br />
-          (YTD)
+          Budget
+        </span>
+        <span>
+          Spent
+          <br />
+          YTD
         </span>
         <span>Encumbered</span>
-        <span className="text-center">Available</span>
+        <span className="text-center">
+          Available
+          <br />
+          Budget
+        </span>
         <span className="text-right">Status</span>
       </div>
       <div aria-hidden className="h-px w-full bg-[#e7e7e7]" />

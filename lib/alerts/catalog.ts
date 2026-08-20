@@ -102,6 +102,14 @@ export interface AlertDef {
 const money = (v: Prisma.Decimal) => compactMoney(v);
 const pct = (v: Prisma.Decimal) => `${v.toFixed(1)}%`;
 const n = (v: number | boolean) => Number(v);
+/**
+ * A THRESHOLD, set the way the figure beside it is set.
+ *
+ * The policy value is a plain number, so `${c}%` rendered "2%" in a sentence whose other
+ * percentage came from `pct` and read "-10.0%" — one decimal place apart inside one clause,
+ * which reads as two different kinds of number rather than a figure and the line it crossed.
+ */
+const thr = (v: number) => `${v.toFixed(1)}%`;
 
 /**
  * A null fact means "we cannot say yet", and it must never read as "all clear". Every
@@ -281,21 +289,58 @@ function revenueCurrentSeverity(f: AlertFacts, p: PolicyValues): AlertSeverity |
 const revenueAlreadySaid = (f: AlertFacts, p: PolicyValues): boolean =>
   revenueReadingsAgree(f) && revenueVarianceSeverity(f.revenueVariancePercent, p) !== null;
 
+/**
+ * The revenue the district should have collected by now — the figure the percentage in
+ * these two alerts is actually measured against.
+ *
+ * Recovered from the variance rather than passed in: `v` IS (ytd − expected) ÷ expected,
+ * so expected = ytd ÷ (1 + v/100), exactly. Worth the inversion because the sentence used
+ * to pair a PRO-RATED percentage with the FULL-YEAR budget — "Collections are 23.7% below
+ * budget ($39.86M against $208.9M)" — two figures a reader cannot get 23.7% out of, in
+ * any month but the last. See `expectedRevenue` in lib/alerts/engine.ts.
+ *
+ * Null where the inversion has nothing to divide by: v = −100% is a district that has
+ * collected nothing, and the sentence drops its parenthetical rather than invent one.
+ */
+function expectedYtd(f: AlertFacts, v: Prisma.Decimal): Prisma.Decimal | null {
+  const factor = v.dividedBy(100).plus(1);
+  return factor.isZero() ? null : f.revenueYtd.dividedBy(factor);
+}
+
+/** " ($39.86M against $52.23M)", or nothing at all when the basis cannot be stated. */
+function against(f: AlertFacts, v: Prisma.Decimal): string {
+  const expected = expectedYtd(f, v);
+  return expected === null ? "" : ` (${money(f.revenueYtd)} against ${money(expected)})`;
+}
+
 export const ALERTS: AlertDef[] = [
   // ===================== Revenue (5) =====================
   {
     id: "REVENUE_BELOW_BUDGET",
     group: "revenue",
-    title: "Revenue below budget",
+    title: "Collections Below Expected",
     evaluate: (f, p) => {
       const v = f.revenueVariancePercent;
       if (v === null || !v.isNegative()) return null;
       const severity = revenueCurrentSeverity(f, p);
       if (severity === null) return null;
-      return {
-        severity,
-        message: `Collections are ${pct(v.abs())} below budget (${money(f.revenueYtd)} against ${money(f.revenueBudget)}).`,
-      };
+      /**
+       * DOLLARS FIRST, the percentage in the parenthesis behind them — the same shape
+       * MATERIAL_FORECAST_VARIANCE settled on, and for the same reason. "23.7% below
+       * expected YTD levels ($39.86M against $52.23M)" made a reader subtract two figures
+       * to find the shortfall, which is the one thing the sentence is about.
+       *
+       * The percentage carries it alone where the basis cannot be stated — v = −100% is a
+       * district that has collected nothing, and there is no expected figure to subtract
+       * from. See `expectedYtd`.
+       */
+      const expected = expectedYtd(f, v);
+      const message =
+        expected === null
+          ? `Revenue collections are ${pct(v.abs())} below expected year-to-date levels.`
+          : `Revenue collections are ${money(expected.minus(f.revenueYtd))} below expected ` +
+            `year-to-date levels (${pct(v.abs())}).`;
+      return { severity, message };
     },
   },
   {
@@ -310,7 +355,7 @@ export const ALERTS: AlertDef[] = [
       if (severity === null) return null;
       return {
         severity,
-        message: `Collections are ${pct(v)} above budget (${money(f.revenueYtd)} against ${money(f.revenueBudget)}). Worth confirming the budget is current.`,
+        message: `Collections are ${pct(v)} above expected YTD levels${against(f, v)}. Worth confirming the budget is current.`,
       };
     },
   },
@@ -440,22 +485,30 @@ export const ALERTS: AlertDef[] = [
   {
     id: "MATERIAL_FORECAST_VARIANCE",
     group: "expenditure",
-    title: "Material forecast variance",
+    title: "Material Forecast Variance",
     // One alert, either severity — the workbook lists it once, firing "at the warning or
     // critical threshold".
     evaluate: (f, p) => {
       const v = f.expenditureForecastVariancePercent;
       const severity = expenditureForecastSeverity(v, p);
       if (severity === null) return null;
-      // The landing figure, inherited from FORECAST_EXCEEDS_BUDGET now that it steps aside
-      // here: "7.9% off budget" on its own is a percentage the reader has to go and price.
-      // "off budget", not "over" — the workbook fires this in both directions, and the two
-      // figures say which way without the sentence having to.
-      const against =
-        f.expenditureForecast === null
-          ? ""
-          : ` (${money(f.expenditureForecast)} against ${money(f.expenditureBudget)})`;
-      return { severity, message: `Projected year-end spend is ${pct(v!.abs())} off budget${against}.` };
+      /**
+       * DOLLARS FIRST, the percentage in the parenthesis behind them.
+       *
+       * "7.9% off budget ($191.84M against $208.3M)" made a reader do two jobs: work out
+       * which way "off" ran by comparing the two figures, then subtract them to find out
+       * how much. The gap IS the news, so the sentence states it — and states its
+       * direction in a word, which is what "off" was standing in for. The workbook fires
+       * this alert in both directions, so both words are needed.
+       */
+      const gap = f.expenditureForecast === null ? null : f.expenditureForecast.minus(f.expenditureBudget);
+      const message =
+        gap === null
+          ? `Projected year-end expenditures are ${pct(v!.abs())} off budget.`
+          : `Projected year-end expenditures are ${money(gap.abs())} ${
+              gap.isNegative() ? "below" : "over"
+            } budget (${pct(v!.abs())}).`;
+      return { severity, message };
     },
   },
   {
@@ -556,9 +609,14 @@ export const ALERTS: AlertDef[] = [
    *
    * Both are year-end figures since M6, so "Projected year-end reserve" no longer
    * distinguishes them — and these three firing beside the ones above with a different
-   * number is exactly the situation the wording has to survive. "On the current pace" is
-   * what makes the pair readable: the board's budget says one thing, the district's actual
-   * rate of collection and spending says another, and the gap between them is the signal.
+   * number is exactly the situation the wording has to survive. "At the current projected
+   * pace" is what makes the pair readable: the board's budget says one thing, the
+   * district's actual rate of collection and spending says another, and the gap between
+   * them is the signal.
+   *
+   * All three name the SUBJECT rather than "the year-end reserve" — the forecast screen
+   * calls this figure the unassigned fund balance from its column heading to its trend
+   * card, and an alert about it was the one place still calling it a reserve.
    */
   {
     id: "FORECAST_BELOW_TARGET",
@@ -569,7 +627,7 @@ export const ALERTS: AlertDef[] = [
       const target = n(p.fundBalance.target);
       if (!lt(v, target) || lt(v, n(p.fundBalance.forecastWarning))) return null;
       return warn(
-        `On the current pace, the year-end reserve is ${pct(v!)} ${ofBasis(f)}, below your ${target}% target.`,
+        `At the current projected pace, unassigned fund balance is expected to end at ${pct(v!)} ${ofBasis(f)}, below the ${thr(target)} target.`,
       );
     },
   },
@@ -582,31 +640,31 @@ export const ALERTS: AlertDef[] = [
       const w = n(p.fundBalance.forecastWarning);
       if (!lt(v, w) || lt(v, n(p.fundBalance.forecastCritical))) return null;
       return warn(
-        `On the current pace, the year-end reserve is ${pct(v!)} ${ofBasis(f)}, below your ${w}% forecast warning.`,
+        `At the current projected pace, unassigned fund balance is expected to end at ${pct(v!)} ${ofBasis(f)}, below the ${thr(w)} warning threshold.`,
       );
     },
   },
   {
     id: "FORECAST_CRITICAL",
     group: "fundBalance",
-    title: "Forecast reserve critical",
+    title: "Critical Forecast",
     evaluate: (f, p) => {
       const v = f.forecastReservePercent;
       const c = n(p.fundBalance.forecastCritical);
       if (!lt(v, c)) return null;
       return crit(
-        `On the current pace, the year-end reserve is ${pct(v!)} ${ofBasis(f)}, below your ${c}% forecast critical threshold.`,
+        `At the current projected pace, unassigned fund balance is expected to end at ${pct(v!)} ${ofBasis(f)}, below the ${thr(c)} critical threshold.`,
       );
     },
   },
   {
     id: "NEGATIVE_CHANGE_IN_FUND_BALANCE",
     group: "fundBalance",
-    title: "Fund balance is falling",
+    title: "Fund balance decreased",
     evaluate: (f) => {
       if (!f.changeInFundBalance.isNegative()) return null;
       return warn(
-        `This year's operations have reduced the fund balance by ${money(f.changeInFundBalance.abs())}.`,
+        `Fund balance has decreased by ${money(f.changeInFundBalance.abs())} this year.`,
       );
     },
   },

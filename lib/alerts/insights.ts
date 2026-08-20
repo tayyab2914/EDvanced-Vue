@@ -172,7 +172,19 @@ export function trendNarrative(args: {
   subject: string;
   current: Prisma.Decimal | null;
   previous: Prisma.Decimal | null;
-  periodLabel: string;
+  /**
+   * The period the figure LANDS on — "…from the prior month, ending SEPTEMBER at $41.79M".
+   *
+   * It rides the closing clause, not the comparison. "…from period 2 to September 2026
+   * (FY 2026-27), ending at $41.79M" spent its longest phrase naming both ends of a
+   * comparison the reader had not been given a figure for yet, and left the figure that
+   * matters — where the balance ended — unattached to any month at all.
+   *
+   * Optional. The executive summary omits it because the card's own "As of …" line and the
+   * chart's last category already say which month, and the sentence stops at
+   * "…decreased $1.92M (8.65%) from the prior month, ending at $20.25M."
+   */
+  periodLabel?: string | null;
   previousLabel: string;
 }): string | null {
   const { current, previous } = args;
@@ -182,5 +194,7 @@ export function trendNarrative(args: {
   const percentChange = change.dividedBy(previous.abs()).times(100);
   const direction = change.isNegative() ? "decreased" : "increased";
 
-  return `${args.subject} ${direction} ${compactMoney(change.abs())} (${percentChange.abs().toFixed(2)}%) from ${args.previousLabel} to ${args.periodLabel}, ending at ${compactMoney(current)}.`;
+  const ending = args.periodLabel ? `ending ${args.periodLabel} at` : "ending at";
+
+  return `${args.subject} ${direction} ${compactMoney(change.abs())} (${percentChange.abs().toFixed(2)}%) from ${args.previousLabel}, ${ending} ${compactMoney(current)}.`;
 }

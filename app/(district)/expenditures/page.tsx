@@ -132,25 +132,25 @@ const VIEW_META: Record<
   { title: string; subtitle: string; column: string; ranked: boolean }
 > = {
   object: {
-    title: "Expenditures by object (YTD)",
-    subtitle: "Salaries, benefits, services, supplies and capital",
-    column: "Object",
+    title: "Expenditures by Object (YTD)",
+    subtitle: "YTD spending and commitments by expenditure object",
+    column: "Expenditure Object",
     ranked: false,
   },
   function: {
-    title: "Expenditures by function (YTD)",
-    subtitle: "Grouped by function type — the full list, in code order, is below",
+    title: "Expenditures by Function (YTD)",
+    subtitle: "YTD spending and commitments by function type — the full list, in code order, is below",
     column: "Function",
     ranked: false,
   },
   costCenterType: {
-    title: "Expenditures by cost center type (YTD)",
-    subtitle: "Schools, departments and operations",
-    column: "Cost center type",
+    title: "Expenditures by Cost Center Type (YTD)",
+    subtitle: "YTD spending and commitments by cost center type",
+    column: "Cost Center Type",
     ranked: false,
   },
   project: {
-    title: "Expenditures by project (YTD)",
+    title: "Expenditures by Project (YTD)",
     subtitle: "The Project / Grant column on the expenditure detail",
     column: "Project",
     ranked: true,
@@ -409,7 +409,7 @@ export default async function ExpenditureDashboard({
         </SheetBand>
 
         <SheetBand cols="1fr 1fr">
-          <SheetCard title="Expenditures — budget vs actual" note={`Through ${scope.label}`}>
+          <SheetCard title="Expenditures vs. Budget (YTD)" note={`Through ${scope.label}`}>
             <LineChart
               title="Expenditures, budget against actual"
               summary={`Actual spending year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
@@ -488,13 +488,13 @@ export default async function ExpenditureDashboard({
                 { label: "Total budget", value: compactMoney(grouped.total.budget) },
                 { label: "Encumbered", value: compactMoney(grouped.total.encumbrances) },
                 {
-                  label: "Available",
+                  label: "Available Budget",
                   value: accounting(grouped.total.available, { compact: true }),
                   tone: grouped.total.available.isNegative()
                     ? ("negative" as const)
                     : ("neutral" as const),
                 },
-                { label: "Utilized", value: percent(grouped.total.utilisation.percent) },
+                { label: "% Utilized", value: percent(grouped.total.utilisation.percent) },
               ]}
             />
           </SheetCard>
@@ -502,7 +502,7 @@ export default async function ExpenditureDashboard({
 
         <SheetBand cols="1fr">
           <SheetCard
-            title="Expenditures by function (YTD)"
+            title="Expenditures by Function (YTD)"
             note={
               byFunction.rows.length > SHEET_TABLE_ROWS
                 ? sheetTableNote(SHEET_TABLE_ROWS)
@@ -513,11 +513,11 @@ export default async function ExpenditureDashboard({
               dense
               columns={[
                 { key: "fn", label: "Function" },
-                { key: "budget", label: "Budget", align: "right" },
-                { key: "actual", label: "Actual (YTD)", align: "right" },
+                { key: "budget", label: "Annual Budget", align: "right" },
+                { key: "actual", label: "Spent YTD", align: "right" },
                 { key: "enc", label: "Encumbered", align: "right" },
-                { key: "avail", label: "Available", align: "right" },
-                { key: "util", label: "Utilized", align: "right" },
+                { key: "avail", label: "Available Budget", align: "right" },
+                { key: "util", label: "% Utilized", align: "right" },
                 { key: "status", label: "Status", align: "right" },
               ]}
               rows={byFunction.rows.slice(0, SHEET_TABLE_ROWS).map((r) => {
@@ -588,7 +588,7 @@ export default async function ExpenditureDashboard({
                       chart the one-page sheet had no room for, and the one that says whether
                       the year is tracking to overspend rather than what it has spent. */}
                   <SheetCard
-                    title="Budget utilization trend"
+                    title="Budget Utilization Trend"
                     note={`Warning ≥ ${pctRule(utilT.warning)} · critical ≥ ${pctRule(utilT.critical)}`}
                   >
                     <ColumnChart
@@ -783,6 +783,35 @@ export default async function ExpenditureDashboard({
       status: expenditurePace(toNumber(r.pace.percent), fcT),
     }));
 
+  /**
+   * ---------- the Key Insight, closing the page ----------
+   *
+   * The strip used to advertise the Forecasting tab — "adjust your growth assumptions to
+   * see how changes in spending flow through …". A true sentence about a DIFFERENT page,
+   * identical in every district and every period, which is a heading for the capsule
+   * beside it rather than an insight. The capsule still goes to Forecasting; the sentence
+   * now says what this period actually did.
+   *
+   * Three figures, in the order a reader asks for them: what has been SPENT, what is
+   * additionally COMMITTED but not yet spent, and what the two together have consumed of
+   * the year's budget. All from `byFunction.total`, the same aggregate the KPI tiles at
+   * the top of the page read — so the closing line cannot disagree with the opening one.
+   */
+  const encumbered = byFunction.total.encumbrances;
+  const keyInsight =
+    byFunction.rows.length === 0
+      ? "No expenditure detail has been committed for this period yet."
+      : [
+          `YTD spending is ${compactMoney(byFunction.total.actualYtd)}${
+            encumbered.isZero() ? "" : `, with an additional ${compactMoney(encumbered)} encumbered`
+          }.`,
+          utilPct === null
+            ? null
+            : `Total budget utilization is ${percent(byFunction.total.utilisation.percent)}.`,
+        ]
+          .filter(Boolean)
+          .join(" ");
+
   return (
     <div className="animate-fade-up space-y-[18px]">
       {/* Arms the entrance animations — same one-liner the Revenue redesign carries. */}
@@ -943,16 +972,17 @@ export default async function ExpenditureDashboard({
         />
 
         <RevenueMoversCard
-          title="Top positive variances"
-          subtitle="Categories spending above expected levels"
+          title="Top Positive Variances"
+          subtitle="Spending above expected YTD levels"
           items={moverItems(movers.positive, "negative")}
           empty="Nothing is spending ahead of budget."
         />
 
         {/* row 2 — budget vs actual beside the negative movers */}
         <RevenueTrendCard
-          title="Expenditures — budget vs actual"
-          subtitle={`Year to date through ${scope.label}`}
+          title="Expenditures vs. Budget (YTD)"
+          subtitle="Actual spending compared to expected YTD spending"
+          actualLabel="Spent (YTD)"
           categories={labels}
           actual={series.points.map((p) => ({ value: toNumber(p.expenditureYtd) }))}
           budget={series.points.map((p) => ({
@@ -962,8 +992,8 @@ export default async function ExpenditureDashboard({
           format={(v) => compactMoney(v, 0)}
           summary={`Actual spending year to date against the budget expected by now, for fiscal year ${scope.fiscalYear}.`}
           stats={[
-            { label: "Actual (YTD)", value: compactMoney(byFunction.total.actualYtd) },
-            { label: "Budget (YTD)", value: compactMoney(byFunction.total.pace.budget) },
+            { label: "Spent (YTD)", value: compactMoney(byFunction.total.actualYtd) },
+            { label: "Expected (YTD)", value: compactMoney(byFunction.total.pace.budget) },
             {
               label: "Variance (YTD)",
               value: accounting(byFunction.total.pace.amount, { compact: true }),
@@ -981,8 +1011,8 @@ export default async function ExpenditureDashboard({
         />
 
         <RevenueMoversCard
-          title="Top negative variances"
-          subtitle="Categories spending below expected levels"
+          title="Top Negative Variances"
+          subtitle="Spending below expected YTD levels"
           items={moverItems(movers.negative, "positive")}
           empty="Nothing is spending behind budget."
         />
@@ -1025,8 +1055,7 @@ export default async function ExpenditureDashboard({
           ctaLabel={GO_TO.forecast}
           ctaHref={options.link("/fund-balance/forecast")}
         >
-          Adjust your growth assumptions to see how changes in spending flow through to fund
-          balance and reserves over the next three years.
+          {keyInsight}
         </RevenueInsightCard>
       </div>
     </div>

@@ -64,18 +64,18 @@ export const FORECAST_METHOD_VALUES = [
 export type ForecastMethod = (typeof FORECAST_METHOD_VALUES)[number];
 
 export const FORECAST_METHOD_LABELS: Record<ForecastMethod, string> = {
-  CARRY_FORWARD: "Carry forward",
-  ONE_TIME_CARRYFORWARD: "One-time carryforward",
+  CARRY_FORWARD: "Carry Forward",
+  ONE_TIME_CARRYFORWARD: "One-time Carry Forward",
   INCREASE_BY_PERCENT: "Increase by %",
-  MANUAL_OVERRIDE: "Manual override",
+  MANUAL_OVERRIDE: "Manual Override",
 };
 
 export const FORECAST_METHOD_HELP: Record<ForecastMethod, string> = {
-  CARRY_FORWARD: "Held at today's balance in every projected year.",
+  CARRY_FORWARD: "Maintains the current balance in each projected year.",
   ONE_TIME_CARRYFORWARD:
-    "Carried into the first projected year, then released — for a balance the district intends to spend.",
+    "Carries the balance into the first projected year, then releases it in subsequent years. Use for amounts expected to be spent.",
   INCREASE_BY_PERCENT: "Compounds each year at the annual increase you set.",
-  MANUAL_OVERRIDE: "Uses the figure you type for each projected year.",
+  MANUAL_OVERRIDE: "Uses the amount entered for each projected year.",
 };
 
 // ===================== M6: the reserve measurement basis =====================

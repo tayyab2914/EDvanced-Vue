@@ -5,7 +5,7 @@ import { OverviewPanel, PanelRungPill } from "@/components/dashboard/overview-pa
 import { CARD_TITLE, CARD_SUBTITLE, COLUMN_HEADER } from "@/components/dashboard/type-scale";
 
 /**
- * "Financial health summary" — a transcription of Figma 3:12545.
+ * "Financial Health Summary" — a transcription of Figma 3:12545.
  *
  * The design draws the table with hand-placed absolutes; the column template below is its
  * own geometry read back as fractions of the 1055px content row (Indicator 0%, Current
@@ -130,10 +130,10 @@ export function OverviewHealthCard({ rows }: { rows: HealthRow[] }) {
     <OverviewPanel>
       <header>
         <h2 className={CARD_TITLE}>
-          Financial health summary
+          Financial Health Summary
         </h2>
         <p className={CARD_SUBTITLE}>
-          Key indicators compared to policy targets
+          Key financial indicators compared to established targets
         </p>
       </header>
 
@@ -193,7 +193,7 @@ export function OverviewHealthCard({ rows }: { rows: HealthRow[] }) {
 
           {/* The same content as a real table, for a reader who cannot use the grid. */}
           <table className="sr-only">
-            <caption>Financial health summary — key indicators compared to policy targets</caption>
+            <caption>Financial Health Summary — key financial indicators compared to established targets</caption>
             <thead>
               <tr>
                 <th scope="col">Indicator</th>

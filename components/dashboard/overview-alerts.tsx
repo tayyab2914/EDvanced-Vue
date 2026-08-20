@@ -19,6 +19,13 @@ import type { AlertRow, DisplaySeverity } from "@/components/dashboard/alert-lis
  * the same anatomy in the product's other two severity colours — a design that colour-coded
  * only its worst case cannot mean every row to be red.
  *
+ * What this rail does NOT draw is the "Where" fund breakdown under each alert, which the
+ * Alerts page still carries (see alert-list.tsx). This screen is a summary: an alert here
+ * says what crossed and how badly, and the arrow beside it — and "View All N Alerts" at
+ * the foot — is where a reader goes to find out which funds it landed in. Five alerts each
+ * trailing a stack of fund capsules made the rail taller than the two charts beside it and
+ * pushed the tallies out of sight, which is the opposite of what a summary is for.
+ *
  * Font: the mockup sets "Aeonik Pro TRIAL" (a trial licence — see overview-kpi.tsx);
  * nothing here names a family.
  */
@@ -169,7 +176,6 @@ export function OverviewAlertsPanel({
         <ul className="flex flex-col">
           {shown.map((a) => {
             const sev = SEVERITY[a.severity];
-            const funds = a.funds ?? [];
             return (
               <li key={a.id} className="relative">
                 <span aria-hidden className="absolute left-[12px] top-[14px]">
@@ -202,47 +208,6 @@ export function OverviewAlertsPanel({
                     <ArrowGlyph color="#FD4438" />
                   </Link>
                 </div>
-
-                {funds.length > 0 && (
-                  <div className="mt-[8px] flex items-start gap-[9px] pl-[4px] pr-[8px]">
-                    <span className="pt-[5px] text-[10px] font-bold uppercase leading-[12px] tracking-[0.08px] text-[#060606]">
-                      Where
-                    </span>
-                    <span className="flex min-w-0 flex-col items-start gap-[3px]">
-                      {funds.map((f) => {
-                        // The closing "+ 9 other funds" line is not a fund — no code to
-                        // prefix, and no white capsule, so it reads as the total of the
-                        // chips above rather than as one more place to go.
-                        const isTotal = f.role === "total";
-                        const body = (
-                          <>
-                            <span className="font-bold">
-                              {isTotal ? f.name : `${f.code} - ${f.name}`}
-                            </span>
-                            {f.detail && <span>{`  ${f.detail}`}</span>}
-                          </>
-                        );
-                        const shape = cn(
-                          "max-w-full truncate whitespace-pre rounded-[20px] px-[8px] py-[5px] text-[10px] leading-[12px] tracking-[0.08px] text-[#060606]",
-                          isTotal ? "opacity-70" : "bg-white",
-                        );
-                        return f.href ? (
-                          <Link
-                            key={f.id}
-                            href={f.href}
-                            className={cn(shape, "transition-opacity hover:opacity-75")}
-                          >
-                            {body}
-                          </Link>
-                        ) : (
-                          <span key={f.id} className={shape}>
-                            {body}
-                          </span>
-                        );
-                      })}
-                    </span>
-                  </div>
-                )}
 
                 <span aria-hidden className="mx-[7px] mt-[8px] block h-[0.5px] bg-black/[0.11]" />
               </li>

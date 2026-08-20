@@ -5,7 +5,7 @@ import { PacePill } from "@/components/dashboard/revenue-shared";
 import type { StatusRung } from "@/lib/dashboard/status";
 
 /**
- * "Cash balance by fund" — a transcription of Figma 55:5221, the Cash band's ledger, and
+ * "Cash Balance by Fund" — a transcription of Figma 55:5221, the Cash band's ledger, and
  * the same construction as the Fund Balance band's by-fund table: 16px header with the
  * "View … Details" capsule beside it, 14px column headers over a solid rule, bold fund
  * names, dashed rules between rows, the tinted status pill hard right, and the TOTAL row
@@ -51,7 +51,7 @@ const COLS =
   "grid grid-cols-[minmax(196px,1.5fr)_minmax(96px,1fr)_minmax(96px,1fr)_minmax(110px,1fr)_minmax(96px,1fr)_minmax(84px,0.9fr)_minmax(56px,auto)] items-center gap-x-[12px]";
 
 export function CashByFundTable({
-  title = "Cash balance by fund",
+  title = "Cash Balance by Fund",
   subtitle,
   ctaLabel,
   ctaHref,
@@ -98,7 +98,7 @@ export function CashByFundTable({
               <span>
                 Beginning
                 <br />
-                cash
+                Cash
               </span>
               <span>
                 Receipts
@@ -113,12 +113,12 @@ export function CashByFundTable({
               <span>
                 Ending
                 <br />
-                cash
+                Cash
               </span>
               <span>
-                Days cash
+                Days Cash
                 <br />
-                on hand
+                on Hand
               </span>
               <span className="text-right">Status</span>
             </div>

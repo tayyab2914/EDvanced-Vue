@@ -30,6 +30,30 @@ const GRID_TOP = 18;
 const GRID_BOTTOM = 244;
 const BAR_W = 32;
 
+/**
+ * A step's label, folded to at most two lines.
+ *
+ * A slot is (PLOT_R − PLOT_L) ÷ 7 ≈ 86 viewBox units and the steps carry full names —
+ * "Beginning Fund Balance" is ~110 units at 10px — so on one line the outer columns' labels
+ * ran into their neighbours'. Broken on whitespace at roughly what fits, and never onto a
+ * third line: two already reach the frame's foot.
+ */
+function labelLines(label: string, max = 17): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of label.split(" ")) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > max && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length > 2 ? [lines[0], lines.slice(1).join(" ")] : lines;
+}
+
 /** A column rounded only at its leading edge — top for rises and anchors, bottom for falls. */
 function roundedBar(x: number, yTop: number, yBottom: number, w: number, edge: "top" | "bottom") {
   const r = Math.min(4, Math.max(0, yBottom - yTop));
@@ -57,7 +81,7 @@ function roundedBar(x: number, yTop: number, yBottom: number, w: number, edge: "
 }
 
 export function FundBalanceWaterfallCard({
-  title = "Fund balance waterfall",
+  title = "Fund Balance Waterfall",
   subtitle,
   steps,
   format,
@@ -177,12 +201,16 @@ export function FundBalanceWaterfallCard({
                   <text
                     key={`${s.label}-${i}`}
                     x={xs[i]}
-                    y={274}
+                    y={272}
                     textAnchor="middle"
                     fontSize={10}
                     fill="#667085"
                   >
-                    {s.label}
+                    {labelLines(s.label).map((line, li) => (
+                      <tspan key={line} x={xs[i]} dy={li === 0 ? 0 : 11}>
+                        {line}
+                      </tspan>
+                    ))}
                   </text>
                 ))}
               </svg>

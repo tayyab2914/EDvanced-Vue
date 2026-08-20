@@ -208,16 +208,16 @@ function observe(f: AlertFacts): Observation[] {
   if (f.availableBudget.isPositive() && f.encumbrances.greaterThan(0)) {
     out.push({
       id: "ENCUMBRANCES_OUTSTANDING",
-      title: "Encumbrances outstanding",
-      message: `${money(f.encumbrances)} is committed but not yet paid, and is already counted against available budget.`,
+      title: "Outstanding Encumbrances",
+      message: `${money(f.encumbrances)} is encumbered and already reflected in available budget.`,
     });
   }
 
   if (f.expenditureForecast !== null && f.expenditureBudget.greaterThan(0)) {
     out.push({
       id: "YEAR_END_PROJECTION",
-      title: "Year-end projection",
-      message: `On the current pace, spending reaches ${money(f.expenditureForecast)} against a budget of ${money(f.expenditureBudget)}.`,
+      title: "Year-End Projection",
+      message: `Projected year-end expenditures are ${money(f.expenditureForecast)} against a ${money(f.expenditureBudget)} budget.`,
     });
   }
 
@@ -244,8 +244,13 @@ function observe(f: AlertFacts): Observation[] {
  * pointless ".00" — the exact thing compactMoney's header argues against for the rest of the
  * product. The drill-downs are where an exact figure earns its width; a card whose whole
  * purpose is a glance is not.
+ *
+ * The two decimal places ARE named, though, rather than left to compactMoney's trimming.
+ * These lines stack in one card and quote two figures per sentence — "$191.84M against a
+ * $208.3M budget" sets a five-character figure beside a four-character one and reads as
+ * the second having been rounded harder than the first.
  */
-const money = (v: Prisma.Decimal) => compactMoney(v);
+const money = (v: Prisma.Decimal) => compactMoney(v, 2);
 
 /**
  * Everything the catalogue can ask about, for one period.

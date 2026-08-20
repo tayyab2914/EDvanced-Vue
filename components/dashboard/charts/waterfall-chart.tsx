@@ -26,6 +26,14 @@ import { plotOf, Gridlines, YAxis, XAxis, ChartFigure, ChartEmpty } from "./chro
 
 export interface WaterfallStep {
   label: string;
+  /**
+   * A shorter name for the same step, for the print sheet.
+   *
+   * The screen's card wraps its labels onto two lines; the sheet draws this walk in a
+   * half-width band on a single-line axis, where a full name under every column collides
+   * with its neighbours. The caller passes both and each surface picks the one it can draw.
+   */
+  short?: string;
   /** Signed. Positive rises, negative falls. Ignored for `anchor` steps. */
   value: number;
   /** A total that sits on the baseline rather than floating — first and last. */
