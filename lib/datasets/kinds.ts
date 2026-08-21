@@ -24,8 +24,10 @@ export interface DatasetMeta {
   slug: DatasetSlug;
   /** Name shown in the dropdown, the report and the version list. */
   label: string;
-  /** One line explaining what the file holds, shown under the dropdown. */
+  /** One line explaining what the file holds, shown in the template list. */
   description: string;
+  /** Shown under the upload dropdown when the file is described differently there. */
+  hint?: string;
   periodType: PeriodType;
   /** Set only for budget-bearing imports — decides how amounts are tagged on ingest. */
   budgetType?: BudgetType;
@@ -40,7 +42,7 @@ export const DATASETS: Record<DatasetSlug, DatasetMeta> = {
     kind: DatasetKind.REVENUE_BUDGET,
     slug: "revenue-budget",
     label: "Revenue Budget",
-    description: "What the district plans to collect, by fund and revenue source.",
+    description: "Annual revenue budget by fund and revenue source.",
     periodType: PeriodType.ANNUAL,
     budgetType: BudgetType.ADOPTED,
   },
@@ -48,7 +50,7 @@ export const DATASETS: Record<DatasetSlug, DatasetMeta> = {
     kind: DatasetKind.EXPENDITURE_BUDGET,
     slug: "expenditure-budget",
     label: "Expenditure Budget",
-    description: "What the district plans to spend, by fund, function and object.",
+    description: "Annual expenditure budget by fund, function, and object.",
     periodType: PeriodType.ANNUAL,
     budgetType: BudgetType.ADOPTED,
   },
@@ -56,15 +58,15 @@ export const DATASETS: Record<DatasetSlug, DatasetMeta> = {
     kind: DatasetKind.OPENING_FUND_BALANCE,
     slug: "opening-fund-balance",
     label: "Opening Fund Balance",
-    description:
-      "What the district started the year with. Anchors every fund balance figure for the year.",
+    description: "Beginning Fund Balance by Fund for the fiscal year.",
     periodType: PeriodType.ANNUAL,
   },
   "revenue-detail": {
     kind: DatasetKind.REVENUE_DETAIL,
     slug: "revenue-detail",
     label: "Revenue Detail",
-    description: "What was actually collected this month and year to date.",
+    description: "Actual revenue by fund and revenue source for the selected reporting period.",
+    hint: "Actual revenue collected for the selected reporting period and year to date.",
     periodType: PeriodType.MONTHLY,
     budgetType: BudgetType.CURRENT,
   },
@@ -73,7 +75,7 @@ export const DATASETS: Record<DatasetSlug, DatasetMeta> = {
     slug: "expenditure-detail",
     label: "Expenditure Detail",
     description:
-      "What was actually spent, including encumbrances — money committed but not yet paid.",
+      "Actual expenditures and encumbrances by fund, function, and object for the selected reporting period.",
     periodType: PeriodType.MONTHLY,
     budgetType: BudgetType.CURRENT,
   },
@@ -81,7 +83,7 @@ export const DATASETS: Record<DatasetSlug, DatasetMeta> = {
     kind: DatasetKind.CASH_POSITION,
     slug: "cash-position",
     label: "Cash Position",
-    description: "The month's cash movement, in and out, by fund.",
+    description: "Cash activity and ending cash balance by fund for the selected reporting period.",
     periodType: PeriodType.MONTHLY,
   },
 };

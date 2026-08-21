@@ -274,7 +274,7 @@ export function VersionLog({
             <TH>Version</TH>
             <TH className="text-right">Rows</TH>
             <TH>Source</TH>
-            <TH>Committed</TH>
+            <TH>Uploaded By</TH>
             <TH className="text-right">Actions</TH>
           </TR>
         </THead>

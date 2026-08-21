@@ -45,8 +45,8 @@ export default async function UploadPage() {
   return (
     <div className="animate-fade-up space-y-[18px]">
       <PageHeader
-        title="Upload data"
-        description="One dataset per file. We'll validate it against your master data before anything is imported."
+        title="Upload Data"
+        description="Upload one dataset per file. Data is validated against your master data before import."
       />
       <Card>
         <UploadForm

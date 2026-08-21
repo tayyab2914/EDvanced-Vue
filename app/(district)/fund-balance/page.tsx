@@ -1119,8 +1119,10 @@ export default async function FundBalancePage({
   // leaves inside the card — so the "% of …" column was clipped clean off by the panel's
   // `overflow-clip`. The card scrolls sideways below that width (see the wrapper on the
   // Reserve Components table), the same treatment the fund and cash tables already carry.
+  // The share column is pinned at 150px rather than `auto` so the long "% of projected
+  // General Fund revenue" heading wraps inside it instead of stretching the whole table.
   const BREAKDOWN_COLS =
-    "grid grid-cols-[minmax(150px,1fr)_minmax(96px,auto)_minmax(150px,auto)] items-center gap-x-[12px]";
+    "grid grid-cols-[minmax(150px,1fr)_minmax(96px,auto)_150px] items-center gap-x-[12px]";
 
   return (
     <FundBalanceShell
@@ -1367,9 +1369,9 @@ export default async function FundBalancePage({
               "mt-[14px] pb-[10px] text-[14px] leading-[1.15] tracking-[0.14px] text-[#060606]",
             )}
           >
-            <span>Component</span>
-            <span className="text-right">Amount</span>
-            <span className="text-right">% {reserveOf}</span>
+            <span className="self-end">Component</span>
+            <span className="self-end text-right">Amount</span>
+            <span className="self-end text-balance text-right">% {reserveOf}</span>
           </div>
           <div aria-hidden className="h-px w-full bg-[#060606]/20" />
           <ul>

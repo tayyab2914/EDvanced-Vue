@@ -393,11 +393,11 @@ export const ALERTS: AlertDef[] = [
   {
     id: "REVENUE_SIGNIFICANT_CHANGE",
     group: "revenue",
-    title: "Significant revenue change",
+    title: "Significant Monthly Revenue Change",
     evaluate: (f, p) => {
       const v = f.revenueMomChangePercent;
       if (v === null || v.abs().lessThan(n(p.revenue.significantChange))) return null;
-      return warn(`Revenue ${v.isNegative() ? "fell" : "rose"} ${pct(v.abs())} against last month.`);
+      return warn(`Revenue ${v.isNegative() ? "decreased" : "increased"} ${pct(v.abs())} from the prior month.`);
     },
   },
 

@@ -15,12 +15,14 @@ import {
 import { labelMode } from "@/lib/dashboard/label-mode";
 import { periodLabel } from "@/lib/periods/fiscal";
 import { formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/cn";
 import { VIEW_DETAILS } from "@/lib/dashboard/cta";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ServerTable, type ServerRow } from "@/components/data/server-table";
+import { PeriodSelect, type PeriodOption } from "@/components/data/period-select";
 import type { DatasetKind, PeriodType } from "@/lib/enums";
 
 /**
@@ -100,6 +102,18 @@ export default async function DatasetBrowsePage({
     versions.find((v) => v.fiscalYear === sp.fy) ??
     versions[0];
 
+  // The picker's options, in the order they were read — newest year first, and within a
+  // year the latest period first. `PeriodSelect` groups them by fiscal year off the back
+  // of that order, so it must not be re-sorted here.
+  const periodValue = (v: (typeof versions)[number]) =>
+    v.period !== null ? `${v.fiscalYear}:${v.period}` : v.fiscalYear;
+  const periods: PeriodOption[] = versions.map((v) => ({
+    value: periodValue(v),
+    label: periodLabel(v.periodType as PeriodType, v.period, startMonth),
+    fiscalYear: v.fiscalYear,
+  }));
+  const selectedValue = periodValue(selected);
+
   const dir = sp.dir === "desc" ? "desc" : "asc";
   const filters = filtersFromParams(sp);
 
@@ -154,23 +168,20 @@ export default async function DatasetBrowsePage({
           <span className="text-[11.5px] font-medium uppercase tracking-wider text-muted-2">
             Period
           </span>
-          {versions.slice(0, 12).map((v) => {
-            const active = v.id === selected.id;
-            const href = `/data/${dataset}?fy=${v.fiscalYear}${v.period !== null ? `&period=${v.period}` : ""}`;
-            return (
-              <Link
-                key={v.id}
-                href={href}
-                className={
-                  active
-                    ? "rounded-full bg-brand px-2.5 py-1 text-[12px] font-medium text-white"
-                    : "rounded-full border border-line px-2.5 py-1 text-[12px] text-muted hover:border-[#c8d3e4]"
-                }
-              >
-                {v.fiscalYear} · {periodLabel(v.periodType as PeriodType, v.period, startMonth)}
-              </Link>
-            );
-          })}
+          {/*
+            Every committed period, not the twelve most recent — a district in its fifth
+            year has sixty of these, and the row of pills this replaced could neither show
+            them nor reach past its own cap. One option is not a choice, so a district with
+            a single period reads it rather than opens it.
+          */}
+          {periods.length > 1 ? (
+            <PeriodSelect dataset={dataset} options={periods} value={selectedValue} />
+          ) : (
+            <span className="text-[12.5px] text-ink">
+              FY {selected.fiscalYear} ·{" "}
+              {periodLabel(selected.periodType as PeriodType, selected.period, startMonth)}
+            </span>
+          )}
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line-soft pt-3 text-[12px] text-muted-2">
@@ -209,25 +220,36 @@ function Header({ slug, label }: { slug: string; label: string }) {
     <>
       <PageHeader
         title={label}
-        description="The current version for the selected period. Search, sort and export run on the server."
+        description="Browse, search, sort, and export the current data for the selected period."
       />
-      <div className="flex flex-wrap gap-1.5">
-        {DATASET_SLUGS.map((s) => {
-          const m = datasetBySlug(s)!;
-          return (
-            <Link
-              key={s}
-              href={`/data/${s}`}
-              className={
-                s === slug
-                  ? "rounded-lg bg-navy px-2.5 py-1.5 text-[12px] font-medium text-white"
-                  : "rounded-lg border border-line px-2.5 py-1.5 text-[12px] text-muted hover:border-[#c8d3e4]"
-              }
-            >
-              {m.label}
-            </Link>
-          );
-        })}
+      {/*
+        THE SAME TABS AS CHART OF ACCOUNTS — components/master-data/master-data-workspace.tsx.
+        Two screens that both switch between dimensions of the same district's ledger should
+        not switch differently. Links rather than buttons because each dataset is its own
+        route, but the face is the underline tab, to the pixel.
+      */}
+      <div className="border-b border-line">
+        <div className="-mb-px flex gap-1 overflow-x-auto">
+          {DATASET_SLUGS.map((s) => {
+            const m = datasetBySlug(s)!;
+            const active = s === slug;
+            return (
+              <Link
+                key={s}
+                href={`/data/${s}`}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "whitespace-nowrap border-b-2 px-3 py-2.5 text-[13px] font-medium transition-colors",
+                  active
+                    ? "border-brand text-brand"
+                    : "border-transparent text-muted-2 hover:border-line hover:text-ink-soft",
+                )}
+              >
+                {m.label}
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </>
   );

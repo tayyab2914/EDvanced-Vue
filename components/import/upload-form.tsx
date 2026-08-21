@@ -78,7 +78,7 @@ export function UploadForm({
     <form onSubmit={submit} className="space-y-5">
       {error && <Alert tone="error">{error}</Alert>}
 
-      <Field label="What are you uploading?" htmlFor="dataset">
+      <Field label="Select Dataset" htmlFor="dataset">
         <Select
           id="dataset"
           value={slug}
@@ -88,14 +88,14 @@ export function UploadForm({
           }}
         >
           {/* Grouped by rhythm: a district sets its year up once, then reports monthly. */}
-          <optgroup label="Once a year">
+          <optgroup label="Annual Data">
             {datasets.annual.map((d) => (
               <option key={d.slug} value={d.slug}>
                 {d.label}
               </option>
             ))}
           </optgroup>
-          <optgroup label="Every reporting period">
+          <optgroup label="Periodic Data">
             {datasets.monthly.map((d) => (
               <option key={d.slug} value={d.slug}>
                 {d.label}
@@ -103,11 +103,11 @@ export function UploadForm({
             ))}
           </optgroup>
         </Select>
-        <p className="mt-1.5 text-[12px] text-muted-2">{meta.description}</p>
+        <p className="mt-1.5 text-[12px] text-muted-2">{meta.hint ?? meta.description}</p>
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Fiscal year" htmlFor="fiscalYear">
+        <Field label="Fiscal Year" htmlFor="fiscalYear">
           <Select
             id="fiscalYear"
             value={fiscalYear}
@@ -121,7 +121,7 @@ export function UploadForm({
           </Select>
         </Field>
 
-        <Field label="Reporting period" htmlFor="period">
+        <Field label="Reporting Period" htmlFor="period">
           {isAnnual ? (
             <div className="flex h-[38px] items-center rounded-lg border border-line bg-panel px-3 text-[13px] text-muted">
               Full year — this file has no period
@@ -147,13 +147,13 @@ export function UploadForm({
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         />
         <p className="mt-1.5 text-[12px] text-muted-2">
-          Excel (.xlsx) or CSV. One dataset per file.
+          Accepted formats: Excel (.xlsx) or CSV. One dataset per file.
         </p>
       </Field>
 
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={busy}>
-          {busy ? "Uploading…" : "Upload and validate"}
+          {busy ? "Uploading…" : "Upload and Validate"}
         </Button>
         {busy && (
           <span className="text-[12.5px] text-muted-2">

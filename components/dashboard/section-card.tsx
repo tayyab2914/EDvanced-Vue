@@ -126,7 +126,7 @@ export function CardActionLink({ href, children }: { href: string; children: Rea
 }
 
 /**
- * The "View all revenue alerts ›" link at a card's foot.
+ * The "Go to Revenue Alerts ›" link at a card's foot.
  *
  * `mt-auto` is why the card is asked for `bodyClassName="flex flex-col"`: in a grid row the
  * cards stretch to the tallest, and without it a short card's link floats up mid-air while

@@ -32,15 +32,15 @@ export function ImportTemplates({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-[15px] font-semibold text-ink">Import templates</h2>
+        <h2 className="text-[15px] font-semibold text-ink">Import Templates</h2>
         <p className="mt-0.5 text-[12.5px] text-muted-2">
-          Download a blank template with the exact columns each file needs, fill it in, then
-          upload it above. One dataset per file.
+          Download the required template for each dataset, complete the applicable fields, and
+          upload it above.
         </p>
       </div>
 
-      <Group title="Once a year" items={annual} onDownload={download} />
-      <Group title="Every reporting period" items={monthly} onDownload={download} />
+      <Group title="Annual Data" items={annual} onDownload={download} />
+      <Group title="Periodic Data" items={monthly} onDownload={download} />
     </div>
   );
 }

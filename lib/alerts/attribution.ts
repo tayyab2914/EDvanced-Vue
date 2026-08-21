@@ -462,8 +462,10 @@ async function buildAttribution(
       (f) => (f.revenueMtdBefore === null ? null : f.revenueMtd.minus(f.revenueMtdBefore).abs()),
       (a, f) =>
         `${compactMoney(a)} ${
-          f.revenueMtdBefore !== null && f.revenueMtd.lessThan(f.revenueMtdBefore) ? "down" : "up"
-        } on last month`,
+          f.revenueMtdBefore !== null && f.revenueMtd.lessThan(f.revenueMtdBefore)
+            ? "decrease"
+            : "increase"
+        }`,
     ),
     spendAhead: rank(committedAboveRate, (a, f) => {
       const u = utilisation(f.spendYtd, f.encumbrances, f.spendBudget).percent;

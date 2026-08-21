@@ -41,7 +41,7 @@ interface GroupDef {
   /** The blue foot link when the card is holding alerts — it stays on this page. */
   all: string;
   /**
-   * The blue foot link when the card is CLEAR. "View all cash alerts" would land a reader on
+   * The blue foot link when the card is CLEAR. "Go to Cash Alerts" would land a reader on
    * an empty filtered page; with nothing to triage, the useful destination is the dashboard.
    */
   quiet: string;
@@ -55,8 +55,8 @@ const GROUPS: GroupDef[] = [
     title: "Revenue",
     href: "/revenues",
     cta: GO_TO.revenues,
-    all: "View all revenue alerts",
-    quiet: "View revenue position",
+    all: "Go to Revenue Alerts",
+    quiet: "Go to Revenue Position",
     empty: "No revenue thresholds have been crossed.",
     emptyNote: "Collections are within all policy thresholds.",
   },
@@ -65,8 +65,8 @@ const GROUPS: GroupDef[] = [
     title: "Expenditure",
     href: "/expenditures",
     cta: GO_TO.expenditures,
-    all: "View all expenditure alerts",
-    quiet: "View expenditure position",
+    all: "Go to Expenditure Alerts",
+    quiet: "Go to Expenditure Position",
     empty: "No expenditure thresholds have been crossed.",
     emptyNote: "Spending is within all policy thresholds.",
   },
@@ -75,8 +75,8 @@ const GROUPS: GroupDef[] = [
     title: "Cash",
     href: "/cash",
     cta: GO_TO.cash,
-    all: "View all cash alerts",
-    quiet: "View cash position",
+    all: "Go to Cash Alerts",
+    quiet: "Go to Cash Position",
     empty: "No cash thresholds have been crossed.",
     emptyNote: "Cash position is within all policy thresholds.",
   },
@@ -85,8 +85,8 @@ const GROUPS: GroupDef[] = [
     title: "Fund Balance",
     href: "/fund-balance",
     cta: GO_TO.fundBalance,
-    all: "View all fund balance alerts",
-    quiet: "View fund balance position",
+    all: "Go to Fund Balance Alerts",
+    quiet: "Go to Fund Balance Position",
     empty: "No fund balance thresholds have been crossed.",
     emptyNote: "The reserve is within all policy thresholds.",
   },
