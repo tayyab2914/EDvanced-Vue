@@ -12,6 +12,7 @@ import {
 import { DistrictSwitcher } from "@/components/external/district-switcher";
 import { EXTERNAL_HOME } from "@/lib/auth/routes";
 import { Role } from "@/lib/enums";
+import { DATASET_SLUGS } from "@/lib/datasets/kinds";
 import type { NavGroup, NavItem } from "@/components/sidebar-nav";
 
 export default async function DistrictLayout({
@@ -72,7 +73,17 @@ export default async function DistrictLayout({
     // The periodic browse was reachable only from the version history and from each
     // dataset page — Spec §5.19 flags the missing top-level entry as a known gap and
     // suggests folding it into this milestone. This is that.
-    dataManagement.unshift({ label: "Browse Data", href: "/data/revenue-detail", icon: "search" });
+    //
+    // It opens on the FIRST tab, not on Revenue Detail: the six datasets are one screen with
+    // a tab strip, and a menu entry that lands mid-strip reads as though a tab were missing.
+    // `alsoActiveOn` keeps the row selected across all six — the reader is in Browse Data on
+    // every one of them, whichever tab they moved to.
+    dataManagement.unshift({
+      label: "Browse Data",
+      href: `/data/${DATASET_SLUGS[0]}`,
+      icon: "search",
+      alsoActiveOn: DATASET_SLUGS.map((s) => `/data/${s}`),
+    });
   }
   if (userCan(user, "upload_data")) {
     dataManagement.unshift({ label: "Upload Data", href: "/data/upload", icon: "upload" });

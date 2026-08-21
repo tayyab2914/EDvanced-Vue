@@ -14,6 +14,14 @@ export interface NavItem {
   icon: IconName;
   exact?: boolean;
   /**
+   * Other routes this row owns, beyond its own `href` and that href's sub-routes.
+   *
+   * For the one entry that opens onto a set of tabs: Browse Data points at the first of the
+   * six datasets, but a reader on any of the other five is still in Browse Data and the rail
+   * has to say so. Sub-routes of each entry count, exactly as they do for `href`.
+   */
+  alsoActiveOn?: string[];
+  /**
    * Second-level destinations, revealed only while this branch is the one being read.
    *
    * Deliberately one level deep and deliberately not collapsible by hand: the rail is a
@@ -28,10 +36,16 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+/** Is the reader on this route, or somewhere under it? */
+function under(href: string, pathname: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 /** Does this item's own route match? Sub-routes count unless the item asked for `exact`. */
 function isActive(item: NavItem, pathname: string): boolean {
+  if (item.alsoActiveOn?.some((href) => under(href, pathname))) return true;
   if (item.exact) return pathname === item.href;
-  return pathname === item.href || pathname.startsWith(`${item.href}/`);
+  return under(item.href, pathname);
 }
 
 /**
