@@ -442,7 +442,7 @@ export default async function ForecastPage({
               componentRow("COMMITTED"),
               componentRow("NONSPENDABLE"),
               componentRow("ASSIGNED"),
-              moneyRow("= Projected unassigned fund balance", (y) => ({ value: y.unassigned }), {
+              moneyRow("= Projected Unassigned Fund Balance", (y) => ({ value: y.unassigned }), {
                 emphasis: true,
                 tone: "auto",
               }),

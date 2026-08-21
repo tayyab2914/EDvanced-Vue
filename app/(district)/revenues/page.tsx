@@ -694,7 +694,7 @@ export default async function RevenueDashboard({
       {/* Arms the entrance animations — same one-liner the Executive redesign carries. */}
       <RevealManager />
       <PageHeader
-        title="Revenue"
+        title="Revenues"
         description="Track revenue performance against budget."
         actions={
           <DashboardFilters

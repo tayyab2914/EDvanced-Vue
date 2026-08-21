@@ -10,7 +10,7 @@ import type { DisplaySeverity } from "@/components/dashboard/alert-list";
  *
  * The band's 16px title with the red count capsule beside it; each alert as a 12px sentence
  * with its severity pill at the right, the alert's rule named underneath in 42% black, a
- * red ↗ linking into the Alerts page, and the "By Fund" row of solid-white fund capsules the
+ * red ↗ linking into the Alerts page, and the "Where" row of solid-white fund capsules the
  * client asked for ("the Alerts doesn't tell me which fund… so I do not know where to go").
  * Hairlines between alerts, and the centred "View All N Alerts" capsule at the foot.
  *
@@ -111,7 +111,7 @@ export function RevenueAlertsCard({
                         left: a fund name is 192px and its detail up to 252px, so the
                         label's own gutter was what pushed both into an ellipsis. */}
                     <span className="whitespace-nowrap text-[10px] font-bold leading-normal tracking-[0.08px] text-[#060606] sm:pt-[4px]">
-                      By Fund
+                      Where
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col items-start gap-[4px]">
                       {a.funds!.map((f) => {
