@@ -31,23 +31,28 @@ export function UploadForm({
   const router = useRouter();
   const all = [...datasets.annual, ...datasets.monthly];
 
-  const [slug, setSlug] = useState<DatasetSlug>(datasets.monthly[0]?.slug ?? all[0].slug);
-  const [fiscalYear, setFiscalYear] = useState(fiscalYears[0]);
+  // Every selector starts empty. A pre-filled dataset or year is a mis-tagged import
+  // waiting to happen: the file lands under a label nobody chose, and the mistake only
+  // surfaces once the numbers are already in a report.
+  const [slug, setSlug] = useState<DatasetSlug | "">("");
+  const [fiscalYear, setFiscalYear] = useState("");
   const [period, setPeriod] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const meta = all.find((d) => d.slug === slug)!;
-  const isAnnual = meta.periodType === PeriodType.ANNUAL;
-  const periods = periodOptions(meta.periodType, startMonth);
+  const meta = all.find((d) => d.slug === slug) ?? null;
+  const isAnnual = meta?.periodType === PeriodType.ANNUAL;
+  const periods = meta ? periodOptions(meta.periodType, startMonth) : [];
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (!file) return setError("Choose a file to upload.");
+    if (!slug) return setError("Choose a dataset.");
+    if (!fiscalYear) return setError("Choose a fiscal year.");
     if (!isAnnual && !period) return setError("Choose a reporting period.");
+    if (!file) return setError("Choose a file to upload.");
 
     const body = new FormData();
     body.set("dataset", slug);
@@ -83,10 +88,11 @@ export function UploadForm({
           id="dataset"
           value={slug}
           onChange={(e) => {
-            setSlug(e.target.value as DatasetSlug);
+            setSlug(e.target.value as DatasetSlug | "");
             setPeriod("");
           }}
         >
+          <option value="">Select a dataset…</option>
           {/* Grouped by rhythm: a district sets its year up once, then reports monthly. */}
           <optgroup label="Annual Data">
             {datasets.annual.map((d) => (
@@ -103,7 +109,9 @@ export function UploadForm({
             ))}
           </optgroup>
         </Select>
-        <p className="mt-1.5 text-[12px] text-muted-2">{meta.hint ?? meta.description}</p>
+        {meta && (
+          <p className="mt-1.5 text-[12px] text-muted-2">{meta.hint ?? meta.description}</p>
+        )}
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -113,6 +121,7 @@ export function UploadForm({
             value={fiscalYear}
             onChange={(e) => setFiscalYear(e.target.value)}
           >
+            <option value="">Select a fiscal year…</option>
             {fiscalYears.map((fy) => (
               <option key={fy} value={fy}>
                 {fy}
@@ -123,12 +132,19 @@ export function UploadForm({
 
         <Field label="Reporting Period" htmlFor="period">
           {isAnnual ? (
-            <div className="flex h-[38px] items-center rounded-lg border border-line bg-panel px-3 text-[13px] text-muted">
+            <div className="flex h-[42px] items-center rounded-lg border border-line bg-panel px-3 text-[13px] text-muted">
               Full year — this file has no period
             </div>
           ) : (
-            <Select id="period" value={period} onChange={(e) => setPeriod(e.target.value)}>
-              <option value="">Select a period…</option>
+            // Until a dataset is picked we don't know the rhythm, so there is nothing
+            // sensible to offer — the control says so rather than sitting empty.
+            <Select
+              id="period"
+              value={period}
+              disabled={!meta}
+              onChange={(e) => setPeriod(e.target.value)}
+            >
+              <option value="">{meta ? "Select a period…" : "Select a dataset first…"}</option>
               {periods.map((p) => (
                 <option key={p.value} value={p.value}>
                   {p.label}

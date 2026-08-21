@@ -1,7 +1,8 @@
 import { Prisma } from "@/lib/generated/prisma/client";
-import type { PolicyValues } from "@/lib/policies/registry";
+import { requiredReservePercent, type PolicyValues } from "@/lib/policies/registry";
 import { compactMoney } from "@/lib/dashboard/format";
-import { RESERVE_DENOMINATOR_LABELS, type ReserveBasis, type ReserveDenominator } from "@/lib/enums";
+import type { ReserveBasis, ReserveDenominator } from "@/lib/enums";
+import { reserveCaption, reserveSubject, type ReserveCaptionInput } from "@/lib/dashboard/reserve";
 
 /**
  * The twenty-seven alerts, declared rather than coded.
@@ -124,23 +125,34 @@ const crit = (message: string): AlertHit => ({ severity: "CRITICAL", message });
 
 /**
  * ---------------------------------------------------------------------------
- * NAMING THE DENOMINATOR IN THE SENTENCE — why these three helpers exist.
+ * NAMING THE DENOMINATOR IN THE SENTENCE — why these helpers exist.
  *
  * There are now three reserve percentages a district can see in one sitting: the
  * budget-driven projection, the pace-driven projection, and last year's outturn. They are
  * all "the reserve", they are all a percentage, and two of them can be on screen together.
  *
- * A sentence reading "Unassigned reserve is 3.5%, below your 3% warning threshold" does not
+ * A sentence reading "Unassigned fund balance is 3.5%, below your 3% warning threshold" does not
  * say which of the three it is or what it is 3.5% OF — and the district's own workbook
  * measures against revenue while the platform used to measure against expenditures, so
  * "3.5%" was already a figure two people could read two ways. Every reserve alert now says
  * both: the tense, and the divisor.
  * ---------------------------------------------------------------------------
+ *
+ * ONE VOCABULARY, shared with the dashboards — `reserveSubject` and `reserveCaption` live
+ * in lib/dashboard/reserve.ts and are what the executive tile, the fund balance band and
+ * the Key Insights already print.
+ *
+ * The catalogue used to keep its own pair, and they had drifted: an alert said "Projected
+ * unassigned reserve" over a screen whose tile, caption and trend line all said "Projected
+ * unassigned fund balance". Same figure, two names, on one page. AlertFacts is a FLAT bag,
+ * so the only thing needed here is the adapter into the shape those helpers take.
+ * ---------------------------------------------------------------------------
  */
-const reserveSubject = (f: AlertFacts) =>
-  f.reserveIsActual ? "Unassigned reserve" : "Projected unassigned reserve";
-
-const ofBasis = (f: AlertFacts) => `of ${RESERVE_DENOMINATOR_LABELS[f.reserveDenominator]}`;
+const reserveView = (f: AlertFacts): ReserveCaptionInput => ({
+  denominator: f.reserveDenominator,
+  basis: f.reserveBasis,
+  actual: f.reserveIsActual,
+});
 
 /**
  * The dollar gap to the statutory floor, appended only when the district is actually short.
@@ -148,10 +160,16 @@ const ofBasis = (f: AlertFacts) => `of ${RESERVE_DENOMINATOR_LABELS[f.reserveDen
  * A percentage below a threshold tells a board it has a problem; the dollars tell it how
  * big. `excessUnassigned` is already the difference, so this costs nothing to say.
  */
-const shortfall = (f: AlertFacts) =>
-  f.excessUnassigned.isNegative()
-    ? ` That is ${money(f.excessUnassigned.abs())} short of the ${money(f.requiredReserve)} required reserve.`
-    : "";
+const shortfall = (f: AlertFacts, p: PolicyValues) => {
+  if (!f.excessUnassigned.isNegative()) return "";
+  // "Required reserve" says a floor exists without saying WHOSE — and a board reading it
+  // beside its own target and board-policy minimum has three floors to choose between. The
+  // figure is the State Minimum policy applied to the denominator, so the sentence says so.
+  // Only where that minimum is actually set: a district with no statutory floor configured
+  // would otherwise be told the state requires $0 of it.
+  const floor = requiredReservePercent(p) > 0 ? "state-required minimum reserve" : "required reserve";
+  return ` That is ${money(f.excessUnassigned.abs())} short of the ${money(f.requiredReserve)} ${floor}.`;
+};
 
 /**
  * ---------------------------------------------------------------------------
@@ -346,7 +364,7 @@ export const ALERTS: AlertDef[] = [
   {
     id: "REVENUE_ABOVE_BUDGET",
     group: "revenue",
-    title: "Revenue above budget",
+    title: "Collections Above Expected",
     evaluate: (f, p) => {
       const v = f.revenueVariancePercent;
       if (v === null || !v.isPositive()) return null;
@@ -355,7 +373,7 @@ export const ALERTS: AlertDef[] = [
       if (severity === null) return null;
       return {
         severity,
-        message: `Collections are ${pct(v)} above expected YTD levels${against(f, v)}. Worth confirming the budget is current.`,
+        message: `Collections are ${pct(v)} above expected YTD levels${against(f, v)}.`,
       };
     },
   },
@@ -518,7 +536,7 @@ export const ALERTS: AlertDef[] = [
     evaluate: (f, p) => {
       const v = f.expenditureMomIncreasePercent;
       if (v === null) return null;
-      const msg = `Spending jumped ${pct(v)} against last month.`;
+      const msg = `Spending increased ${pct(v)} from the prior month.`;
       if (v.greaterThanOrEqualTo(n(p.expenditure.momIncreaseCritical))) return crit(msg);
       if (v.greaterThanOrEqualTo(n(p.expenditure.momIncreaseWarning))) return warn(msg);
       return null;
@@ -556,7 +574,7 @@ export const ALERTS: AlertDef[] = [
     evaluate: (f, p) => {
       const v = f.cashDecreasePercent;
       if (v === null) return null;
-      const msg = `Cash fell ${pct(v)} against last month.`;
+      const msg = `Cash decreased ${pct(v)} from the prior month.`;
       if (v.greaterThanOrEqualTo(n(p.cash.decreaseCritical))) return crit(msg);
       if (v.greaterThanOrEqualTo(n(p.cash.decreaseWarning))) return warn(msg);
       return null;
@@ -574,7 +592,7 @@ export const ALERTS: AlertDef[] = [
       // Below target but not yet at the warning bar — a nudge, not an alarm.
       if (!lt(v, target) || lt(v, n(p.fundBalance.warning))) return null;
       return warn(
-        `${reserveSubject(f)} is ${pct(v!)} ${ofBasis(f)}, below the ${target}% you aim to hold.`,
+        `${reserveSubject(reserveView(f))} is ${pct(v!)} ${reserveCaption(reserveView(f))}, below the ${target}% you aim to hold.`,
       );
     },
   },
@@ -587,7 +605,7 @@ export const ALERTS: AlertDef[] = [
       const w = n(p.fundBalance.warning);
       if (!lt(v, w) || lt(v, n(p.fundBalance.critical))) return null;
       return warn(
-        `${reserveSubject(f)} is ${pct(v!)} ${ofBasis(f)}, below your ${w}% warning threshold.${shortfall(f)}`,
+        `${reserveSubject(reserveView(f))} is ${pct(v!)} ${reserveCaption(reserveView(f))}, below your ${w}% warning threshold.${shortfall(f, p)}`,
       );
     },
   },
@@ -600,7 +618,7 @@ export const ALERTS: AlertDef[] = [
       const c = n(p.fundBalance.critical);
       if (!lt(v, c)) return null;
       return crit(
-        `${reserveSubject(f)} is ${pct(v!)} ${ofBasis(f)}, below your ${c}% critical threshold.${shortfall(f)}`,
+        `${reserveSubject(reserveView(f))} is ${pct(v!)} ${reserveCaption(reserveView(f))}, below your ${c}% critical threshold.${shortfall(f, p)}`,
       );
     },
   },
@@ -627,7 +645,7 @@ export const ALERTS: AlertDef[] = [
       const target = n(p.fundBalance.target);
       if (!lt(v, target) || lt(v, n(p.fundBalance.forecastWarning))) return null;
       return warn(
-        `At the current projected pace, unassigned fund balance is expected to end at ${pct(v!)} ${ofBasis(f)}, below the ${thr(target)} target.`,
+        `At the current projected pace, unassigned fund balance is expected to end at ${pct(v!)} ${reserveCaption(reserveView(f))}, below the ${thr(target)} target.`,
       );
     },
   },
@@ -640,7 +658,7 @@ export const ALERTS: AlertDef[] = [
       const w = n(p.fundBalance.forecastWarning);
       if (!lt(v, w) || lt(v, n(p.fundBalance.forecastCritical))) return null;
       return warn(
-        `At the current projected pace, unassigned fund balance is expected to end at ${pct(v!)} ${ofBasis(f)}, below the ${thr(w)} warning threshold.`,
+        `At the current projected pace, unassigned fund balance is expected to end at ${pct(v!)} ${reserveCaption(reserveView(f))}, below the ${thr(w)} warning threshold.`,
       );
     },
   },
@@ -653,7 +671,7 @@ export const ALERTS: AlertDef[] = [
       const c = n(p.fundBalance.forecastCritical);
       if (!lt(v, c)) return null;
       return crit(
-        `At the current projected pace, unassigned fund balance is expected to end at ${pct(v!)} ${ofBasis(f)}, below the ${thr(c)} critical threshold.`,
+        `At the current projected pace, unassigned fund balance is expected to end at ${pct(v!)} ${reserveCaption(reserveView(f))}, below the ${thr(c)} critical threshold.`,
       );
     },
   },
@@ -675,7 +693,7 @@ export const ALERTS: AlertDef[] = [
     evaluate: (f) =>
       f.componentsExceedTotal
         ? crit(
-            "The projected restricted, committed and assigned components add up to more than the projected balance, which would leave the unassigned reserve negative.",
+            "The projected restricted, committed and assigned components add up to more than the projected balance, which would leave the unassigned fund balance negative.",
           )
         : null,
   },

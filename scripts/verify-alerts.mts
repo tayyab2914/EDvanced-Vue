@@ -429,7 +429,7 @@ assert(
  *
  * Three reserve percentages can reach a district in one sitting: the budget projection, the
  * pace projection, and last year's outturn. Before M6 every one of them rendered as a bare
- * "Unassigned reserve is 3.5%", which is not a number a board can act on without being told
+ * "Unassigned fund balance is 3.5%", which is not a number a board can act on without being told
  * the denominator and the tense.
  */
 console.log("\nReserve alerts name their denominator and their tense");
@@ -437,7 +437,7 @@ const projected = fire({ ...healthy(), reservePercent: d("2.5") }).find(
   (x) => x.id === "FUND_BALANCE_WARNING",
 )!.hit!.message;
 assert(
-  projected.includes("Projected unassigned reserve"),
+  projected.includes("Projected unassigned fund balance"),
   `a mid-year reserve alert says it is projected (got "${projected}")`,
 );
 assert(
@@ -477,6 +477,13 @@ const short = fire({
 assert(
   short.includes("short of the"),
   `a district below its required reserve is told the dollar gap (got "${short}")`,
+);
+// And WHOSE floor it is. "Required reserve" alone sits beside a district target and a board
+// policy minimum in the same policy group; the figure is the State Minimum applied to the
+// denominator, so the sentence names it.
+assert(
+  short.includes("state-required minimum reserve"),
+  `and that the floor is the state's, not one of its own (got "${short}")`,
 );
 assert(
   !projected.includes("short of the"),

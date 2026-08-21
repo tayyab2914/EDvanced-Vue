@@ -13,6 +13,7 @@ import { Input, Select } from "@/components/ui/input";
 import { Icon } from "@/components/icons";
 import { Table, THead, TBody, TR, TH, TD, EmptyRow } from "@/components/ui/table";
 import { csvFilename, downloadCsv, toCsv } from "@/lib/csv-export";
+import { DATASETS } from "@/lib/datasets/kinds";
 
 export interface VersionLogRow {
   id: string;
@@ -27,7 +28,6 @@ export interface VersionLogRow {
   warningCount: number;
   fileName: string;
   committedAt: string;
-  committedAtMs: number;
   committedBy: string;
   /** False when a later Replace destroyed this version's rows — it cannot be restored. */
   hasData: boolean;
@@ -35,6 +35,23 @@ export interface VersionLogRow {
   /** The version immediately before this one for the same dataset + period, if any. */
   compareToId: string | null;
   compareToVersion: number | null;
+}
+
+/**
+ * The six importers in their declaration order — Revenue Budget first, Cash Position last.
+ *
+ * The same order the browse tabs and the upload dropdown use. Sections here were ordered by
+ * most-recent upload instead, which meant this page opened on whichever dataset the district
+ * happened to touch last (Revenue Detail, most months) and re-ordered itself under them as
+ * they uploaded. A fixed order is the one a district already knows, and it does not move.
+ */
+const DATASET_ORDER = new Map<string, number>(
+  Object.values(DATASETS).map((d, i) => [d.kind as string, i]),
+);
+
+/** Where a dataset sorts. Unknown kinds — a retired importer's rows — fall to the end. */
+function datasetOrder(kind: string): number {
+  return DATASET_ORDER.get(kind) ?? DATASET_ORDER.size;
 }
 
 const ACTION_LABEL: Record<VersionLogRow["action"], string> = {
@@ -79,7 +96,8 @@ export function VersionLog({
     () =>
       [...new Map(rows.map((r) => [r.dataset, r.datasetLabel]))]
         .map(([value, label]) => ({ value, label }))
-        .sort((a, b) => a.label.localeCompare(b.label)),
+        // Dataset order, not alphabetical — the same order the sections below are in.
+        .sort((a, b) => datasetOrder(a.value) - datasetOrder(b.value)),
     [rows],
   );
   const fiscalYearOptions = useMemo(
@@ -103,28 +121,19 @@ export function VersionLog({
   }, [rows, query, dataset, fiscalYear]);
 
   // One group per dataset. Rows keep the order the server sent (fiscal year, then period, then
-  // version — all newest-first), so each dataset reads as its own history. Groups are ordered
-  // by their most-recent upload, so the dataset a district touched last sits at the top.
+  // version — all newest-first), so each dataset reads as its own history. The groups are in
+  // the fixed dataset order — see DATASET_ORDER — so the page always opens on the same one.
   const groups = useMemo(() => {
     const map = new Map<
       string,
-      { dataset: string; datasetLabel: string; rows: VersionLogRow[]; latest: number }
+      { dataset: string; datasetLabel: string; rows: VersionLogRow[] }
     >();
     for (const r of filtered) {
       const g = map.get(r.dataset);
-      if (g) {
-        g.rows.push(r);
-        g.latest = Math.max(g.latest, r.committedAtMs);
-      } else {
-        map.set(r.dataset, {
-          dataset: r.dataset,
-          datasetLabel: r.datasetLabel,
-          rows: [r],
-          latest: r.committedAtMs,
-        });
-      }
+      if (g) g.rows.push(r);
+      else map.set(r.dataset, { dataset: r.dataset, datasetLabel: r.datasetLabel, rows: [r] });
     }
-    return [...map.values()].sort((a, b) => b.latest - a.latest);
+    return [...map.values()].sort((a, b) => datasetOrder(a.dataset) - datasetOrder(b.dataset));
   }, [filtered]);
 
   const activeFilters = (dataset ? 1 : 0) + (fiscalYear ? 1 : 0);

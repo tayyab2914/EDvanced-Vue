@@ -96,7 +96,7 @@ export default async function ForecastPage({
     return (
       <FundBalanceShell scope={scope} active="/fund-balance/forecast" alertCount={fbAlerts.length}>
         <EmptyState title="No General Fund identified" icon="database" action="Manage funds" href="/master-data?tab=funds">
-          Multi-year projection and the projected unassigned reserve apply to the General Fund
+          Multi-year projection and the projected unassigned fund balance apply to the General Fund
           only. Set one of your funds to the &ldquo;General&rdquo; fund type to see this view.
         </EmptyState>
       </FundBalanceShell>
@@ -511,7 +511,7 @@ export default async function ForecastPage({
           <div className="mt-[10px]">
             <LineChart
               title="Projected reserve percentage"
-              summary={`Projected unassigned reserve as a share of projected revenues across ${projection.length} fiscal years, against the district's own thresholds.`}
+              summary={`Projected unassigned fund balance as a share of projected revenues across ${projection.length} fiscal years, against the district's own thresholds.`}
               categories={projection.map((y) => `FY${y.fiscalYear.slice(2)}`)}
               format={(v) => `${v.toFixed(1)}%`}
               height={260}

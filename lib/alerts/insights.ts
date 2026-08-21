@@ -82,7 +82,7 @@ export function buildInsights(args: {
         ? `Budget is overcommitted by ${compactMoney(available.abs())}.`
         : `Available budget is ${compactMoney(available)}${share === null ? "" : ` (${share.toFixed(0)}% of full-year budget)`}.`,
       detail: over
-        ? "Spending plus encumbrances exceeds the adopted budget."
+        ? "Spending plus encumbrances exceeds the current budget."
         : "Sufficient remaining budget for planned activities.",
       href: "/expenditures",
     });

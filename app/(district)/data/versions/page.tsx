@@ -64,7 +64,6 @@ export default async function VersionsPage() {
       warningCount: v.warningCount,
       fileName: v.fileName,
       committedAt: formatDateTime(v.committedAt),
-      committedAtMs: v.committedAt.getTime(),
       committedBy: actorName.get(v.committedByUserId) ?? "—",
       hasData: (rowCounts.get(v.id) ?? 0) > 0,
       restoredFrom: null,
@@ -100,7 +99,7 @@ export default async function VersionsPage() {
 
   // Rows stay in the query order (fiscal year, then period, then version — newest-first) so
   // that within each dataset group they read as that dataset's history. The log groups them by
-  // dataset and orders the groups by most-recent upload.
+  // dataset and orders the groups the way the browse tabs are ordered.
 
   return (
     // No `animate-fade-up` here: its transform would become the containing block for the row

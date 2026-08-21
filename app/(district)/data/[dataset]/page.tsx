@@ -22,7 +22,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ServerTable, type ServerRow } from "@/components/data/server-table";
-import { PeriodSelect, type PeriodOption } from "@/components/data/period-select";
+import { PeriodSelect, type FiscalYearOption } from "@/components/data/period-select";
 import type { DatasetKind, PeriodType } from "@/lib/enums";
 
 /**
@@ -92,27 +92,32 @@ export default async function DatasetBrowsePage({
     );
   }
 
-  // Default to the most recent period that has data — the one they almost always want.
+  // Default to the most recent period that has data — the one they almost always want. A
+  // year without the requested period falls back to that year's latest, which is what the
+  // fiscal-year dropdown relies on when it changes year without naming a period.
   const selected =
-    versions.find(
-      (v) =>
-        v.fiscalYear === sp.fy &&
-        String(v.period ?? "") === (sp.period ?? String(v.period ?? "")),
-    ) ??
-    versions.find((v) => v.fiscalYear === sp.fy) ??
-    versions[0];
+    (sp.fy
+      ? (versions.find(
+          (v) => v.fiscalYear === sp.fy && (!sp.period || String(v.period ?? "") === sp.period),
+        ) ?? versions.find((v) => v.fiscalYear === sp.fy))
+      : undefined) ?? versions[0];
 
-  // The picker's options, in the order they were read — newest year first, and within a
-  // year the latest period first. `PeriodSelect` groups them by fiscal year off the back
-  // of that order, so it must not be re-sorted here.
-  const periodValue = (v: (typeof versions)[number]) =>
-    v.period !== null ? `${v.fiscalYear}:${v.period}` : v.fiscalYear;
-  const periods: PeriodOption[] = versions.map((v) => ({
-    value: periodValue(v),
-    label: periodLabel(v.periodType as PeriodType, v.period, startMonth),
-    fiscalYear: v.fiscalYear,
-  }));
-  const selectedValue = periodValue(selected);
+  // The picker's two lists. Years keep the order they were read in — newest first — and are
+  // grouped off the back of that order, so this must not be re-sorted. The periods within a
+  // year are turned back the other way: twelve months read as a calendar, not as a history.
+  const years: FiscalYearOption[] = [];
+  for (const v of versions) {
+    const last = years[years.length - 1];
+    const year = last?.fiscalYear === v.fiscalYear ? last : null;
+    const entry = year ?? { fiscalYear: v.fiscalYear, periods: [] };
+    if (!year) years.push(entry);
+    if (v.period !== null) {
+      entry.periods.unshift({
+        value: String(v.period),
+        label: periodLabel(v.periodType as PeriodType, v.period, startMonth),
+      });
+    }
+  }
 
   const dir = sp.dir === "desc" ? "desc" : "asc";
   const filters = filtersFromParams(sp);
@@ -164,25 +169,18 @@ export default async function DatasetBrowsePage({
       <Header slug={dataset} label={meta.label} />
 
       <Card>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11.5px] font-medium uppercase tracking-wider text-muted-2">
-            Period
-          </span>
-          {/*
-            Every committed period, not the twelve most recent — a district in its fifth
-            year has sixty of these, and the row of pills this replaced could neither show
-            them nor reach past its own cap. One option is not a choice, so a district with
-            a single period reads it rather than opens it.
-          */}
-          {periods.length > 1 ? (
-            <PeriodSelect dataset={dataset} options={periods} value={selectedValue} />
-          ) : (
-            <span className="text-[12.5px] text-ink">
-              FY {selected.fiscalYear} ·{" "}
-              {periodLabel(selected.periodType as PeriodType, selected.period, startMonth)}
-            </span>
-          )}
-        </div>
+        {/*
+          Fiscal year and reporting period are picked separately — one list that grows a
+          row a year, one that is capped at the twelve months of a fiscal year — rather
+          than as one list of every committed version, which grows twelve a year on the
+          monthly datasets. See components/data/period-select.tsx.
+        */}
+        <PeriodSelect
+          dataset={dataset}
+          years={years}
+          fiscalYear={selected.fiscalYear}
+          period={selected.period !== null ? String(selected.period) : null}
+        />
 
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line-soft pt-3 text-[12px] text-muted-2">
           <Badge tone="green">Current · v{selected.version}</Badge>

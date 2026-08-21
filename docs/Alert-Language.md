@@ -49,12 +49,12 @@ drops the dollars:
 
 > Revenue collections are **100.0%** below expected year-to-date levels.
 
-### 2.2 Revenue above budget — *Review* only
+### 2.2 Collections Above Expected — *Review* only
 
 Fires when collections are ahead of pace by the same warning threshold. Over-collection is never
 raised to critical — it is a real state to surface, not a failure.
 
-> Collections are **6.2%** above expected YTD levels (**$55.48M** against **$52.23M**). Worth confirming the budget is current.
+> Collections are **6.2%** above expected YTD levels (**$55.48M** against **$52.23M**).
 
 ### 2.3 Forecast revenue below budget — *Review* or *Action Required*
 
@@ -138,7 +138,7 @@ Where the projected dollar figure is unavailable, the percentage carries it alon
 
 Warning at **15%**, critical at **25%** by default.
 
-> Spending jumped **27.3%** against last month.
+> Spending increased **27.3%** from the prior month.
 
 ---
 
@@ -160,7 +160,7 @@ Below the critical threshold (default **45 days**).
 
 Warning at **10%**, critical at **20%** by default.
 
-> Cash fell **12.4%** against last month.
+> Cash decreased **12.4%** from the prior month.
 
 ---
 
@@ -170,8 +170,10 @@ Three of these describe the **current** position and three describe the **projec
 can be on screen at once with different numbers. Every sentence therefore says two things
 explicitly: whether it is a projection or an outturn, and what the percentage is a percentage *of*.
 
-**The subject** is *"Projected unassigned reserve"* while the year is still open, and *"Unassigned
-reserve"* once the figures are final.
+**The subject** is *"Projected unassigned fund balance"* while the year is still open, and
+*"Unassigned fund balance"* once the figures are final. It is the same phrase the executive tile,
+the fund balance band and the Key Insights use for this figure — the alerts used to be the one
+place calling it a *reserve*.
 
 **The basis** is whichever the district has chosen, named in the sentence:
 
@@ -184,21 +186,25 @@ reserve"* once the figures are final.
 
 Below the District Target (default **5%**) but not yet at the warning bar — a nudge, not an alarm.
 
-> **Projected unassigned reserve** is **4.2%** *of projected General Fund revenue*, below the **5%** you aim to hold.
+> **Projected unassigned fund balance** is **4.2%** *of projected General Fund revenue*, below the **5%** you aim to hold.
 
 ### 5.2 Reserve below warning threshold — *Review*
 
 Below the warning threshold (default **3%**).
 
-> **Projected unassigned reserve** is **2.6%** *of projected General Fund revenue*, below your **3%** warning threshold. That is **$1.04M** short of the **$6.27M** required reserve.
+> **Projected unassigned fund balance** is **2.6%** *of projected General Fund revenue*, below your **3%** warning threshold. That is **$1.04M** short of the **$6.27M** state-required minimum reserve.
 
-The second sentence appears only when the district is actually short of the statutory floor.
+The second sentence appears only when the district is actually short of the statutory floor, and
+it names that floor as the state's — the figure is the **State Minimum (Required Reserve)** setting
+applied to the denominator, not the district's own target or its board policy minimum, which sit
+beside it in the same policy group. A district with no state minimum configured keeps the plain
+wording, *"required reserve"*.
 
 ### 5.3 Reserve critical — *Action Required*
 
 Below the critical threshold (default **2%**).
 
-> **Projected unassigned reserve** is **1.4%** *of projected General Fund revenue*, below your **2%** critical threshold. That is **$3.35M** short of the **$6.27M** required reserve.
+> **Projected unassigned fund balance** is **1.4%** *of projected General Fund revenue*, below your **2%** critical threshold. That is **$3.35M** short of the **$6.27M** state-required minimum reserve.
 
 ### 5.4 Forecast reserve below target — *Review*
 
@@ -223,7 +229,7 @@ and spending implies — rather than what the amended budget implies.
 
 Fixed sentence, no figures:
 
-> The projected restricted, committed and assigned components add up to more than the projected balance, which would leave the unassigned reserve negative.
+> The projected restricted, committed and assigned components add up to more than the projected balance, which would leave the unassigned fund balance negative.
 
 ---
 
@@ -257,7 +263,7 @@ The detail wording, by alert family:
 | Alert family | Detail line |
 |---|---|
 | Collections below expected | `$10.92M below expected` |
-| Revenue above budget | `$3.44M ahead of pace` |
+| Collections above expected | `$3.44M ahead of pace` |
 | Revenue forecast off budget | `$8.10M projected below budget` / `…above budget` |
 | Significant monthly revenue change | `$2.06M increase` / `$2.06M decrease` |
 | Budget utilization (warning & critical) | `84.2% utilized · $3.29M above expected utilization` |
@@ -303,7 +309,7 @@ Ahead of pace, both lines read "above".
 > *Sufficient remaining budget for planned activities.*
 
 > Budget is overcommitted by **$1.86M**.
-> *Spending plus encumbrances exceeds the adopted budget.*
+> *Spending plus encumbrances exceeds the current budget.*
 
 **Spending against budget** → links to Expenditures
 
@@ -314,10 +320,10 @@ Within threshold, the second line reads: *Within your 80% warning threshold.*
 
 **The reserve** → links to Fund Balance
 
-> **Projected unassigned reserve** is below policy target.
+> **Projected unassigned fund balance** is below policy target.
 > *4.20% of projected General Fund revenue against a 5.00% target. Action needed to rebuild reserves.*
 
-> **Projected unassigned reserve** is **6.10%**, at or above policy target.
+> **Projected unassigned fund balance** is **6.10%**, at or above policy target.
 > *6.10% of projected General Fund revenue against a 5.00% target.*
 
 **Cash** — appears only when below the policy minimum → links to Cash

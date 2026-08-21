@@ -203,8 +203,8 @@ If unassigned falls below the required reserve, the excess line is negative. The
 renders that as a **shortfall** rather than as a negative surplus, and the reserve alert
 states the dollar gap:
 
-> Projected unassigned reserve is 1.5% of projected General Fund revenue, below your 2%
-> critical threshold. That is $420K short of the $360K required reserve.
+> Projected unassigned fund balance is 1.5% of projected General Fund revenue, below your 2%
+> critical threshold. That is $420K short of the $360K state-required minimum reserve.
 
 ---
 

@@ -21,8 +21,6 @@ const FEATURES: { icon: IconName; title: string; detail: string }[] = [
 ];
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
-  const year = new Date().getFullYear();
-
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       {/* Marketing panel. Corner-to-corner navy (135deg = top-left → bottom-right), no
@@ -67,13 +65,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
           </ul>
         </div>
 
-        <div className="relative flex items-center gap-4 text-[12px] text-[#7d8ba3]">
-          <span>© {year} EDvanced Vue, LLC. All rights reserved.</span>
-          <span className="text-[#2a3a52]">|</span>
-          <span>Privacy Policy</span>
-          <span className="text-[#2a3a52]">|</span>
-          <span>Terms of Service</span>
-        </div>
+        {/* Legal footer removed pending US review — spacer keeps the
+            justify-between rhythm so the copy block stays put. */}
+        <div aria-hidden />
       </div>
 
       {/* Form panel */}

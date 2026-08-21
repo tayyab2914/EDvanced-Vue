@@ -98,6 +98,18 @@ export function ServerTable({
     navigate(cleared);
   }
 
+  /**
+   * Every column gets air on both sides; the outer two stay flush with the card.
+   *
+   * The old rule padded amounts on the left and everything else on the right, which
+   * holds up until a right-aligned amount column sits directly beside a left-aligned
+   * text one — then neither side contributes a gutter and `$19,000,000` runs straight
+   * into the date next to it. Fund Balance has exactly that seam.
+   */
+  function gutter(i: number) {
+    return cn(i > 0 && "pl-3", i < columns.length - 1 && "pr-3");
+  }
+
   function toggleSort(key: string) {
     // Same rule as lib/sort.ts: first click ascends, clicking the active column flips.
     const nextDir = sort === key && dir === "asc" ? "desc" : "asc";
@@ -195,7 +207,7 @@ export function ServerTable({
         <table className="w-full text-[12.5px]">
           <thead>
             <tr className="border-b border-line text-left text-[10.5px] uppercase tracking-wider text-muted">
-              {columns.map((c) => (
+              {columns.map((c, i) => (
                 <th
                   key={c.key}
                   className={cn("font-semibold", c.type === "amount" && "text-right")}
@@ -210,7 +222,8 @@ export function ServerTable({
                     onClick={() => toggleSort(c.key)}
                     className={cn(
                       "w-full py-2 hover:text-ink",
-                      c.type === "amount" ? "pl-3 text-right" : "pr-3 text-left",
+                      c.type === "amount" ? "text-right" : "text-left",
+                      gutter(i),
                     )}
                   >
                     {c.label}
@@ -234,7 +247,7 @@ export function ServerTable({
             )}
             {rows.map((r) => (
               <tr key={r.id} className="border-b border-line-soft">
-                {columns.map((c) => (
+                {columns.map((c, i) => (
                   <td
                     key={c.key}
                     // Always the full `Code — Name`, even when the cell shows it in full:
@@ -242,10 +255,14 @@ export function ServerTable({
                     title={r.titles[c.key] ?? undefined}
                     className={cn(
                       "py-2",
-                      c.type === "amount"
-                        ? "pl-3 text-right font-mono tabular-nums"
-                        : "pr-3",
+                      gutter(i),
+                      c.type === "amount" && "text-right font-mono tabular-nums",
                       c.type === "code" && "text-ink-soft",
+                      // A date is one token, but the browser will happily break it at its
+                      // hyphens — and it does, the moment the mono amount columns to its
+                      // left refuse to give up any width. `2026-07-01` lands on two lines
+                      // in a table that is already scrolling sideways anyway.
+                      c.type === "date" && "whitespace-nowrap",
                     )}
                   >
                     {r.cells[c.key] ? (
@@ -276,7 +293,11 @@ export function ServerTable({
                     key={c.key}
                     className={cn(
                       "py-2",
-                      c.type === "amount" ? "pl-3 text-right font-mono tabular-nums" : "pr-3",
+                      gutter(i),
+                      c.type === "amount" && "text-right font-mono tabular-nums",
+                      // The label is the widest thing in the first column; letting it wrap
+                      // would set that column's width on every row above it.
+                      i === 0 && "whitespace-nowrap",
                     )}
                   >
                     {/* The label rides in the first cell, so the row reads as a total even

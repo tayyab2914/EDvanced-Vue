@@ -387,6 +387,10 @@ export function ExternalAccessManager({
                   now,
                 );
                 const isLive = state === "ACTIVE";
+                // Expiry is derived, so a lapsed grant is still stored as ACTIVE — and
+                // still actionable. Extending it is how a district lets someone back in;
+                // revoking it closes the grant for good. Both server actions accept it.
+                const canAct = g.status === "ACTIVE";
                 const left = g.expiresAt ? daysUntil(g.expiresAt, now) : null;
 
                 return (
@@ -423,7 +427,7 @@ export function ExternalAccessManager({
                     </TD>
                     <TD>
                       <div className="flex justify-end">
-                        {isLive ? (
+                        {canAct ? (
                           <Menu
                             align="right"
                             triggerLabel={`Actions for ${g.user.name}`}
@@ -435,14 +439,17 @@ export function ExternalAccessManager({
                           >
                             {(close) => (
                               <div className="w-52 py-1">
-                                <MenuItem
-                                  onClick={() => {
-                                    close();
-                                    setLeveling(g);
-                                  }}
-                                >
-                                  Change permission
-                                </MenuItem>
+                                {/* Nothing to change on a grant that confers no access. */}
+                                {isLive && (
+                                  <MenuItem
+                                    onClick={() => {
+                                      close();
+                                      setLeveling(g);
+                                    }}
+                                  >
+                                    Change permission
+                                  </MenuItem>
+                                )}
                                 <MenuItem
                                   onClick={() => {
                                     close();

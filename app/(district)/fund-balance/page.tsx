@@ -805,7 +805,7 @@ export default async function FundBalancePage({
             {components.length > 0 ? (
               <ShareBars
                 title="Fund Balance Composition"
-                summary="How the fund balance splits between its designated components and the unassigned reserve."
+                summary="How the fund balance splits between its designated components and the unassigned balance."
                 rows={components.map((c) => ({
                   id: c.label,
                   label: c.label,
