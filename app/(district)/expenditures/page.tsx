@@ -618,7 +618,7 @@ export default async function ExpenditureDashboard({
 
                   {/* Ink follows favourability, not sign — overspend red, underspend green —
                       which is the same polarity the screen's two cards use. */}
-                  <SheetCard title="Top positive variances" note="Spending above expected">
+                  <SheetCard title="Top Positive Variances" note="Spending above expected">
                     <MoverList
                       items={movers.positive.map((r) => ({
                         id: r.id,
@@ -631,7 +631,7 @@ export default async function ExpenditureDashboard({
                     />
                   </SheetCard>
 
-                  <SheetCard title="Top negative variances" note="Spending below expected">
+                  <SheetCard title="Top Negative Variances" note="Spending below expected">
                     <MoverList
                       items={movers.negative.map((r) => ({
                         id: r.id,

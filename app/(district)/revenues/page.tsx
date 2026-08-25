@@ -550,7 +550,7 @@ export default async function RevenueDashboard({
                     />
                   </SheetCard>
 
-                  <SheetCard title="Top positive variances" note="Above expected">
+                  <SheetCard title="Top Positive Variances" note="Above expected">
                     <MoverList
                       items={movers.positive.map((r) => ({
                         id: r.id,
@@ -563,7 +563,7 @@ export default async function RevenueDashboard({
                     />
                   </SheetCard>
 
-                  <SheetCard title="Top negative variances" note="Below expected">
+                  <SheetCard title="Top Negative Variances" note="Below expected">
                     <MoverList
                       items={movers.negative.map((r) => ({
                         id: r.id,
@@ -860,7 +860,7 @@ export default async function RevenueDashboard({
 
         <RevenueMoversCard
           fit
-          title="Top positive variances"
+          title="Top Positive Variances"
           subtitle="Collections above expected levels"
           items={moverItems(movers.positive, "positive")}
           empty="Nothing is running ahead of budget."
@@ -896,7 +896,7 @@ export default async function RevenueDashboard({
         />
 
         <RevenueMoversCard
-          title="Top negative variances"
+          title="Top Negative Variances"
           subtitle="Collections below expected levels"
           items={moverItems(movers.negative, "negative")}
           empty="Nothing is running behind budget."

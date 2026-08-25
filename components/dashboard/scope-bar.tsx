@@ -53,7 +53,7 @@ export interface ScopeOption {
  * detailed PDF — the browser's own Save as PDF is the export — and it is why these charts
  * are server-rendered SVG rather than a client charting library, which would print blank.
  *
- * The heading says "One-page summary" rather than "Executive summary": every dashboard has
+ * The heading says "Summary Export" rather than "Executive summary": every dashboard has
  * one now, and only one of them is the Executive dashboard.
  */
 export function ExportMenu({
@@ -99,10 +99,10 @@ export function ExportMenu({
           {summaryHref && (
             <>
               <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-[#060606]">
-                One-page summary
+                Summary Export
               </p>
               <a role="menuitem" href={summaryHref} className={item}>
-                One-page landscape PDF
+                Summary Landscape PDF
                 <span className="mt-0.5 block text-[11px] text-[#060606]">
                   For board meetings and leadership.
                 </span>

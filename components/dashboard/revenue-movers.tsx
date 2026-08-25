@@ -4,7 +4,7 @@ import { FundChip, PacePill } from "@/components/dashboard/revenue-shared";
 import type { PaceStatus } from "@/lib/dashboard/pace";
 
 /**
- * "Top positive variances" / "Top negative variances" — a transcription of Figma 46:3291
+ * "Top Positive Variances" / "Top Negative Variances" — a transcription of Figma 46:3291
  * and 46:3304.
  *
  * Four fixed slots under the band's 16px/10px header, hairlines between them: the source
